@@ -1,0 +1,70 @@
+Tiêu chí thiết kế giao diện Web Admin
+1. Tính nhất quán (Consistency)
+Thống nhất màu sắc, font chữ, biểu tượng, khoảng cách và bố cục trên toàn hệ thống.
+Các thành phần cùng chức năng phải có giao diện và cách sử dụng giống nhau.
+Sử dụng chung một Design System và Component Library.
+2. Đơn giản và dễ sử dụng (Simplicity)
+Giao diện rõ ràng, hạn chế thông tin không cần thiết.
+Mỗi màn hình chỉ tập trung vào một mục tiêu chính.
+Giảm số lượng thao tác để hoàn thành công việc.
+3. Trực quan (Visual Hierarchy)
+Nội dung quan trọng được ưu tiên hiển thị.
+Tiêu đề, thông tin chính và hành động nổi bật phải dễ nhận biết.
+Sử dụng màu sắc và kích thước hợp lý để tạo thứ tự ưu tiên.
+4. Responsive Design
+Hỗ trợ Desktop, Tablet và Mobile.
+Không xuất hiện thanh cuộn ngang trên các thiết bị.
+Giao diện tự động điều chỉnh theo kích thước màn hình.
+5. Mobile Friendly
+Thiết kế theo nguyên tắc Mobile First.
+Nút bấm và vùng tương tác có kích thước tối thiểu 44x44px.
+Bộ lọc và menu tối ưu cho thao tác bằng ngón tay.
+Bảng dữ liệu lớn có thể chuyển sang dạng Card trên thiết bị nhỏ.
+6. Điều hướng rõ ràng
+Menu dễ tìm, phân nhóm hợp lý.
+Có Breadcrumb để xác định vị trí hiện tại.
+Không quá 3 cấp điều hướng.
+7. Tối ưu biểu mẫu (Form)
+Nhãn hiển thị phía trên ô nhập liệu.
+Hiển thị rõ trường bắt buộc.
+Kiểm tra dữ liệu ngay khi nhập hoặc trước khi lưu.
+Thông báo lỗi rõ ràng, dễ hiểu.
+8. Tối ưu bảng dữ liệu
+Hỗ trợ tìm kiếm, lọc, sắp xếp và phân trang.
+Cho phép thay đổi kích thước cột nếu cần.
+Header cố định khi cuộn.
+Các thao tác (Xem, Sửa, Xóa...) được bố trí thống nhất.
+9. Phản hồi hệ thống (Feedback)
+Hiển thị trạng thái Loading khi xử lý.
+Thông báo thành công hoặc thất bại sau mỗi thao tác.
+Có Empty State khi chưa có dữ liệu.
+Có thông báo lỗi thân thiện khi xảy ra sự cố.
+10. Hiệu năng
+Thời gian tải màn hình nhanh.
+Phân trang hoặc tải dữ liệu theo từng phần với dữ liệu lớn.
+Tìm kiếm sử dụng Debounce để giảm số lượng request.
+Chỉ tải dữ liệu khi cần thiết.
+11. Khả năng truy cập (Accessibility)
+Độ tương phản màu sắc đảm bảo dễ đọc.
+Hỗ trợ điều hướng bằng bàn phím.
+Có Focus rõ ràng khi thao tác.
+Không sử dụng màu sắc làm dấu hiệu duy nhất để truyền đạt thông tin.
+12. Bảo mật giao diện
+Chỉ hiển thị chức năng theo quyền người dùng.
+Không hiển thị các nút hoặc menu mà người dùng không có quyền sử dụng.
+Các thao tác quan trọng yêu cầu xác nhận trước khi thực hiện.
+13. Chuẩn hiển thị
+Font chữ dễ đọc, kích thước thống nhất.
+Khoảng cách giữa các thành phần đồng đều.
+Icon sử dụng cùng một bộ biểu tượng.
+Màu sắc tuân theo bộ nhận diện của hệ thống.
+14. Khả năng mở rộng
+Giao diện dễ bổ sung chức năng mới mà không ảnh hưởng bố cục hiện có.
+Component có khả năng tái sử dụng.
+Hỗ trợ cấu hình và mở rộng trong tương lai.
+Nguyên tắc thiết kế
+Ưu tiên trải nghiệm người dùng và hiệu quả thao tác.
+Thiết kế đơn giản, trực quan và nhất quán.
+Tương thích tốt trên Desktop, Tablet và Mobile.
+Đảm bảo hiệu năng, khả năng truy cập và bảo mật.
+Dễ bảo trì, dễ mở rộng và tuân thủ Design System của dự án.

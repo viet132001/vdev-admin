@@ -1,12 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { Plus, BookOpen, Clock, Award, CheckCircle, CheckCircle2, ChevronRight, GraduationCap, Volume2, Trash2, Upload, Music, Edit, Repeat } from 'lucide-react';
-
+import { Plus, BookOpen, Clock, Award, CheckCircle, CheckCircle2, ChevronRight, GraduationCap, Volume2, Trash2, Upload, Music, Edit, Repeat, AlertCircle } from 'lucide-react';
 export const Learning: React.FC = () => {
   const [courses, setCourses] = useState<any[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+
+  // Custom Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    action: () => Promise<void>;
+  } | null>(null);
 
   // Forms
   const [showCourseForm, setShowCourseForm] = useState(false);
@@ -16,7 +23,6 @@ export const Learning: React.FC = () => {
   const [cDiff, setCDiff] = useState('BEGINNER');
   const [cLang, setCLang] = useState('vi');
   const [cDur, setCDur] = useState('180');
-
   const [showSectionForm, setShowSectionForm] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [sTitle, setSTitle] = useState('');
@@ -125,17 +131,37 @@ export const Learning: React.FC = () => {
     }
   };
 
-  const handleDeleteAudio = async (assetId: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa file âm thanh này không?')) return;
-    try {
-      await api.delete(`/api/learning/lessons/assets/${assetId}`);
-      if (selectedLesson) {
-        await handleSelectLesson(selectedLesson);
-      }
-      alert('Xóa file âm thanh thành công');
-    } catch (err) {
-      alert('Không thể xóa file âm thanh');
+  const showConfirm = (title: string, message: string, action: () => Promise<void>) => {
+    setConfirmDialog({
+      show: true,
+      title,
+      message,
+      action
+    });
+  };
+
+  const handleConfirmAction = async () => {
+    if (confirmDialog) {
+      await confirmDialog.action();
+      setConfirmDialog(null);
     }
+  };
+
+  const handleDeleteAudio = async (assetId: string) => {
+    showConfirm(
+      'Xóa tệp âm thanh',
+      'Bạn có chắc chắn muốn xóa file âm thanh này khỏi bài học?',
+      async () => {
+        try {
+          await api.delete(`/api/learning/lessons/assets/${assetId}`);
+          if (selectedLesson) {
+            await handleSelectLesson(selectedLesson);
+          }
+        } catch (err) {
+          alert('Không thể xóa file âm thanh');
+        }
+      }
+    );
   };
 
   const handleEditCourse = (course: any, e: React.MouseEvent) => {
@@ -151,18 +177,22 @@ export const Learning: React.FC = () => {
 
   const handleDeleteCourse = async (courseId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Bạn có chắc chắn muốn xóa khóa học này không?')) return;
-    try {
-      await api.delete(`/api/learning/courses/${courseId}`);
-      if (selectedCourse?.id === courseId) {
-        setSelectedCourse(null);
-        setSelectedLesson(null);
+    showConfirm(
+      'Xóa khóa học',
+      'Bạn có chắc chắn muốn xóa khóa học này không? Mọi chương học và bài học bên trong cũng sẽ bị mất.',
+      async () => {
+        try {
+          await api.delete(`/api/learning/courses/${courseId}`);
+          if (selectedCourse?.id === courseId) {
+            setSelectedCourse(null);
+            setSelectedLesson(null);
+          }
+          await loadCourses();
+        } catch (err) {
+          alert('Không thể xóa khóa học');
+        }
       }
-      await loadCourses();
-      alert('Xóa khóa học thành công');
-    } catch (err) {
-      alert('Không thể xóa khóa học');
-    }
+    );
   };
 
   const handleEditSection = (section: any) => {
@@ -173,14 +203,18 @@ export const Learning: React.FC = () => {
   };
 
   const handleDeleteSection = async (sectionId: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa chương học này không?')) return;
-    try {
-      await api.delete(`/api/learning/sections/${sectionId}`);
-      await loadCourses();
-      alert('Xóa chương học thành công');
-    } catch (err) {
-      alert('Không thể xóa chương học');
-    }
+    showConfirm(
+      'Xóa chương học',
+      'Bạn có chắc chắn muốn xóa chương học này không?',
+      async () => {
+        try {
+          await api.delete(`/api/learning/sections/${sectionId}`);
+          await loadCourses();
+        } catch (err) {
+          alert('Không thể xóa chương học');
+        }
+      }
+    );
   };
 
   const handleEditLesson = (lesson: any) => {
@@ -192,17 +226,21 @@ export const Learning: React.FC = () => {
   };
 
   const handleDeleteLesson = async (lessonId: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa bài học này không?')) return;
-    try {
-      await api.delete(`/api/learning/lessons/${lessonId}`);
-      if (selectedLesson?.id === lessonId) {
-        setSelectedLesson(null);
+    showConfirm(
+      'Xóa bài học',
+      'Bạn có chắc chắn muốn xóa bài học này không?',
+      async () => {
+        try {
+          await api.delete(`/api/learning/lessons/${lessonId}`);
+          if (selectedLesson?.id === lessonId) {
+            setSelectedLesson(null);
+          }
+          await loadCourses();
+        } catch (err) {
+          alert('Không thể xóa bài học');
+        }
       }
-      await loadCourses();
-      alert('Xóa bài học thành công');
-    } catch (err) {
-      alert('Không thể xóa bài học');
-    }
+    );
   };
 
   const handleCreateCourse = async (e: React.FormEvent) => {
@@ -793,6 +831,27 @@ export const Learning: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Custom Confirm Dialog Component */}
+      {confirmDialog && confirmDialog.show && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <div className="flex align-center gap-2" style={{ color: 'var(--danger)' }}>
+                <AlertCircle size={20} style={{ color: 'var(--danger)' }} />
+                <h3 style={{ margin: 0 }}>{confirmDialog.title}</h3>
+              </div>
+            </div>
+            <div className="modal-body" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+              {confirmDialog.message}
+            </div>
+            <div className="modal-footer" style={{ borderTop: 'none', backgroundColor: 'transparent' }}>
+              <button className="btn btn-secondary" onClick={() => setConfirmDialog(null)}>Hủy</button>
+              <button className="btn btn-danger" onClick={handleConfirmAction}>Đồng ý</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

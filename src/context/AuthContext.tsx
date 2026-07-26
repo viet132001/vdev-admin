@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { api, clearApiCache } from '../services/api';
 
 interface User {
   id: string;
@@ -69,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('vdev_token');
     localStorage.removeItem('vdev_user_email');
     localStorage.removeItem('vdev_user_name');
+    clearApiCache();
     setUser(null);
   };
 

@@ -88,8 +88,19 @@ const initMockDB = () => {
 
 initMockDB();
 
+const cache = new Map<string, any>();
+
+export const clearApiCache = () => {
+  cache.clear();
+};
+
 export const api = {
   async get(url: string) {
+    const token = localStorage.getItem('vdev_token') || '';
+    const cacheKey = `${url}::${token}`;
+    if (!useMockFallback && cache.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
     if (!useMockFallback) {
       try {
         const response = await fetch(`${BASE_URL}${url}`, {
@@ -97,7 +108,9 @@ export const api = {
         });
         if (!response.ok) throw new Error(await response.text() || 'API Error');
         const json = await response.json();
-        return json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
+        const data = json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
+        cache.set(cacheKey, data);
+        return data;
       } catch (err: any) {
         if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('NetworkError')) {
           useMockFallback = true;
@@ -174,6 +187,7 @@ export const api = {
   },
 
   async post(url: string, body: any) {
+    cache.clear();
     if (!useMockFallback) {
       try {
         const response = await fetch(`${BASE_URL}${url}`, {
@@ -395,6 +409,7 @@ export const api = {
   },
 
   async patch(url: string, body: any) {
+    cache.clear();
     if (!useMockFallback) {
       try {
         const response = await fetch(`${BASE_URL}${url}`, {
@@ -481,6 +496,7 @@ export const api = {
   },
 
   async delete(url: string) {
+    cache.clear();
     if (!useMockFallback) {
       try {
         const response = await fetch(`${BASE_URL}${url}`, {

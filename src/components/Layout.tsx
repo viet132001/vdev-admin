@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -7,7 +7,9 @@ import {
   Wallet, 
   GraduationCap, 
   LogOut, 
-  User as UserIcon
+  User as UserIcon,
+  Menu,
+  X
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -18,6 +20,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -33,26 +36,74 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="layout-container">
-      <aside className="sidebar">
-        <div className="flex align-center gap-2 mb-4" style={{ padding: '0 8px' }}>
+      {/* Mobile Top Header */}
+      <div className="mobile-header">
+        <button 
+          className="hamburger-btn" 
+          onClick={() => setIsSidebarOpen(true)}
+          aria-label="Open Sidebar"
+        >
+          <Menu size={24} />
+        </button>
+        <div className="flex align-center gap-2">
           <div style={{
             backgroundColor: 'var(--primary)',
             color: 'white',
-            width: '36px',
-            height: '36px',
-            borderRadius: 'var(--radius-md)',
+            width: '28px',
+            height: '28px',
+            borderRadius: 'var(--radius-sm)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontWeight: 'bold',
-            fontSize: '1.25rem'
+            fontSize: '0.9rem'
           }}>
             V
           </div>
-          <div>
-            <h2 style={{ fontSize: '1.1rem', margin: 0 }}>VDEV Admin</h2>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Workspace Portal</span>
+          <h2 style={{ fontSize: '0.95rem', margin: 0 }}>VDEV Admin</h2>
+        </div>
+        <div style={{ width: 40 }}></div> {/* spacer */}
+      </div>
+
+      {/* Backdrop overlay for Mobile */}
+      <div 
+        className={`sidebar-overlay ${isSidebarOpen ? 'show' : ''}`}
+        onClick={() => setIsSidebarOpen(false)}
+      ></div>
+
+      {/* Sidebar container */}
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="flex align-center justify-between mb-4" style={{ padding: '0 8px' }}>
+          <div className="flex align-center gap-2">
+            <div style={{
+              backgroundColor: 'var(--primary)',
+              color: 'white',
+              width: '36px',
+              height: '36px',
+              borderRadius: 'var(--radius-md)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 'bold',
+              fontSize: '1.25rem'
+            }}>
+              V
+            </div>
+            <div>
+              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>VDEV Admin</h2>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Workspace Portal</span>
+            </div>
           </div>
+          
+          {/* Close button inside sidebar for Mobile */}
+          <button 
+            className="hamburger-btn" 
+            style={{ display: 'var(--mobile-close-display)' }} // Will be managed via CSS media query or style overrides
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Close Sidebar"
+          >
+            <X size={20} className="mobile-only-close" />
+          </button>
         </div>
 
         <nav className="flex flex-col gap-2" style={{ flexGrow: 1, marginTop: '24px' }}>
@@ -63,6 +114,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={() => setIsSidebarOpen(false)} // Close sidebar on nav click
                 className="flex align-center gap-2"
                 style={{
                   padding: '12px 16px',
