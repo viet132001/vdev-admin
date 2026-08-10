@@ -84,6 +84,41 @@ const initMockDB = () => {
       }
     ]));
   }
+  if (!localStorage.getItem('mock_tasks')) {
+    localStorage.setItem('mock_tasks', JSON.stringify([
+      {
+        id: 'task-1',
+        ownerId: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12',
+        title: 'Hoàn thiện Backend API Phase 2',
+        description: 'Viết tài liệu tích hợp và triển khai test e2e cho Task Module',
+        status: 'PENDING',
+        deadline: '2026-08-15T17:00:00.000Z',
+        createdAt: '2026-07-28T10:35:00.000Z',
+        updatedAt: '2026-07-28T10:35:00.000Z',
+        deletedAt: null,
+        subtasks: [
+          {
+            id: 'subtask-1',
+            taskId: 'task-1',
+            title: 'Viết schema database',
+            isCompleted: false,
+            deadline: '2026-08-05T00:00:00.000Z',
+            createdAt: '2026-07-28T10:35:00.000Z',
+            updatedAt: '2026-07-28T10:35:00.000Z'
+          },
+          {
+            id: 'subtask-2',
+            taskId: 'task-1',
+            title: 'Triển khai module controller và service',
+            isCompleted: true,
+            deadline: null,
+            createdAt: '2026-07-28T10:35:00.000Z',
+            updatedAt: '2026-07-28T10:35:00.000Z'
+          }
+        ]
+      }
+    ]));
+  }
 };
 
 initMockDB();
@@ -181,6 +216,65 @@ export const api = {
           }
         }
       }
+    }
+    
+    if (url.includes('/api/tasks') && !url.includes('/subtasks')) {
+      const cleanUrl = url.split('?')[0];
+      const match = cleanUrl.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/);
+      if (match) {
+        const id = match[1];
+        const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
+        const task = tasks.find((t: any) => t.id === id && !t.deletedAt);
+        if (!task) throw new Error('Task not found');
+        return task;
+      }
+
+      const urlObj = new URL(url, 'http://localhost');
+      const page = parseInt(urlObj.searchParams.get('page') || '1', 10);
+      const limit = parseInt(urlObj.searchParams.get('limit') || '20', 10);
+      const keyword = urlObj.searchParams.get('keyword') || '';
+      const status = urlObj.searchParams.get('status') || '';
+      const sort = urlObj.searchParams.get('sort') || 'createdAt';
+      const order = urlObj.searchParams.get('order') || 'desc';
+
+      let tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
+      tasks = tasks.filter((t: any) => !t.deletedAt);
+
+      if (keyword) {
+        const kw = keyword.toLowerCase();
+        tasks = tasks.filter((t: any) => 
+          (t.title || '').toLowerCase().includes(kw) || 
+          (t.description || '').toLowerCase().includes(kw)
+        );
+      }
+
+      if (status) {
+        tasks = tasks.filter((t: any) => t.status === status);
+      }
+
+      tasks.sort((a: any, b: any) => {
+        let valA = a[sort];
+        let valB = b[sort];
+        if (sort === 'createdAt' || sort === 'updatedAt' || sort === 'deadline') {
+          valA = valA ? new Date(valA).getTime() : 0;
+          valB = valB ? new Date(valB).getTime() : 0;
+        }
+        if (valA < valB) return order === 'asc' ? -1 : 1;
+        if (valA > valB) return order === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      const total = tasks.length;
+      const totalPages = Math.ceil(total / limit);
+      const paginatedTasks = tasks.slice((page - 1) * limit, page * limit);
+
+      return {
+        data: paginatedTasks,
+        total,
+        page,
+        limit,
+        totalPages
+      };
     }
     
     throw new Error(`Endpoint not mocked or found: ${url}`);
@@ -405,6 +499,57 @@ export const api = {
       }
     }
 
+    if (url === '/api/tasks') {
+      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
+      const initialSubtasks = (body.subtasks || []).map((st: any) => ({
+        id: Math.random().toString(36).substring(7),
+        taskId: '', // Will be assigned below
+        title: st.title,
+        isCompleted: false,
+        deadline: st.deadline || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }));
+      const newTaskId = Math.random().toString(36).substring(7);
+      initialSubtasks.forEach((st: any) => { st.taskId = newTaskId; });
+      const newTask = {
+        id: newTaskId,
+        ownerId: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12',
+        title: body.title,
+        description: body.description || '',
+        status: 'PENDING',
+        deadline: body.deadline || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+        subtasks: initialSubtasks
+      };
+      tasks.unshift(newTask);
+      localStorage.setItem('mock_tasks', JSON.stringify(tasks));
+      return newTask;
+    }
+    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks$/)) {
+      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks$/);
+      const taskId = match ? match[1] : '';
+      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
+      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
+      if (taskIdx !== -1) {
+        const newSubtask = {
+          id: Math.random().toString(36).substring(7),
+          taskId,
+          title: body.title,
+          isCompleted: false,
+          deadline: body.deadline || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        if (!tasks[taskIdx].subtasks) tasks[taskIdx].subtasks = [];
+        tasks[taskIdx].subtasks.push(newSubtask);
+        localStorage.setItem('mock_tasks', JSON.stringify(tasks));
+        return newSubtask;
+      }
+    }
+
     throw new Error(`Endpoint not mocked or found: ${url}`);
   },
 
@@ -489,6 +634,33 @@ export const api = {
             return sec.lessons[lesIdx];
           }
         }
+      }
+    }
+
+    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks\/([a-zA-Z0-9-]+)$/)) {
+      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks\/([a-zA-Z0-9-]+)$/);
+      const taskId = match ? match[1] : '';
+      const subtaskId = match ? match[2] : '';
+      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
+      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
+      if (taskIdx !== -1) {
+        const subtaskIdx = (tasks[taskIdx].subtasks || []).findIndex((s: any) => s.id === subtaskId);
+        if (subtaskIdx !== -1) {
+          Object.assign(tasks[taskIdx].subtasks[subtaskIdx], body, { updatedAt: new Date().toISOString() });
+          localStorage.setItem('mock_tasks', JSON.stringify(tasks));
+          return tasks[taskIdx].subtasks[subtaskIdx];
+        }
+      }
+    }
+    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/)) {
+      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/);
+      const taskId = match ? match[1] : '';
+      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
+      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
+      if (taskIdx !== -1) {
+        Object.assign(tasks[taskIdx], body, { updatedAt: new Date().toISOString() });
+        localStorage.setItem('mock_tasks', JSON.stringify(tasks));
+        return tasks[taskIdx];
       }
     }
 
@@ -615,6 +787,31 @@ export const api = {
         }
       }
       return { success: true };
+    }
+
+    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks\/([a-zA-Z0-9-]+)$/)) {
+      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks\/([a-zA-Z0-9-]+)$/);
+      const taskId = match ? match[1] : '';
+      const subtaskId = match ? match[2] : '';
+      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
+      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
+      if (taskIdx !== -1) {
+        const filtered = (tasks[taskIdx].subtasks || []).filter((s: any) => s.id !== subtaskId);
+        tasks[taskIdx].subtasks = filtered;
+        localStorage.setItem('mock_tasks', JSON.stringify(tasks));
+        return { success: true };
+      }
+    }
+    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/)) {
+      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/);
+      const taskId = match ? match[1] : '';
+      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
+      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
+      if (taskIdx !== -1) {
+        tasks[taskIdx].deletedAt = new Date().toISOString();
+        localStorage.setItem('mock_tasks', JSON.stringify(tasks));
+        return { success: true };
+      }
     }
 
     throw new Error(`Endpoint not mocked or found: ${url}`);

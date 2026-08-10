@@ -29,6 +29,14 @@ export const Notes: React.FC = () => {
   const [blockContent, setBlockContent] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
 
+  // Edit State
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [editingBlockContent, setEditingBlockContent] = useState('');
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [editNoteTitle, setEditNoteTitle] = useState('');
+  const [editNoteSummary, setEditNoteSummary] = useState('');
+  const [editNoteTags, setEditNoteTags] = useState('');
+
   // Debouncing Search Input
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -79,6 +87,45 @@ export const Notes: React.FC = () => {
       setSelectedNote(newNote);
     } catch (err) {
       alert('Tạo ghi chú thất bại');
+    }
+  };
+  const startEditingNote = () => {
+    if (!selectedNote) return;
+    setEditNoteTitle(selectedNote.title);
+    setEditNoteSummary(selectedNote.summary || '');
+    const displayTags = selectedNote.tags || (selectedNote.noteTags || []).map((nt: any) => nt.tag?.name).filter(Boolean);
+    setEditNoteTags(displayTags.join(', '));
+    setIsEditingNote(true);
+  };
+
+  const handleUpdateNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedNote || !editNoteTitle.trim()) return;
+    try {
+      const tagsArray = editNoteTags.split(',').map(t => t.trim()).filter(Boolean);
+      const updated = await api.patch(`/api/notes/${selectedNote.id}`, {
+        title: editNoteTitle,
+        summary: editNoteSummary,
+        tags: tagsArray
+      });
+      setIsEditingNote(false);
+      await loadNotes();
+      setSelectedNote(updated);
+    } catch (err) {
+      alert('Cập nhật ghi chú thất bại');
+    }
+  };
+
+  const handleUpdateBlock = async (blockId: string) => {
+    if (!editingBlockContent.trim()) return;
+    try {
+      await api.patch(`/api/notes/blocks/${blockId}`, {
+        content: editingBlockContent
+      });
+      setEditingBlockId(null);
+      await loadNotes();
+    } catch (err) {
+      alert('Cập nhật khối thất bại');
     }
   };
 
@@ -163,8 +210,8 @@ export const Notes: React.FC = () => {
   };
 
   const filteredNotes = notes.filter(note => 
-    note.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-    note.summary.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+    (note.title || '').toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+    (note.summary || '').toLowerCase().includes(debouncedSearchQuery.toLowerCase())
   );
 
   return (
@@ -243,15 +290,19 @@ export const Notes: React.FC = () => {
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                     {note.summary || 'Không có mô tả'}
                   </p>
-                  {note.tags && note.tags.length > 0 && (
-                    <div className="flex gap-2 mt-4" style={{ flexWrap: 'wrap' }}>
-                      {note.tags.map((tag: string) => (
-                        <span key={tag} className="badge badge-info btn-sm" style={{ padding: '2px 6px', fontSize: '0.65rem' }}>
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {(() => {
+                    const displayTags = note.tags || (note.noteTags || []).map((nt: any) => nt.tag?.name).filter(Boolean);
+                    if (!displayTags || displayTags.length === 0) return null;
+                    return (
+                      <div className="flex gap-2 mt-4" style={{ flexWrap: 'wrap' }}>
+                        {displayTags.map((tag: string) => (
+                          <span key={tag} className="badge badge-info btn-sm" style={{ padding: '2px 6px', fontSize: '0.65rem' }}>
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               ))
             )}
@@ -263,11 +314,49 @@ export const Notes: React.FC = () => {
           {selectedNote ? (
             <div className="flex flex-col gap-4" style={{ height: '100%' }}>
               <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', flexShrink: 0 }}>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{selectedNote.title}</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{selectedNote.summary || 'Chưa thêm mô tả tóm tắt.'}</p>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                  Tạo ngày: {new Date(selectedNote.createdAt).toLocaleDateString('vi-VN')}
-                </div>
+                {isEditingNote ? (
+                  <form onSubmit={handleUpdateNote} className="flex flex-col gap-2">
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editNoteTitle} 
+                      onChange={(e) => setEditNoteTitle(e.target.value)} 
+                      placeholder="Tiêu đề..."
+                      required
+                    />
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editNoteSummary} 
+                      onChange={(e) => setEditNoteSummary(e.target.value)} 
+                      placeholder="Mô tả tóm tắt..."
+                    />
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value={editNoteTags} 
+                      onChange={(e) => setEditNoteTags(e.target.value)} 
+                      placeholder="Tags (cách nhau bởi dấu phẩy)..."
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <button type="submit" className="btn btn-primary btn-sm">Lưu</button>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setIsEditingNote(false)}>Hủy</button>
+                    </div>
+                  </form>
+                ) : (
+                  <div>
+                    <div className="flex justify-between align-center">
+                      <h2 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{selectedNote.title}</h2>
+                      <button className="btn btn-secondary btn-sm" onClick={startEditingNote}>
+                        Sửa thông tin
+                      </button>
+                    </div>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{selectedNote.summary || 'Chưa thêm mô tả tóm tắt.'}</p>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                      Tạo ngày: {new Date(selectedNote.createdAt).toLocaleDateString('vi-VN')}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Blocks rendering */}
@@ -287,32 +376,62 @@ export const Notes: React.FC = () => {
                       transition: 'all 0.15s ease'
                     }}>
                       <div style={{ flexGrow: 1 }}>
-                        {block.type === 'TEXT' && <p style={{ fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{block.content}</p>}
-                        {block.type === 'CODE' && (
-                          <pre style={{
-                            fontFamily: 'monospace',
-                            fontSize: '0.8rem',
-                            backgroundColor: 'var(--bg-card)',
-                            padding: '12px',
-                            borderRadius: 'var(--radius-sm)',
-                            overflowX: 'auto',
-                            border: '1px solid var(--border-color)',
-                            color: 'var(--text-main)'
-                          }}>{block.content}</pre>
-                        )}
-                        {block.type === 'CHECKLIST' && (
-                          <div className="flex align-center gap-2">
-                            <input type="checkbox" readOnly checked style={{ accentColor: 'var(--primary)' }} />
-                            <span style={{ fontSize: '0.9rem' }}>{block.content}</span>
+                        {editingBlockId === block.id ? (
+                          <div className="flex gap-2">
+                            <input 
+                              type="text" 
+                              className="form-input" 
+                              style={{ flexGrow: 1 }} 
+                              value={editingBlockContent} 
+                              onChange={(e) => setEditingBlockContent(e.target.value)}
+                            />
+                            <button className="btn btn-primary btn-sm" onClick={() => handleUpdateBlock(block.id)}>Lưu</button>
+                            <button className="btn btn-secondary btn-sm" onClick={() => setEditingBlockId(null)}>Hủy</button>
                           </div>
+                        ) : (
+                          <>
+                            {block.type === 'TEXT' && <p style={{ fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{block.content}</p>}
+                            {block.type === 'CODE' && (
+                              <pre style={{
+                                fontFamily: 'monospace',
+                                fontSize: '0.8rem',
+                                backgroundColor: 'var(--bg-card)',
+                                padding: '12px',
+                                borderRadius: 'var(--radius-sm)',
+                                overflowX: 'auto',
+                                border: '1px solid var(--border-color)',
+                                color: 'var(--text-main)'
+                              }}>{block.content}</pre>
+                            )}
+                            {block.type === 'CHECKLIST' && (
+                              <div className="flex align-center gap-2">
+                                <input type="checkbox" readOnly checked style={{ accentColor: 'var(--primary)' }} />
+                                <span style={{ fontSize: '0.9rem' }}>{block.content}</span>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
-                      <button 
-                        onClick={() => handleDeleteBlock(block.id)}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)', marginLeft: '16px', alignSelf: 'flex-start' }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {editingBlockId !== block.id && (
+                        <div className="flex gap-2" style={{ marginLeft: '16px', alignSelf: 'flex-start' }}>
+                          <button 
+                            onClick={() => {
+                              setEditingBlockId(block.id);
+                              setEditingBlockContent(block.content);
+                            }}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                          >
+                            Sửa
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteBlock(block.id)}
+                            style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)', alignSelf: 'center' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}

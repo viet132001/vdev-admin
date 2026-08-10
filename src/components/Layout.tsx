@@ -9,7 +9,8 @@ import {
   LogOut, 
   User as UserIcon,
   Menu,
-  X
+  X,
+  CheckSquare
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -30,6 +31,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navItems = [
     { path: '/', label: 'Tổng quan', icon: LayoutDashboard },
     { path: '/notes', label: 'Ghi chú (Notes)', icon: FileText },
+    { path: '/tasks', label: 'Công việc (Tasks)', icon: CheckSquare },
     { path: '/finance', label: 'Tài chính (Finance)', icon: Wallet },
     { path: '/learning', label: 'Khóa học (Learning)', icon: GraduationCap },
   ];

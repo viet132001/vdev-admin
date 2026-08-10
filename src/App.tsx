@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Notes } from './pages/Notes';
 import { Finance } from './pages/Finance';
 import { Learning } from './pages/Learning';
+import { Tasks } from './pages/Tasks';
 import './App.css';
 
 // Component to protect pages requiring authentications
@@ -53,7 +54,7 @@ const GuestRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      <Router basename="/vdev-admin">
         <Routes>
           {/* Guest Only Routes */}
           <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
@@ -64,6 +65,7 @@ function App() {
           <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
           <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
           <Route path="/learning" element={<ProtectedRoute><Learning /></ProtectedRoute>} />
+          <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
 
           {/* Catch-all Redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
