@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import { MoneyInput } from '../components/MoneyInput';
 import { Plus, Wallet as WalletIcon, Trash2, AlertCircle, X, Landmark, Coins } from 'lucide-react';
 
 export const Finance: React.FC = () => {
@@ -337,14 +338,7 @@ export const Finance: React.FC = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Số dư khởi tạo (VND) <span className="form-required">*</span></label>
-                  <input 
-                    type="number" 
-                    className="form-input" 
-                    placeholder="5000000" 
-                    required 
-                    value={walletInit}
-                    onChange={(e) => setWalletInit(e.target.value)}
-                  />
+                  <MoneyInput required placeholder="5.000.000" value={walletInit} onChange={setWalletInit} />
                 </div>
               </div>
               <div className="modal-footer">
@@ -386,14 +380,7 @@ export const Finance: React.FC = () => {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Số tiền (VND) <span className="form-required">*</span></label>
-                    <input 
-                      type="number" 
-                      className="form-input" 
-                      placeholder="50000" 
-                      required 
-                      value={txAmount}
-                      onChange={(e) => setTxAmount(e.target.value)}
-                    />
+                    <MoneyInput required placeholder="50.000" value={txAmount} onChange={setTxAmount} />
                   </div>
                 </div>
                 <div className="form-group">

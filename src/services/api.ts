@@ -1,4 +1,5 @@
 // Centralized API client with localStorage mock fallback
+import { mockLiabilities } from './liabilityMock';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -129,11 +130,26 @@ export const clearApiCache = () => {
   cache.clear();
 };
 
+// Extracts a readable message from errors thrown by `api` (backend body is `{ success, message, errors }`)
+export const getErrorMessage = (err: any, fallback: string): string => {
+  const raw = err?.message;
+  if (!raw) return fallback;
+  try {
+    const json = JSON.parse(raw);
+    if (Array.isArray(json.errors) && json.errors.length > 0) {
+      return json.errors.map((e: any) => (typeof e === 'string' ? e : e?.message || JSON.stringify(e))).join('\n');
+    }
+    return json.message || fallback;
+  } catch {
+    return raw;
+  }
+};
+
 export const api = {
-  async get(url: string) {
+  async get(url: string, options: { noCache?: boolean } = {}) {
     const token = localStorage.getItem('vdev_token') || '';
     const cacheKey = `${url}::${token}`;
-    if (!useMockFallback && cache.has(cacheKey)) {
+    if (!useMockFallback && !options.noCache && cache.has(cacheKey)) {
       return cache.get(cacheKey);
     }
     if (!useMockFallback) {
@@ -144,7 +160,7 @@ export const api = {
         if (!response.ok) throw new Error(await response.text() || 'API Error');
         const json = await response.json();
         const data = json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
-        cache.set(cacheKey, data);
+        if (!options.noCache) cache.set(cacheKey, data);
         return data;
       } catch (err: any) {
         if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('NetworkError')) {
@@ -169,6 +185,15 @@ export const api = {
     }
     if (url.includes('/api/notes')) {
       return JSON.parse(localStorage.getItem('mock_notes') || '[]');
+    }
+    const liabilityRes = mockLiabilities('GET', url);
+    if (liabilityRes.handled) return liabilityRes.data;
+    if (url.includes('/api/finance/categories')) {
+      return [
+        { id: 'c1', name: 'Học tập & Giáo dục', type: 'EXPENSE', parentId: null, children: [] },
+        { id: 'c2', name: 'Trả nợ & Vay', type: 'EXPENSE', parentId: null, children: [] },
+        { id: 'c3', name: 'Lương', type: 'INCOME', parentId: null, children: [] }
+      ];
     }
     if (url.includes('/api/finance/wallets')) {
       return JSON.parse(localStorage.getItem('mock_wallets') || '[]');
@@ -305,6 +330,8 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const liabilityRes = mockLiabilities('POST', url, body);
+    if (liabilityRes.handled) return liabilityRes.data;
     if (url.includes('/api/auth/login')) {
       localStorage.setItem('vdev_token', 'mock_jwt_token');
       localStorage.setItem('vdev_user_email', body.email);
@@ -578,6 +605,8 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const liabilityRes = mockLiabilities('PATCH', url, body);
+    if (liabilityRes.handled) return liabilityRes.data;
     if (url.includes('/api/notes/blocks/')) {
       const blockId = url.split('/').pop();
       const notes = JSON.parse(localStorage.getItem('mock_notes') || '[]');
@@ -688,6 +717,8 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const liabilityRes = mockLiabilities('DELETE', url);
+    if (liabilityRes.handled) return liabilityRes.data;
     if (url.includes('/api/notes/blocks/')) {
       const blockId = url.split('/').pop();
       const notes = JSON.parse(localStorage.getItem('mock_notes') || '[]');

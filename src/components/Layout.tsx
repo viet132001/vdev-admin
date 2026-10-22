@@ -10,7 +10,8 @@ import {
   User as UserIcon,
   Menu,
   X,
-  CheckSquare
+  CheckSquare,
+  CreditCard
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -33,6 +34,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { path: '/notes', label: 'Ghi chú (Notes)', icon: FileText },
     { path: '/tasks', label: 'Công việc (Tasks)', icon: CheckSquare },
     { path: '/finance', label: 'Tài chính (Finance)', icon: Wallet },
+    { path: '/liabilities', label: 'Khoản nợ (Liabilities)', icon: CreditCard },
     { path: '/learning', label: 'Khóa học (Learning)', icon: GraduationCap },
   ];
 

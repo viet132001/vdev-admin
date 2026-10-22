@@ -6,6 +6,7 @@ import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { Notes } from './pages/Notes';
 import { Finance } from './pages/Finance';
+import { Liabilities } from './pages/Liabilities';
 import { Learning } from './pages/Learning';
 import { Tasks } from './pages/Tasks';
 import './App.css';
@@ -64,6 +65,7 @@ function App() {
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
           <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
+          <Route path="/liabilities" element={<ProtectedRoute><Liabilities /></ProtectedRoute>} />
           <Route path="/learning" element={<ProtectedRoute><Learning /></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
 
