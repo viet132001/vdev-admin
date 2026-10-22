@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, Mail, Lock, ShieldAlert } from 'lucide-react';
+import { ShieldAlert } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
@@ -27,75 +27,25 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex align-center justify-between" style={{ minHeight: '100vh', padding: 0 }}>
-      {/* Visual panel */}
-      <div style={{
-        flex: 1.2,
-        background: 'linear-gradient(135deg, hsl(265, 90%, 60%) 0%, hsl(280, 85%, 52%) 100%)',
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        padding: '64px',
-        color: 'white',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: '-10%',
-          right: '-10%',
-          width: '400px',
-          height: '400px',
-          borderRadius: '50%',
-          background: 'rgba(255, 255, 255, 0.1)',
-          filter: 'blur(40px)'
-        }} />
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <h1 style={{ color: 'white', fontSize: '3rem', margin: 0, fontWeight: '800' }}>VDEV Portal</h1>
-          <p style={{ fontSize: '1.2rem', color: 'rgba(255, 255, 255, 0.8)', marginTop: '16px', maxWidth: '480px' }}>
-            Hệ thống quản trị trung tâm hỗ trợ ghi chú thông minh, giám sát ngân sách cá nhân và điều phối tiến trình đào tạo.
-          </p>
+    <div className="auth-shell">
+      <aside className="auth-aside">
+        <span style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>VDEV</span>
+        <div>
+          <h1 style={{ fontSize: '2rem', margin: 0, fontWeight: 600, letterSpacing: '-0.03em' }}>Workspace cá nhân</h1>
+          <p style={{ color: '#a1a1aa', marginTop: 8, maxWidth: 360 }}>Quản lý công việc và luyện chính tả tiếng Anh ở cùng một nơi.</p>
         </div>
-      </div>
+        <span style={{ fontSize: '0.75rem', color: '#71717a' }}>© {new Date().getFullYear()} VDEV</span>
+      </aside>
 
-      {/* Form panel */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '40px',
-        backgroundColor: 'var(--bg-app)',
-        minHeight: '100vh'
-      }}>
-        <div className="card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
-          <div className="flex flex-col gap-2 align-center mb-4">
-            <div style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: 'var(--radius-lg)',
-              backgroundColor: 'var(--primary-light)',
-              color: 'var(--primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <LogIn size={24} />
-            </div>
-            <h2 style={{ fontSize: '1.5rem', marginTop: '12px' }}>Đăng nhập</h2>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Chào mừng quay trở lại hệ thống</p>
+      <main className="auth-main">
+        <div className="auth-form">
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: '1.4rem', margin: 0 }}>Đăng nhập</h2>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: 4 }}>Nhập email và mật khẩu để tiếp tục.</p>
           </div>
 
           {error && (
-            <div className="flex align-center gap-2 mb-4" style={{
-              backgroundColor: 'hsla(350, 89%, 60%, 0.1)',
-              color: 'var(--danger)',
-              padding: '12px',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '0.85rem'
-            }}>
+            <div className="alert-banner alert-banner-danger">
               <ShieldAlert size={16} />
               <span>{error}</span>
             </div>
@@ -105,11 +55,10 @@ export const Login: React.FC = () => {
             <div className="form-group">
               <label className="form-label">Email</label>
               <div style={{ position: 'relative' }}>
-                <Mail size={16} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
                 <input
                   type="email"
                   className="form-input"
-                  style={{ width: '100%', paddingLeft: '38px' }}
+                  style={{ width: '100%' }}
                   placeholder="name@vdev.local"
                   required
                   value={email}
@@ -121,11 +70,10 @@ export const Login: React.FC = () => {
             <div className="form-group" style={{ marginBottom: '24px' }}>
               <label className="form-label">Mật khẩu</label>
               <div style={{ position: 'relative' }}>
-                <Lock size={16} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
                 <input
                   type="password"
                   className="form-input"
-                  style={{ width: '100%', paddingLeft: '38px' }}
+                  style={{ width: '100%' }}
                   placeholder="••••••••"
                   required
                   value={password}
@@ -137,7 +85,7 @@ export const Login: React.FC = () => {
             <button
               type="submit"
               className="btn btn-primary"
-              style={{ width: '100%', padding: '12px' }}
+              style={{ width: '100%', padding: '10px' }}
               disabled={loading}
             >
               {loading ? 'Đang xử lý...' : 'Đăng nhập'}
@@ -149,7 +97,7 @@ export const Login: React.FC = () => {
             <Link to="/register" style={{ fontWeight: '600' }}>Đăng ký ngay</Link>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

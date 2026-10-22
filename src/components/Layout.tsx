@@ -2,16 +2,12 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
-  LayoutDashboard, 
-  FileText, 
-  Wallet, 
-  GraduationCap, 
   LogOut, 
   User as UserIcon,
   Menu,
   X,
   CheckSquare,
-  CreditCard
+  Headphones
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -30,12 +26,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const navItems = [
-    { path: '/', label: 'Tổng quan', icon: LayoutDashboard },
-    { path: '/notes', label: 'Ghi chú (Notes)', icon: FileText },
+    // Tổng quan, Tài chính, Khoản nợ, Khóa học are temporarily hidden
     { path: '/tasks', label: 'Công việc (Tasks)', icon: CheckSquare },
-    { path: '/finance', label: 'Tài chính (Finance)', icon: Wallet },
-    { path: '/liabilities', label: 'Khoản nợ (Liabilities)', icon: CreditCard },
-    { path: '/learning', label: 'Khóa học (Learning)', icon: GraduationCap },
+    { path: '/dictation', label: 'Luyện chính tả (EN)', icon: Headphones },
   ];
 
   return (
@@ -52,7 +45,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="flex align-center gap-2">
           <div style={{
             backgroundColor: 'var(--primary)',
-            color: 'white',
+            color: 'var(--primary-fg)',
             width: '28px',
             height: '28px',
             borderRadius: 'var(--radius-sm)',
@@ -81,21 +74,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex align-center gap-2">
             <div style={{
               backgroundColor: 'var(--primary)',
-              color: 'white',
-              width: '36px',
-              height: '36px',
+              color: 'var(--primary-fg)',
+              width: '28px',
+              height: '28px',
               borderRadius: 'var(--radius-md)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontWeight: 'bold',
-              fontSize: '1.25rem'
+              fontWeight: 700,
+              fontSize: '0.95rem'
             }}>
               V
             </div>
             <div>
-              <h2 style={{ fontSize: '1.1rem', margin: 0 }}>VDEV Admin</h2>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Workspace Portal</span>
+              <h2 style={{ fontSize: '0.95rem', margin: 0 }}>VDEV Admin</h2>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Workspace</span>
             </div>
           </div>
           
@@ -110,7 +103,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </button>
         </div>
 
-        <nav className="flex flex-col gap-2" style={{ flexGrow: 1, marginTop: '24px' }}>
+        <nav className="flex flex-col" style={{ flexGrow: 1, marginTop: '16px', gap: '2px' }}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -121,17 +114,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 onClick={() => setIsSidebarOpen(false)} // Close sidebar on nav click
                 className="flex align-center gap-2"
                 style={{
-                  padding: '12px 16px',
+                  padding: '8px 10px',
                   borderRadius: 'var(--radius-md)',
-                  color: isActive ? 'var(--primary)' : 'var(--text-main)',
-                  backgroundColor: isActive ? 'var(--primary-light)' : 'transparent',
-                  fontWeight: isActive ? '600' : '500',
-                  fontSize: '0.9rem',
-                  transition: 'all 0.2s ease',
-                  border: isActive ? '1px solid var(--primary)' : '1px solid transparent'
+                  color: isActive ? 'var(--text-main)' : 'var(--text-muted)',
+                  backgroundColor: isActive ? 'var(--bg-hover)' : 'transparent',
+                  fontWeight: 500,
+                  fontSize: '0.875rem',
+                  textDecoration: 'none',
+                  transition: 'background-color 0.15s ease, color 0.15s ease'
                 }}
               >
-                <Icon size={18} />
+                <Icon size={16} />
                 <span>{item.label}</span>
               </Link>
             );

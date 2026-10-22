@@ -22,7 +22,7 @@ export const Finance: React.FC = () => {
   const [walletName, setWalletName] = useState('');
   const [walletType, setWalletType] = useState('BANK');
   const [walletInit, setWalletInit] = useState('');
-  const [walletColor, setWalletColor] = useState('#6366f1');
+  const [walletColor, setWalletColor] = useState('#71717a');
 
   // Create Transaction Form
   const [showTxForm, setShowTxForm] = useState(false);

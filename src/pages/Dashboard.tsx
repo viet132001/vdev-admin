@@ -1,23 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { FileText, Wallet, GraduationCap, ChevronRight, Activity, ArrowUpRight } from 'lucide-react';
+import { SquareCheckBig, Wallet, GraduationCap, ChevronRight, Activity, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({
-    notesCount: 0,
+    openTasksCount: 0,
+    overdueCount: 0,
     walletsCount: 0,
     totalBalance: 0,
     coursesCount: 0,
     coursesProgress: 0
   });
-  const [recentNotes, setRecentNotes] = useState<any[]>([]);
+  const [upcomingTasks, setUpcomingTasks] = useState<any[]>([]);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     const loadStats = async () => {
       try {
-        const notes = await api.get('/api/notes');
+        const [pending, inProgress, byDeadline] = await Promise.all([
+          api.get('/api/tasks?status=PENDING&limit=1'),
+          api.get('/api/tasks?status=IN_PROGRESS&limit=1'),
+          api.get('/api/tasks?sort=deadline&order=asc&limit=50')
+        ]);
+        const openWithDeadline = (byDeadline.data || []).filter((t: any) => t.deadline && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+        const startOfToday = new Date().setHours(0, 0, 0, 0);
         const wallets = await api.get('/api/finance/wallets');
         const transactions = await api.get('/api/finance/transactions');
         const courses = await api.get('/api/learning/courses');
@@ -40,13 +47,14 @@ export const Dashboard: React.FC = () => {
         }
 
         setStats({
-          notesCount: notes.length,
+          openTasksCount: (pending.total || 0) + (inProgress.total || 0),
+          overdueCount: openWithDeadline.filter((t: any) => new Date(t.deadline).getTime() < startOfToday).length,
           walletsCount: wallets.length,
           totalBalance,
           coursesCount: courses.length,
           coursesProgress: progressPercent
         });
-        setRecentNotes(notes.slice(0, 3));
+        setUpcomingTasks(openWithDeadline.slice(0, 3));
         setRecentTransactions(transactions.slice(0, 3));
       } catch (err) {
         console.error('Failed to load stats', err);
@@ -66,23 +74,26 @@ export const Dashboard: React.FC = () => {
 
       {/* Grid statistics */}
       <div className="grid grid-cols-3 gap-4" style={{ marginTop: '24px' }}>
-        <div className="card card-hover flex flex-col justify-between" style={{ borderLeft: '4px solid var(--primary)' }}>
+        <div className="card card-hover flex flex-col justify-between">
           <div className="flex justify-between align-center">
             <div>
-              <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Ghi chú cá nhân</span>
-              <h2 style={{ fontSize: '2rem', margin: '8px 0 0' }}>{stats.notesCount}</h2>
+              <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Công việc đang mở</span>
+              <h2 style={{ fontSize: '2rem', margin: '8px 0 0' }}>
+                {stats.openTasksCount}
+                {stats.overdueCount > 0 && <span className="badge badge-danger" style={{ marginLeft: '8px', verticalAlign: 'middle' }}>{stats.overdueCount} quá hạn</span>}
+              </h2>
             </div>
-            <div style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
-              <FileText size={24} />
+            <div style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-main)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
+              <SquareCheckBig size={24} />
             </div>
           </div>
-          <Link to="/notes" className="flex align-center gap-2 mt-4" style={{ fontSize: '0.8rem', fontWeight: '600' }}>
-            <span>Quản lý ghi chú</span>
+          <Link to="/tasks" className="flex align-center gap-2 mt-4" style={{ fontSize: '0.8rem', fontWeight: '600' }}>
+            <span>Quản lý công việc</span>
             <ChevronRight size={14} />
           </Link>
         </div>
 
-        <div className="card card-hover flex flex-col justify-between" style={{ borderLeft: '4px solid var(--success)' }}>
+        <div className="card card-hover flex flex-col justify-between">
           <div className="flex justify-between align-center">
             <div>
               <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tài chính (Ví & Số dư)</span>
@@ -90,31 +101,31 @@ export const Dashboard: React.FC = () => {
                 {stats.totalBalance.toLocaleString('vi-VN')} <span style={{ fontSize: '1rem', fontWeight: '500' }}>đ</span>
               </h2>
             </div>
-            <div style={{ backgroundColor: 'hsla(142, 72%, 45%, 0.1)', color: 'var(--success)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-main)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
               <Wallet size={24} />
             </div>
           </div>
-          <Link to="/finance" className="flex align-center gap-2 mt-4" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--success)' }}>
+          <Link to="/finance" className="flex align-center gap-2 mt-4" style={{ fontSize: '0.8rem', fontWeight: '600', }}>
             <span>Chi tiết thu chi</span>
             <ChevronRight size={14} />
           </Link>
         </div>
 
-        <div className="card card-hover flex flex-col justify-between" style={{ borderLeft: '4px solid var(--warning)' }}>
+        <div className="card card-hover flex flex-col justify-between">
           <div className="flex justify-between align-center">
             <div>
               <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Học tập (Learning)</span>
               <h2 style={{ fontSize: '2rem', margin: '8px 0 0' }}>{stats.coursesProgress}%</h2>
             </div>
-            <div style={{ backgroundColor: 'hsla(38, 92%, 50%, 0.1)', color: 'var(--warning)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-main)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
               <GraduationCap size={24} />
             </div>
           </div>
           <div className="mt-4">
             <div className="progress-bar-container" style={{ marginBottom: '8px' }}>
-              <div className="progress-bar-fill" style={{ width: `${stats.coursesProgress}%`, backgroundColor: 'var(--warning)' }} />
+              <div className="progress-bar-fill" style={{ width: `${stats.coursesProgress}%`, }} />
             </div>
-            <Link to="/learning" className="flex align-center gap-2" style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--warning)' }}>
+            <Link to="/learning" className="flex align-center gap-2" style={{ fontSize: '0.8rem', fontWeight: '600', }}>
               <span>Vào học tiếp</span>
               <ChevronRight size={14} />
             </Link>
@@ -124,29 +135,33 @@ export const Dashboard: React.FC = () => {
 
       {/* Detail panels */}
       <div className="grid grid-cols-2 gap-4 mt-4">
-        {/* Recent notes card */}
+        {/* Upcoming tasks card */}
         <div className="card">
           <h3 style={{ fontSize: '1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Activity size={18} style={{ color: 'var(--primary)' }} />
-            Ghi chú cập nhật gần đây
+            Công việc sắp đến hạn
           </h3>
           <div className="flex flex-col gap-2">
-            {recentNotes.length === 0 ? (
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Chưa có ghi chú nào.</p>
+            {upcomingTasks.length === 0 ? (
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Không có công việc nào sắp đến hạn.</p>
             ) : (
-              recentNotes.map((note) => (
-                <div key={note.id} style={{
+              upcomingTasks.map((task) => (
+                <Link key={task.id} to={`/tasks?${task.projectId ? `project=${task.projectId}&` : ''}task=${task.id}`} style={{
+                  display: 'block',
+                  color: 'inherit',
                   padding: '12px',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--border-color)',
                   backgroundColor: 'var(--bg-app)'
                 }}>
                   <div className="flex justify-between align-center">
-                    <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{note.title}</span>
-                    {note.isPinned && <span className="badge badge-info btn-sm" style={{ padding: '2px 6px', fontSize: '0.65rem' }}>Ghim</span>}
+                    <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{task.icon ? `${task.icon} ` : ''}{task.title}</span>
+                    {new Date(task.deadline).getTime() < new Date().setHours(0, 0, 0, 0)
+                      ? <span className="badge badge-danger">Quá hạn</span>
+                      : <span className="badge badge-info">{task.status === 'IN_PROGRESS' ? 'Đang làm' : 'Chờ xử lý'}</span>}
                   </div>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>{note.summary || 'Không có mô tả chi tiết'}</p>
-                </div>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Deadline: {new Date(task.deadline).toLocaleDateString('vi-VN')}</p>
+                </Link>
               ))
             )}
           </div>
@@ -155,7 +170,7 @@ export const Dashboard: React.FC = () => {
         {/* Recent transactions card */}
         <div className="card">
           <h3 style={{ fontSize: '1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ArrowUpRight size={18} style={{ color: 'var(--success)' }} />
+            <ArrowUpRight size={18} style={{ color: 'var(--text-muted)' }} />
             Giao dịch tài chính mới nhất
           </h3>
           <div className="flex flex-col gap-2">

@@ -1,793 +1,673 @@
-import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
-import { 
-  Plus, Search, Calendar, Trash2, CheckCircle2, 
-  Circle, Clock, AlertCircle, X, ChevronLeft, ChevronRight, Edit2, Check
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { api, getErrorMessage } from '../services/api';
+import {
+  Plus, Inbox, Search, Ellipsis, Pencil, Trash2, Archive, ArchiveRestore, ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
+  Tag, X, SlidersHorizontal
 } from 'lucide-react';
+import { TaskBoard } from './tasks/TaskBoard';
+import { TaskTable } from './tasks/TaskTable';
+import { TaskCalendar } from './tasks/TaskCalendar';
+import { TaskDetail } from './tasks/TaskDetail';
+import {
+  COLOR_PRESETS, INBOX_VIEWS, PRIORITY_OPTIONS, VIEW_TYPES, ConfirmDialog, Popover, TagChip,
+  type ConfirmState, type TaskFilters
+} from './tasks/shared';
+
+const INBOX = 'inbox';
+
+interface ProjectForm {
+  id?: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+}
+
+const emptyProjectForm: ProjectForm = { name: '', description: '', icon: '', color: COLOR_PRESETS[0] };
 
 export const Tasks: React.FC = () => {
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [selectedTask, setSelectedTask] = useState<any | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const scope = searchParams.get('project') || INBOX;
+  const openTaskId = searchParams.get('task');
 
-  // Search & Filters state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [page, setPage] = useState(1);
-  const [limit] = useState(10);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [inboxCount, setInboxCount] = useState<number | null>(null);
+  const [project, setProject] = useState<any | null>(null);
+  const [tags, setTags] = useState<any[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
-  // Create Task Modal state
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskDesc, setNewTaskDesc] = useState('');
-  const [newTaskDeadline, setNewTaskDeadline] = useState('');
-  const [newTaskSubtasks, setNewTaskSubtasks] = useState<{ title: string; deadline: string }[]>([]);
-  const [tempSubtaskTitle, setTempSubtaskTitle] = useState('');
-  const [tempSubtaskDeadline, setTempSubtaskDeadline] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [debouncedKeyword, setDebouncedKeyword] = useState('');
+  const [inboxConfig, setInboxConfig] = useState<any>({});
 
-  // Editing Task details state
-  const [isEditingTask, setIsEditingTask] = useState(false);
-  const [editTaskTitle, setEditTaskTitle] = useState('');
-  const [editTaskDesc, setEditTaskDesc] = useState('');
-  const [editTaskDeadline, setEditTaskDeadline] = useState('');
-  const [editTaskStatus, setEditTaskStatus] = useState('PENDING');
+  const [projectMenuId, setProjectMenuId] = useState<string | null>(null);
+  const [projectForm, setProjectForm] = useState<ProjectForm | null>(null);
+  const [viewMenuId, setViewMenuId] = useState<string | null>(null);
+  const [addViewOpen, setAddViewOpen] = useState(false);
+  const [renamingView, setRenamingView] = useState<{ id: string; name: string } | null>(null);
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [newTag, setNewTag] = useState({ name: '', color: COLOR_PRESETS[0] });
 
-  // Editing Subtask state
-  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
-  const [editSubtaskTitle, setEditSubtaskTitle] = useState('');
-  const [editSubtaskDeadline, setEditSubtaskDeadline] = useState('');
+  const updateParams = useCallback((patch: Record<string, string | null>) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      Object.entries(patch).forEach(([k, v]) => (v === null ? next.delete(k) : next.set(k, v)));
+      return next;
+    });
+  }, [setSearchParams]);
 
-  // Add subtask inline state
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [newSubtaskDeadline, setNewSubtaskDeadline] = useState('');
+  // ---------- data loading ----------
 
-  // Confirmation Dialog
-  const [confirmDialog, setConfirmDialog] = useState<{
-    show: boolean;
-    title: string;
-    message: string;
-    action: () => Promise<void>;
-  } | null>(null);
+  const loadProjects = useCallback(async () => {
+    try {
+      const [list, inbox] = await Promise.all([
+        api.get(`/api/task-projects?includeArchived=${showArchived}`, { noCache: true }),
+        api.get('/api/tasks?projectId=none&limit=1', { noCache: true })
+      ]);
+      setProjects(Array.isArray(list) ? list : []);
+      setInboxCount(inbox?.total ?? null);
+    } catch (err) {
+      console.error('Failed to load projects', err);
+    }
+  }, [showArchived]);
 
-  // Debouncing search
+  const loadTags = useCallback(async () => {
+    try {
+      const list = await api.get('/api/task-tags', { noCache: true });
+      setTags(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error('Failed to load tags', err);
+    }
+  }, []);
+
+  const loadProject = useCallback(async () => {
+    if (scope === INBOX) {
+      setProject(null);
+      return;
+    }
+    try {
+      const detail = await api.get(`/api/task-projects/${scope}`, { noCache: true });
+      setProject(detail);
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không tải được project'));
+      updateParams({ project: null, view: null });
+    }
+  }, [scope, updateParams]);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
+  useEffect(() => { loadTags(); }, [loadTags]);
+  useEffect(() => { loadProject(); }, [loadProject]);
+
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearchQuery(searchQuery);
-      setPage(1);
-    }, 300);
+    const handler = setTimeout(() => setDebouncedKeyword(keyword), 300);
     return () => clearTimeout(handler);
-  }, [searchQuery]);
+  }, [keyword]);
 
-  const loadTasks = async () => {
-    setLoading(true);
+  // Called by child views whenever task data changes (counts in the sidebar, tag usage...)
+  const handleChanged = useCallback(() => {
+    loadProjects();
+    loadTags();
+  }, [loadProjects, loadTags]);
+
+  const refreshViews = () => setRefreshKey((k) => k + 1);
+
+  // ---------- views ----------
+
+  const views: any[] = scope === INBOX ? INBOX_VIEWS : project?.id === scope ? project.views || [] : [];
+  const activeView = views.find((v) => v.id === searchParams.get('view')) || views[0] || null;
+  const viewConfig = (scope === INBOX ? inboxConfig[activeView?.id] : activeView?.config) || {};
+
+  const filters: TaskFilters = useMemo(
+    () => ({ keyword: debouncedKeyword, priority: viewConfig.priority || '', tagId: viewConfig.tagId || '' }),
+    [debouncedKeyword, viewConfig.priority, viewConfig.tagId]
+  );
+
+  // Filters / sort live in the view's `config`, so each view remembers its own setup
+  const updateViewConfig = async (patch: any) => {
+    if (!activeView) return;
+    const config = { ...viewConfig, ...patch };
+    if (scope === INBOX) {
+      setInboxConfig({ ...inboxConfig, [activeView.id]: config });
+      return;
+    }
+    setProject({ ...project, views: project.views.map((v: any) => (v.id === activeView.id ? { ...v, config } : v)) });
     try {
-      const query = `/api/tasks?page=${page}&limit=${limit}&keyword=${encodeURIComponent(debouncedSearchQuery)}&status=${statusFilter}`;
-      const response = await api.get(query);
-      
-      // Real backend response structure
-      if (response && response.data) {
-        setTasks(response.data);
-        setTotal(response.total);
-        setTotalPages(response.totalPages);
-
-        if (response.data.length > 0) {
-          if (!selectedTask) {
-            setSelectedTask(response.data[0]);
-          } else {
-            const updated = response.data.find((t: any) => t.id === selectedTask.id);
-            if (updated) {
-              setSelectedTask(updated);
-            } else {
-              setSelectedTask(response.data[0]);
-            }
-          }
-        } else {
-          setSelectedTask(null);
-        }
-      } else {
-        setTasks([]);
-        setSelectedTask(null);
-      }
+      await api.patch(`/api/task-projects/${scope}/views/${activeView.id}`, { config });
     } catch (err) {
-      console.error('Failed to load tasks', err);
-    } finally {
-      setLoading(false);
+      alert(getErrorMessage(err, 'Lưu cấu hình view thất bại'));
     }
   };
 
-  useEffect(() => {
-    loadTasks();
-  }, [page, debouncedSearchQuery, statusFilter]);
-
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-
+  const addView = async (type: string) => {
+    setAddViewOpen(false);
     try {
-      const payload = {
-        title: newTaskTitle,
-        description: newTaskDesc,
-        deadline: newTaskDeadline ? new Date(newTaskDeadline).toISOString() : null,
-        subtasks: newTaskSubtasks.map(st => ({
-          title: st.title,
-          deadline: st.deadline ? new Date(st.deadline).toISOString() : null
-        }))
-      };
-
-      const created = await api.post('/api/tasks', payload);
-      setNewTaskTitle('');
-      setNewTaskDesc('');
-      setNewTaskDeadline('');
-      setNewTaskSubtasks([]);
-      setShowAddModal(false);
-      await loadTasks();
-      setSelectedTask(created);
+      const label = VIEW_TYPES.find((t) => t.value === type)?.label || 'View';
+      const view = await api.post(`/api/task-projects/${scope}/views`, { name: label, type, config: type === 'CALENDAR' ? { dateField: 'deadline' } : null });
+      await loadProject();
+      updateParams({ view: view.id });
     } catch (err) {
-      alert('Tạo công việc thất bại');
+      alert(getErrorMessage(err, 'Thêm view thất bại'));
     }
   };
 
-  const handleAddTempSubtask = () => {
-    if (!tempSubtaskTitle.trim()) return;
-    setNewTaskSubtasks([...newTaskSubtasks, { title: tempSubtaskTitle, deadline: tempSubtaskDeadline }]);
-    setTempSubtaskTitle('');
-    setTempSubtaskDeadline('');
-  };
-
-  const handleRemoveTempSubtask = (idx: number) => {
-    setNewTaskSubtasks(newTaskSubtasks.filter((_, i) => i !== idx));
-  };
-
-  const startEditingTask = () => {
-    if (!selectedTask) return;
-    setEditTaskTitle(selectedTask.title);
-    setEditTaskDesc(selectedTask.description || '');
-    setEditTaskDeadline(selectedTask.deadline ? selectedTask.deadline.substring(0, 16) : '');
-    setEditTaskStatus(selectedTask.status);
-    setIsEditingTask(true);
-  };
-
-  const handleUpdateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTask || !editTaskTitle.trim()) return;
-
+  const patchView = async (viewId: string, patch: any) => {
     try {
-      const updated = await api.patch(`/api/tasks/${selectedTask.id}`, {
-        title: editTaskTitle,
-        description: editTaskDesc,
-        deadline: editTaskDeadline ? new Date(editTaskDeadline).toISOString() : null,
-        status: editTaskStatus
-      });
-      setIsEditingTask(false);
-      await loadTasks();
-      setSelectedTask(updated);
+      await api.patch(`/api/task-projects/${scope}/views/${viewId}`, patch);
+      await loadProject();
     } catch (err) {
-      alert('Cập nhật công việc thất bại');
+      alert(getErrorMessage(err, 'Cập nhật view thất bại'));
     }
   };
 
-  const handleDeleteTask = (taskId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    showConfirm(
-      'Xóa công việc',
-      'Bạn có chắc chắn muốn xóa công việc này? Công việc sẽ được đưa vào thùng rác (xóa mềm).',
-      async () => {
+  const moveView = async (viewId: string, dir: -1 | 1) => {
+    const ids = views.map((v) => v.id);
+    const i = ids.indexOf(viewId);
+    const j = i + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    try {
+      await api.patch(`/api/task-projects/${scope}/views/reorder`, { ids });
+      await loadProject();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Sắp xếp view thất bại'));
+    }
+  };
+
+  const deleteView = (view: any) => {
+    setConfirm({
+      title: 'Xóa view',
+      message: `Xóa view “${view.name}”? Công việc trong project không bị ảnh hưởng.`,
+      confirmLabel: 'Xóa',
+      action: async () => {
         try {
-          await api.delete(`/api/tasks/${taskId}`);
-          if (selectedTask?.id === taskId) {
-            setSelectedTask(null);
-          }
-          await loadTasks();
+          await api.delete(`/api/task-projects/${scope}/views/${view.id}`);
+          updateParams({ view: null });
+          await loadProject();
         } catch (err) {
-          alert('Xóa công việc thất bại');
+          alert(getErrorMessage(err, 'Xóa view thất bại'));
         }
       }
-    );
-  };
-
-  // Subtask Actions
-  const handleToggleSubtask = async (subtask: any) => {
-    if (!selectedTask) return;
-    try {
-      await api.patch(`/api/tasks/${selectedTask.id}/subtasks/${subtask.id}`, {
-        isCompleted: !subtask.isCompleted
-      });
-      await loadTasks();
-    } catch (err) {
-      alert('Cập nhật nhiệm vụ phụ thất bại');
-    }
-  };
-
-  const handleAddSubtaskInline = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTask || !newSubtaskTitle.trim()) return;
-
-    try {
-      await api.post(`/api/tasks/${selectedTask.id}/subtasks`, {
-        title: newSubtaskTitle,
-        deadline: newSubtaskDeadline ? new Date(newSubtaskDeadline).toISOString() : null
-      });
-      setNewSubtaskTitle('');
-      setNewSubtaskDeadline('');
-      await loadTasks();
-    } catch (err) {
-      alert('Thêm nhiệm vụ phụ thất bại');
-    }
-  };
-
-  const startEditingSubtask = (st: any) => {
-    setEditingSubtaskId(st.id);
-    setEditSubtaskTitle(st.title);
-    setEditSubtaskDeadline(st.deadline ? st.deadline.substring(0, 10) : '');
-  };
-
-  const handleUpdateSubtask = async (subtaskId: string) => {
-    if (!selectedTask || !editSubtaskTitle.trim()) return;
-    try {
-      await api.patch(`/api/tasks/${selectedTask.id}/subtasks/${subtaskId}`, {
-        title: editSubtaskTitle,
-        deadline: editSubtaskDeadline ? new Date(editSubtaskDeadline).toISOString() : null
-      });
-      setEditingSubtaskId(null);
-      await loadTasks();
-    } catch (err) {
-      alert('Cập nhật nhiệm vụ phụ thất bại');
-    }
-  };
-
-  const handleDeleteSubtask = async (subtaskId: string) => {
-    if (!selectedTask) return;
-    showConfirm(
-      'Xóa nhiệm vụ phụ',
-      'Bạn có muốn xóa nhiệm vụ phụ này khỏi công việc?',
-      async () => {
-        try {
-          await api.delete(`/api/tasks/${selectedTask.id}/subtasks/${subtaskId}`);
-          await loadTasks();
-        } catch (err) {
-          alert('Xóa thất bại');
-        }
-      }
-    );
-  };
-
-  const showConfirm = (title: string, message: string, action: () => Promise<void>) => {
-    setConfirmDialog({
-      show: true,
-      title,
-      message,
-      action
     });
   };
 
-  const handleConfirmAction = async () => {
-    if (confirmDialog) {
-      await confirmDialog.action();
-      setConfirmDialog(null);
+  // ---------- projects ----------
+
+  const saveProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectForm || !projectForm.name.trim()) return;
+    const payload = {
+      name: projectForm.name.trim(),
+      description: projectForm.description.trim() || null,
+      icon: projectForm.icon || null,
+      color: projectForm.color
+    };
+    try {
+      if (projectForm.id) {
+        await api.patch(`/api/task-projects/${projectForm.id}`, payload);
+        if (projectForm.id === scope) await loadProject();
+      } else {
+        const created = await api.post('/api/task-projects', payload);
+        updateParams({ project: created.id, view: null, task: null });
+      }
+      setProjectForm(null);
+      await loadProjects();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Lưu project thất bại'));
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return <span className="badge badge-warning" style={{ fontSize: '0.75rem' }}>Chờ xử lý</span>;
-      case 'IN_PROGRESS':
-        return <span className="badge badge-info" style={{ fontSize: '0.75rem' }}>Đang làm</span>;
-      case 'COMPLETED':
-        return <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>Hoàn thành</span>;
-      case 'CANCELLED':
-        return <span className="badge badge-danger" style={{ fontSize: '0.75rem' }}>Đã hủy</span>;
+  const toggleArchive = async (p: any) => {
+    try {
+      await api.patch(`/api/task-projects/${p.id}`, { isArchived: !p.isArchived });
+      await loadProjects();
+      if (p.id === scope) await loadProject();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Cập nhật project thất bại'));
+    }
+  };
+
+  const moveProject = async (projectId: string, dir: -1 | 1) => {
+    const ids = projects.map((p) => p.id);
+    const i = ids.indexOf(projectId);
+    const j = i + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    setProjects(ids.map((id) => projects.find((p) => p.id === id)));
+    try {
+      await api.patch('/api/task-projects/reorder', { ids });
+    } catch (err) {
+      alert(getErrorMessage(err, 'Sắp xếp project thất bại'));
+    }
+    await loadProjects();
+  };
+
+  const deleteProject = (p: any) => {
+    setConfirm({
+      title: 'Xóa project',
+      message: <>Xóa project <b>{p.name}</b> cùng toàn bộ {p.taskCount ?? ''} công việc bên trong? (xóa mềm)</>,
+      confirmLabel: 'Xóa project',
+      action: async () => {
+        try {
+          await api.delete(`/api/task-projects/${p.id}`);
+          if (p.id === scope) updateParams({ project: null, view: null, task: null });
+          await loadProjects();
+        } catch (err) {
+          alert(getErrorMessage(err, 'Xóa project thất bại'));
+        }
+      }
+    });
+  };
+
+  // ---------- tasks & tags ----------
+
+  const createTask = async () => {
+    try {
+      const created = await api.post('/api/tasks', { title: 'Công việc mới', ...(scope !== INBOX ? { projectId: scope } : {}) });
+      refreshViews();
+      handleChanged();
+      updateParams({ task: created.id });
+    } catch (err) {
+      alert(getErrorMessage(err, 'Tạo công việc thất bại'));
+    }
+  };
+
+  const openTask = useCallback((id: string) => updateParams({ task: id }), [updateParams]);
+  const closeTask = useCallback(() => {
+    updateParams({ task: null });
+    refreshViews();
+  }, [updateParams]);
+
+  const createTag = async () => {
+    if (!newTag.name.trim()) return;
+    try {
+      await api.post('/api/task-tags', { name: newTag.name.trim(), color: newTag.color });
+      setNewTag({ name: '', color: COLOR_PRESETS[(tags.length + 1) % COLOR_PRESETS.length] });
+      await loadTags();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Tạo tag thất bại'));
+    }
+  };
+
+  const patchTag = async (id: string, patch: any) => {
+    try {
+      await api.patch(`/api/task-tags/${id}`, patch);
+      await loadTags();
+      refreshViews();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Cập nhật tag thất bại'));
+    }
+  };
+
+  const deleteTag = (tag: any) => {
+    setConfirm({
+      title: 'Xóa tag',
+      message: `Tag “${tag.name}” sẽ được gỡ khỏi ${tag.taskCount ?? 0} công việc.`,
+      confirmLabel: 'Xóa tag',
+      action: async () => {
+        try {
+          await api.delete(`/api/task-tags/${tag.id}`);
+          if (viewConfig.tagId === tag.id) updateViewConfig({ tagId: '' });
+          await loadTags();
+          refreshViews();
+        } catch (err) {
+          alert(getErrorMessage(err, 'Xóa tag thất bại'));
+        }
+      }
+    });
+  };
+
+  // ---------- render ----------
+
+  const renderView = () => {
+    if (!activeView) {
+      return <div className="loading-container"><span className="spinner"></span><span>Đang tải...</span></div>;
+    }
+    const projectId = scope === INBOX ? null : scope;
+    switch (activeView.type) {
+      case 'BOARD':
+        return projectId ? (
+          <TaskBoard projectId={projectId} filters={filters} refreshKey={refreshKey} onOpenTask={openTask} onChanged={handleChanged} onConfirm={setConfirm} />
+        ) : null;
+      case 'LIST':
+      case 'TABLE':
+        return (
+          <TaskTable
+            variant={activeView.type}
+            projectId={projectId}
+            columns={project?.columns || []}
+            filters={filters}
+            sort={viewConfig.sort || (activeView.type === 'LIST' ? 'position' : 'createdAt')}
+            order={viewConfig.order || (activeView.type === 'LIST' ? 'asc' : 'desc')}
+            onSortChange={(sort, order) => updateViewConfig({ sort, order })}
+            refreshKey={refreshKey}
+            onOpenTask={openTask}
+            onChanged={handleChanged}
+          />
+        );
+      case 'CALENDAR':
+      case 'TIMELINE':
+        return <TaskCalendar mode={activeView.type} projectId={projectId} filters={filters} refreshKey={refreshKey} onOpenTask={openTask} onChanged={handleChanged} />;
       default:
         return null;
     }
   };
 
+  const activeProjects = projects.filter((p) => !p.isArchived);
+  const archivedProjects = projects.filter((p) => p.isArchived);
+
+  const renderProjectItem = (p: any, index: number) => (
+    <div key={p.id} style={{ position: 'relative' }}>
+      <button
+        className={`tw-nav-item ${scope === p.id ? 'active' : ''}`}
+        onClick={() => updateParams({ project: p.id, view: null, task: null })}
+        style={{ opacity: p.isArchived ? 0.6 : 1 }}
+      >
+        {p.icon ? <span>{p.icon}</span> : <span className="tw-column-dot" style={{ backgroundColor: p.color || 'var(--text-muted)', margin: '0 3px' }} />}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+        <span className="tw-count">{p.taskCount ?? ''}</span>
+        <span className="tw-nav-actions">
+          <span className="icon-btn" role="button" onClick={(e) => { e.stopPropagation(); setProjectMenuId(projectMenuId === p.id ? null : p.id); }}>
+            <Ellipsis size={14} />
+          </span>
+        </span>
+      </button>
+      {projectMenuId === p.id && (
+        <Popover onClose={() => setProjectMenuId(null)} style={{ top: '100%', left: 16 }}>
+          <button className="tw-popover-item" onClick={() => { setProjectMenuId(null); setProjectForm({ id: p.id, name: p.name, description: p.description || '', icon: p.icon || '', color: p.color || COLOR_PRESETS[8] }); }}>
+            <Pencil size={14} /> Chỉnh sửa
+          </button>
+          {!p.isArchived && (
+            <>
+              <button className="tw-popover-item" disabled={index === 0} onClick={() => { setProjectMenuId(null); moveProject(p.id, -1); }}><ArrowUp size={14} /> Lên trên</button>
+              <button className="tw-popover-item" disabled={index === activeProjects.length - 1} onClick={() => { setProjectMenuId(null); moveProject(p.id, 1); }}><ArrowDown size={14} /> Xuống dưới</button>
+            </>
+          )}
+          <button className="tw-popover-item" onClick={() => { setProjectMenuId(null); toggleArchive(p); }}>
+            {p.isArchived ? <><ArchiveRestore size={14} /> Bỏ lưu trữ</> : <><Archive size={14} /> Lưu trữ</>}
+          </button>
+          <button className="tw-popover-item danger" onClick={() => { setProjectMenuId(null); deleteProject(p); }}><Trash2 size={14} /> Xóa project</button>
+        </Popover>
+      )}
+    </div>
+  );
+
   return (
-    <div style={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <header className="flex justify-between align-center mb-4" style={{ flexShrink: 0 }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', margin: 0, fontWeight: '700' }}>Quản lý Công việc</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Theo dõi công việc, phân việc phụ và kiểm soát deadline</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-          <Plus size={16} />
-          <span>Tạo công việc</span>
+    <div className="tw-shell">
+      {/* Sidebar: Inbox, projects, tags */}
+      <aside className="tw-nav">
+        <button className={`tw-nav-item ${scope === INBOX ? 'active' : ''}`} onClick={() => updateParams({ project: null, view: null, task: null })}>
+          <Inbox size={16} /> Inbox
+          <span className="tw-count">{inboxCount ?? ''}</span>
         </button>
-      </header>
 
-      {/* Main Workspace */}
-      <div className="flex gap-6 mt-4" style={{ flexGrow: 1, minHeight: 0, alignItems: 'stretch' }}>
-        {/* Left column: List with filters */}
-        <div className="flex flex-col gap-4" style={{ width: '360px', flexShrink: 0, height: '100%' }}>
-          {/* Controls */}
-          <div className="flex flex-col gap-2">
-            <div style={{ position: 'relative' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
-              <input 
-                type="text" 
-                className="form-input" 
-                style={{ width: '100%', paddingLeft: '36px' }} 
-                placeholder="Tìm kiếm công việc..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            
-            <select 
-              className="form-input" 
-              value={statusFilter} 
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="PENDING">Chờ xử lý</option>
-              <option value="IN_PROGRESS">Đang làm</option>
-              <option value="COMPLETED">Hoàn thành</option>
-              <option value="CANCELLED">Đã hủy</option>
-            </select>
-          </div>
-
-          {/* List Area */}
-          <div className="flex flex-col" style={{ flexGrow: 1, minHeight: 0 }}>
-            <div style={{
-              flexGrow: 1,
-              overflowY: 'auto',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
-              backgroundColor: 'var(--bg-card)'
-            }}>
-              {loading ? (
-                <div className="loading-container">
-                  <span className="spinner"></span>
-                  <span>Đang tải danh sách...</span>
-                </div>
-              ) : tasks.length === 0 ? (
-                <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
-                  <Clock className="empty-state-icon" size={32} />
-                  <p style={{ fontSize: '0.85rem' }}>Không có công việc nào</p>
-                </div>
-              ) : (
-                tasks.map((task) => (
-                  <div 
-                    key={task.id} 
-                    onClick={() => { setSelectedTask(task); setIsEditingTask(false); }}
-                    style={{
-                      padding: '16px',
-                      borderBottom: '1px solid var(--border-color)',
-                      cursor: 'pointer',
-                      backgroundColor: selectedTask?.id === task.id ? 'var(--primary-light)' : 'transparent',
-                      transition: 'all 0.2s ease',
-                      position: 'relative'
-                    }}
-                  >
-                    <div className="flex justify-between align-center" style={{ gap: '8px' }}>
-                      <span style={{ 
-                        fontWeight: '600', 
-                        fontSize: '0.875rem', 
-                        color: selectedTask?.id === task.id ? 'var(--primary)' : 'var(--text-main)',
-                        textOverflow: 'ellipsis',
-                        overflow: 'hidden',
-                        whiteSpace: 'nowrap',
-                        flexGrow: 1
-                      }}>
-                        {task.title}
-                      </span>
-                      {getStatusBadge(task.status)}
-                    </div>
-                    
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                      {task.description || 'Không có mô tả'}
-                    </p>
-
-                    <div className="flex justify-between align-center mt-3" style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      <div className="flex align-center gap-1">
-                        <Calendar size={12} />
-                        <span>
-                          {task.deadline ? new Date(task.deadline).toLocaleDateString('vi-VN') : 'Không thời hạn'}
-                        </span>
-                      </div>
-                      <div>
-                        {task.subtasks ? `${task.subtasks.filter((s: any) => s.isCompleted).length}/${task.subtasks.length} subtasks` : '0 subtasks'}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex justify-between align-center" style={{
-                padding: '12px',
-                border: '1px solid var(--border-color)',
-                borderTop: 'none',
-                borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
-                backgroundColor: 'var(--bg-card)',
-                fontSize: '0.8rem'
-              }}>
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                  style={{ padding: '4px 8px' }}
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <span style={{ color: 'var(--text-muted)' }}>Trang {page} / {totalPages} (Tổng: {total})</span>
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(page + 1)}
-                  style={{ padding: '4px 8px' }}
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
-          </div>
+        <div className="tw-nav-title">
+          Projects
+          <button className="icon-btn" title="Tạo project" onClick={() => setProjectForm({ ...emptyProjectForm })}><Plus size={14} /></button>
         </div>
+        {activeProjects.length === 0 && (
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0 8px' }}>Chưa có project nào.</p>
+        )}
+        {activeProjects.map(renderProjectItem)}
 
-        {/* Right column: Details and Subtasks */}
-        <div className="card flex-col" style={{ flexGrow: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
-          {selectedTask ? (
-            <div className="flex flex-col gap-4" style={{ height: '100%' }}>
-              
-              {/* Task Header & Info */}
-              <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', flexShrink: 0 }}>
-                {isEditingTask ? (
-                  <form onSubmit={handleUpdateTask} className="flex flex-col gap-3">
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Tiêu đề</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        value={editTaskTitle} 
-                        onChange={(e) => setEditTaskTitle(e.target.value)} 
-                        placeholder="Tiêu đề..."
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Mô tả</label>
-                      <textarea 
-                        className="form-input" 
-                        value={editTaskDesc} 
-                        onChange={(e) => setEditTaskDesc(e.target.value)} 
-                        placeholder="Mô tả chi tiết..."
-                        style={{ height: '60px', resize: 'none' }}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Thời hạn (Deadline)</label>
-                        <input 
-                          type="datetime-local" 
-                          className="form-input" 
-                          value={editTaskDeadline} 
-                          onChange={(e) => setEditTaskDeadline(e.target.value)} 
-                        />
-                      </div>
-                      <div>
-                        <label className="form-label" style={{ fontSize: '0.75rem' }}>Trạng thái</label>
-                        <select 
-                          className="form-input" 
-                          value={editTaskStatus} 
-                          onChange={(e) => setEditTaskStatus(e.target.value)}
-                        >
-                          <option value="PENDING">Chờ xử lý (Pending)</option>
-                          <option value="IN_PROGRESS">Đang làm (In Progress)</option>
-                          <option value="COMPLETED">Hoàn thành (Completed)</option>
-                          <option value="CANCELLED">Đã hủy (Cancelled)</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <button type="submit" className="btn btn-primary btn-sm">Lưu thay đổi</button>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setIsEditingTask(false)}>Hủy</button>
-                    </div>
-                  </form>
+        {showArchived && archivedProjects.length > 0 && (
+          <>
+            <div className="tw-nav-title">Đã lưu trữ</div>
+            {archivedProjects.map(renderProjectItem)}
+          </>
+        )}
+        <button className="tw-nav-item" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }} onClick={() => setShowArchived(!showArchived)}>
+          <Archive size={14} /> {showArchived ? 'Ẩn project lưu trữ' : 'Hiện project lưu trữ'}
+        </button>
+
+        <div className="tw-nav-title">
+          Tags
+          <button className="icon-btn" title="Quản lý tag" onClick={() => setTagManagerOpen(true)}><SlidersHorizontal size={14} /></button>
+        </div>
+        <div className="flex" style={{ flexWrap: 'wrap', gap: '4px', padding: '0 8px' }}>
+          {tags.length === 0 && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Chưa có tag.</span>}
+          {tags.map((t) => (
+            <span
+              key={t.id}
+              style={{ cursor: 'pointer', outline: viewConfig.tagId === t.id ? '2px solid var(--primary)' : 'none', borderRadius: 999 }}
+              title="Lọc theo tag"
+              onClick={() => updateViewConfig({ tagId: viewConfig.tagId === t.id ? '' : t.id })}
+            >
+              <TagChip tag={t} />
+            </span>
+          ))}
+        </div>
+      </aside>
+
+      {/* Main area */}
+      <section className="tw-main">
+        <header className="flex justify-between align-center" style={{ gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 600 }}>
+              {scope === INBOX ? 'Inbox' : project ? `${project.icon ? `${project.icon} ` : ''}${project.name}` : '...'}
+              {project?.isArchived && <span className="badge" style={{ marginLeft: 8, verticalAlign: 'middle' }}>Đã lưu trữ</span>}
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              {scope === INBOX ? 'Công việc chưa thuộc project nào' : project?.description || 'Quản lý công việc theo dạng bảng, danh sách, lịch'}
+            </p>
+          </div>
+          <button className="btn btn-primary" onClick={createTask}><Plus size={16} /> Tạo công việc</button>
+        </header>
+
+        {/* View tabs */}
+        <div className="tabs" style={{ alignItems: 'center', overflow: 'visible', flexWrap: 'wrap' }}>
+          {views.map((v, i) => {
+            const meta = VIEW_TYPES.find((t) => t.value === v.type);
+            const Icon = meta?.icon;
+            const isActive = activeView?.id === v.id;
+            return (
+              <div key={v.id} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                {renamingView && renamingView.id === v.id ? (
+                  <input
+                    autoFocus
+                    className="form-input"
+                    style={{ padding: '4px 8px', fontSize: '0.85rem', width: 140 }}
+                    value={renamingView.name}
+                    onChange={(e) => setRenamingView({ id: v.id, name: e.target.value })}
+                    onBlur={() => {
+                      if (renamingView.name.trim() && renamingView.name !== v.name) patchView(v.id, { name: renamingView.name.trim() });
+                      setRenamingView(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      if (e.key === 'Escape') setRenamingView(null);
+                    }}
+                  />
                 ) : (
-                  <div>
-                    <div className="flex justify-between align-start" style={{ gap: '16px' }}>
-                      <div>
-                        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px', fontWeight: '700' }}>{selectedTask.title}</h2>
-                        {getStatusBadge(selectedTask.status)}
-                      </div>
-                      <div className="flex gap-2">
-                        <button className="btn btn-secondary btn-sm" onClick={startEditingTask}>
-                          <Edit2 size={12} />
-                          <span>Chỉnh sửa</span>
+                  <button
+                    className={`tab ${isActive ? 'active' : ''}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    onClick={() => updateParams({ view: v.id })}
+                    onDoubleClick={() => scope !== INBOX && setRenamingView({ id: v.id, name: v.name })}
+                  >
+                    {Icon && <Icon size={14} />} {v.name}
+                  </button>
+                )}
+                {scope !== INBOX && isActive && !renamingView && (
+                  <button className="icon-btn" onClick={() => setViewMenuId(viewMenuId === v.id ? null : v.id)}><Ellipsis size={14} /></button>
+                )}
+                {viewMenuId === v.id && (
+                  <Popover onClose={() => setViewMenuId(null)} style={{ top: '100%', left: 0 }}>
+                    <button className="tw-popover-item" onClick={() => { setViewMenuId(null); setRenamingView({ id: v.id, name: v.name }); }}><Pencil size={14} /> Đổi tên</button>
+                    <div style={{ padding: '4px 10px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>Kiểu hiển thị</div>
+                    {VIEW_TYPES.map((t) => {
+                      const TIcon = t.icon;
+                      return (
+                        <button key={t.value} className="tw-popover-item" style={{ fontWeight: v.type === t.value ? 700 : 400 }} onClick={() => { setViewMenuId(null); patchView(v.id, { type: t.value }); }}>
+                          <TIcon size={14} /> {t.label}
                         </button>
-                        <button className="btn btn-danger btn-sm" onClick={(e) => handleDeleteTask(selectedTask.id, e)}>
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '12px', whiteSpace: 'pre-wrap' }}>
-                      {selectedTask.description || 'Chưa có mô tả chi tiết cho công việc này.'}
-                    </p>
-                    <div className="flex gap-4 mt-4" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      <div className="flex align-center gap-1">
-                        <Calendar size={14} />
-                        <span>Thời hạn: {selectedTask.deadline ? new Date(selectedTask.deadline).toLocaleString('vi-VN') : 'Không thời hạn'}</span>
-                      </div>
-                      <div>
-                        Tạo ngày: {new Date(selectedTask.createdAt).toLocaleDateString('vi-VN')}
-                      </div>
-                    </div>
-                  </div>
+                      );
+                    })}
+                    <hr className="tw-divider" style={{ margin: '4px 0' }} />
+                    <button className="tw-popover-item" disabled={i === 0} onClick={() => { setViewMenuId(null); moveView(v.id, -1); }}><ArrowLeft size={14} /> Chuyển sang trái</button>
+                    <button className="tw-popover-item" disabled={i === views.length - 1} onClick={() => { setViewMenuId(null); moveView(v.id, 1); }}><ArrowRight size={14} /> Chuyển sang phải</button>
+                    <button className="tw-popover-item danger" disabled={views.length <= 1} onClick={() => { setViewMenuId(null); deleteView(v); }}><Trash2 size={14} /> Xóa view</button>
+                  </Popover>
                 )}
               </div>
-
-              {/* Subtasks Section */}
-              <div className="flex flex-col" style={{ flexGrow: 1, minHeight: 0 }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '12px' }}>
-                  Nhiệm vụ phụ (Subtasks) ({selectedTask.subtasks ? selectedTask.subtasks.filter((s: any) => s.isCompleted).length : 0}/{selectedTask.subtasks ? selectedTask.subtasks.length : 0})
-                </h3>
-
-                {/* Subtask List */}
-                <div style={{ flexGrow: 1, overflowY: 'auto', paddingRight: '4px' }} className="flex flex-col gap-2">
-                  {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) ? (
-                    <div className="empty-state" style={{ padding: '32px' }}>
-                      <CheckCircle2 className="empty-state-icon" size={24} />
-                      <p style={{ fontSize: '0.85rem' }}>Chưa có nhiệm vụ phụ nào. Hãy nhập ở phía dưới để thêm mới.</p>
-                    </div>
-                  ) : (
-                    selectedTask.subtasks.map((subtask: any) => (
-                      <div 
-                        key={subtask.id} 
-                        style={{
-                          padding: '12px 16px',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-md)',
-                          backgroundColor: 'var(--bg-app)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'between',
-                          gap: '12px',
-                          transition: 'all 0.15s ease'
-                        }}
-                        className="card-hover"
-                      >
-                        <button 
-                          onClick={() => handleToggleSubtask(subtask)}
-                          style={{
-                            border: 'none',
-                            background: 'none',
-                            cursor: 'pointer',
-                            color: subtask.isCompleted ? 'var(--success)' : 'var(--text-muted)',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}
-                        >
-                          {subtask.isCompleted ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                        </button>
-
-                        <div style={{ flexGrow: 1 }}>
-                          {editingSubtaskId === subtask.id ? (
-                            <div className="flex gap-2" style={{ width: '100%' }}>
-                              <input 
-                                type="text" 
-                                className="form-input" 
-                                style={{ flexGrow: 1 }} 
-                                value={editSubtaskTitle}
-                                onChange={(e) => setEditSubtaskTitle(e.target.value)}
-                              />
-                              <input 
-                                type="date" 
-                                className="form-input" 
-                                style={{ width: '130px' }}
-                                value={editSubtaskDeadline}
-                                onChange={(e) => setEditSubtaskDeadline(e.target.value)}
-                              />
-                              <button className="btn btn-primary btn-sm" onClick={() => handleUpdateSubtask(subtask.id)}>
-                                <Check size={14} />
-                              </button>
-                              <button className="btn btn-secondary btn-sm" onClick={() => setEditingSubtaskId(null)}>
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ) : (
-                            <div>
-                              <span style={{ 
-                                fontSize: '0.875rem', 
-                                textDecoration: subtask.isCompleted ? 'line-through' : 'none',
-                                color: subtask.isCompleted ? 'var(--text-muted)' : 'var(--text-main)',
-                                fontWeight: '500'
-                              }}>
-                                {subtask.title}
-                              </span>
-                              {subtask.deadline && (
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                                  <Calendar size={10} />
-                                  <span>Hạn chót: {new Date(subtask.deadline).toLocaleDateString('vi-VN')}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {editingSubtaskId !== subtask.id && (
-                          <div className="flex gap-2" style={{ flexShrink: 0 }}>
-                            <button 
-                              onClick={() => startEditingSubtask(subtask)}
-                              className="btn btn-secondary btn-sm"
-                              style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                            >
-                              Sửa
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteSubtask(subtask.id)}
-                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--danger)' }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Add Subtask Inline Form */}
-                <form onSubmit={handleAddSubtaskInline} className="flex gap-2 mt-3" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', flexShrink: 0 }}>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    style={{ flexGrow: 1 }} 
-                    placeholder="Tên nhiệm vụ phụ mới..." 
-                    required
-                    value={newSubtaskTitle}
-                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                  />
-                  <input 
-                    type="date" 
-                    className="form-input" 
-                    style={{ width: '140px' }}
-                    value={newSubtaskDeadline}
-                    onChange={(e) => setNewSubtaskDeadline(e.target.value)}
-                  />
-                  <button type="submit" className="btn btn-primary">
-                    <Plus size={16} />
-                    <span>Thêm</span>
-                  </button>
-                </form>
-              </div>
-
-            </div>
-          ) : (
-            <div className="empty-state" style={{ margin: 'auto', border: 'none' }}>
-              <Clock size={48} className="empty-state-icon" />
-              <h3 style={{ marginTop: '16px', fontSize: '1.1rem' }}>Không có công việc nào được chọn</h3>
-              <p style={{ marginTop: '8px', fontSize: '0.85rem' }}>Hãy chọn một công việc từ danh sách bên trái hoặc tạo công việc mới để bắt đầu quản lý</p>
+            );
+          })}
+          {scope !== INBOX && project && (
+            <div style={{ position: 'relative' }}>
+              <button className="icon-btn" title="Thêm view" onClick={() => setAddViewOpen(!addViewOpen)}><Plus size={16} /></button>
+              {addViewOpen && (
+                <Popover onClose={() => setAddViewOpen(false)} style={{ top: '100%', left: 0 }}>
+                  {VIEW_TYPES.map((t) => {
+                    const TIcon = t.icon;
+                    return <button key={t.value} className="tw-popover-item" onClick={() => addView(t.value)}><TIcon size={14} /> {t.label}</button>;
+                  })}
+                </Popover>
+              )}
             </div>
           )}
         </div>
-      </div>
 
-      {/* Modern Modal Create Task */}
-      {showAddModal && (
+        {/* Filters */}
+        <div className="tw-toolbar">
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
+            <input className="form-input" style={{ paddingLeft: 30, width: 220 }} placeholder="Tìm công việc..." value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+          </div>
+          <select className="form-input" value={viewConfig.priority || ''} onChange={(e) => updateViewConfig({ priority: e.target.value })}>
+            <option value="">Mọi mức ưu tiên</option>
+            {PRIORITY_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+          <select className="form-input" value={viewConfig.tagId || ''} onChange={(e) => updateViewConfig({ tagId: e.target.value })}>
+            <option value="">Mọi tag</option>
+            {tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          {(keyword || viewConfig.priority || viewConfig.tagId) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setKeyword(''); updateViewConfig({ priority: '', tagId: '' }); }}>
+              <X size={12} /> Xóa lọc
+            </button>
+          )}
+        </div>
+
+        <div className="tw-content">{renderView()}</div>
+      </section>
+
+      {openTaskId && (
+        <TaskDetail
+          key={openTaskId}
+          taskId={openTaskId}
+          projects={projects.filter((p) => !p.isArchived)}
+          tags={tags}
+          onClose={closeTask}
+          onOpenTask={openTask}
+          onChanged={handleChanged}
+          onTagsChanged={loadTags}
+          onConfirm={setConfirm}
+        />
+      )}
+
+      {/* Project create / edit */}
+      {projectForm && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '560px' }}>
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
             <div className="modal-header">
-              <h3 style={{ margin: 0 }}>Tạo Công Việc Mới</h3>
-              <button className="hamburger-btn" onClick={() => setShowAddModal(false)}>
-                <X size={18} />
-              </button>
+              <h3 style={{ margin: 0 }}>{projectForm.id ? 'Chỉnh sửa project' : 'Tạo project mới'}</h3>
+              <button className="hamburger-btn" onClick={() => setProjectForm(null)}><X size={18} /></button>
             </div>
-            <form onSubmit={handleCreateTask}>
+            <form onSubmit={saveProject}>
               <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Tiêu đề công việc <span className="form-required">*</span></label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Nhập tiêu đề công việc..." 
-                    required
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Mô tả chi tiết</label>
-                  <textarea 
-                    className="form-input" 
-                    placeholder="Mô tả nội dung công việc..." 
-                    value={newTaskDesc}
-                    onChange={(e) => setNewTaskDesc(e.target.value)}
-                    style={{ height: '70px', resize: 'none' }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Thời hạn (Deadline)</label>
-                  <input 
-                    type="datetime-local" 
-                    className="form-input" 
-                    value={newTaskDeadline}
-                    onChange={(e) => setNewTaskDeadline(e.target.value)}
-                  />
-                </div>
-
-                {/* Subtasks in Modal */}
-                <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '16px', paddingTop: '16px' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem' }}>Nhiệm vụ phụ khởi tạo (Tùy chọn)</h4>
-                  
-                  {newTaskSubtasks.length > 0 && (
-                    <div className="flex flex-col gap-2 mb-3" style={{ maxHeight: '120px', overflowY: 'auto' }}>
-                      {newTaskSubtasks.map((st, i) => (
-                        <div key={i} className="flex justify-between align-center" style={{
-                          padding: '6px 12px',
-                          backgroundColor: 'var(--bg-app)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: 'var(--radius-sm)'
-                        }}>
-                          <span style={{ fontSize: '0.8rem' }}>{st.title}</span>
-                          <div className="flex align-center gap-3">
-                            {st.deadline && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Hạn: {new Date(st.deadline).toLocaleDateString('vi-VN')}</span>}
-                            <button type="button" onClick={() => handleRemoveTempSubtask(i)} style={{ border: 'none', background: 'none', color: 'var(--danger)', cursor: 'pointer', padding: 0 }}>
-                              <X size={12} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      style={{ flexGrow: 1 }}
-                      placeholder="Tên nhiệm vụ phụ..."
-                      value={tempSubtaskTitle}
-                      onChange={(e) => setTempSubtaskTitle(e.target.value)}
-                    />
-                    <input 
-                      type="date" 
-                      className="form-input" 
-                      style={{ width: '130px' }}
-                      value={tempSubtaskDeadline}
-                      onChange={(e) => setTempSubtaskDeadline(e.target.value)}
-                    />
-                    <button type="button" className="btn btn-secondary" onClick={handleAddTempSubtask}>
-                      Thêm
-                    </button>
+                <div className="flex gap-2">
+                  <div className="form-group" style={{ width: 80 }}>
+                    <label className="form-label">Icon</label>
+                    <input className="form-input" style={{ textAlign: 'center', fontSize: '1.2rem', padding: '6px' }} maxLength={4} value={projectForm.icon} onChange={(e) => setProjectForm({ ...projectForm, icon: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ flexGrow: 1 }}>
+                    <label className="form-label">Tên project <span className="form-required">*</span></label>
+                    <input autoFocus required className="form-input" placeholder="VD: Side project" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
                   </div>
                 </div>
-
+                <div className="form-group">
+                  <label className="form-label">Mô tả</label>
+                  <textarea className="form-input" style={{ resize: 'none', height: 70 }} value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Màu</label>
+                  <div className="flex" style={{ gap: '8px', flexWrap: 'wrap' }}>
+                    {COLOR_PRESETS.map((c) => (
+                      <button
+                        type="button"
+                        key={c}
+                        onClick={() => setProjectForm({ ...projectForm, color: c })}
+                        style={{ width: 24, height: 24, borderRadius: '50%', backgroundColor: c, cursor: 'pointer', border: projectForm.color === c ? '3px solid var(--text-main)' : '3px solid transparent' }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {!projectForm.id && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Project mới có sẵn 3 cột “Cần làm / Đang làm / Hoàn thành” và một view Bảng.</p>
+                )}
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Hủy</button>
-                <button type="submit" className="btn btn-primary">Tạo mới</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setProjectForm(null)}>Hủy</button>
+                <button type="submit" className="btn btn-primary">{projectForm.id ? 'Lưu' : 'Tạo project'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Confirmation Dialog Component */}
-      {confirmDialog && confirmDialog.show && (
+      {/* Tag manager */}
+      {tagManagerOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
-            <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
-              <div className="flex align-center gap-2" style={{ color: 'var(--danger)' }}>
-                <AlertCircle size={20} />
-                <h3 style={{ margin: 0 }}>{confirmDialog.title}</h3>
+          <div className="modal-content" style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}><Tag size={18} /> Quản lý tag</h3>
+              <button className="hamburger-btn" onClick={() => setTagManagerOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body flex flex-col gap-2">
+              {tags.length === 0 && <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Chưa có tag nào.</p>}
+              {tags.map((t) => (
+                <div key={t.id} className="flex align-center gap-2">
+                  <input
+                    type="color"
+                    value={t.color || '#9CA3AF'}
+                    onChange={(e) => patchTag(t.id, { color: e.target.value })}
+                    style={{ width: 28, height: 28, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+                  />
+                  <input
+                    className="form-input"
+                    style={{ flexGrow: 1, padding: '6px 10px' }}
+                    defaultValue={t.name}
+                    key={`${t.id}-${t.name}`}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v && v !== t.name) patchTag(t.id, { name: v });
+                      else e.target.value = t.name;
+                    }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', width: 70, textAlign: 'right' }}>{t.taskCount ?? 0} task</span>
+                  <button className="icon-btn danger" onClick={() => deleteTag(t)}><Trash2 size={14} /></button>
+                </div>
+              ))}
+              <div className="flex align-center gap-2" style={{ borderTop: '1px solid var(--border-color)', paddingTop: 12, marginTop: 4 }}>
+                <input type="color" value={newTag.color} onChange={(e) => setNewTag({ ...newTag, color: e.target.value })} style={{ width: 28, height: 28, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }} />
+                <input
+                  className="form-input"
+                  style={{ flexGrow: 1, padding: '6px 10px' }}
+                  placeholder="Tên tag mới..."
+                  value={newTag.name}
+                  onChange={(e) => setNewTag({ ...newTag, name: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') createTag(); }}
+                />
+                <button className="btn btn-primary btn-sm" onClick={createTag}><Plus size={14} /> Thêm</button>
               </div>
-            </div>
-            <div className="modal-body" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-              {confirmDialog.message}
-            </div>
-            <div className="modal-footer" style={{ borderTop: 'none', backgroundColor: 'transparent' }}>
-              <button className="btn btn-secondary" onClick={() => setConfirmDialog(null)}>Hủy</button>
-              <button className="btn btn-danger" onClick={handleConfirmAction}>Đồng ý</button>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 };

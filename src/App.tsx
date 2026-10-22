@@ -4,11 +4,11 @@ import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
-import { Notes } from './pages/Notes';
 import { Finance } from './pages/Finance';
 import { Liabilities } from './pages/Liabilities';
 import { Learning } from './pages/Learning';
 import { Tasks } from './pages/Tasks';
+import { Dictation } from './pages/Dictation';
 import './App.css';
 
 // Component to protect pages requiring authentications
@@ -62,12 +62,15 @@ function App() {
           <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
 
           {/* Protected Main Admin Routes */}
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
+          {/* Dashboard is hidden from the menu, so the home page opens Tasks */}
+          <Route path="/" element={<Navigate to="/tasks" replace />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/notes" element={<Navigate to="/tasks" replace />} />
           <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
           <Route path="/liabilities" element={<ProtectedRoute><Liabilities /></ProtectedRoute>} />
           <Route path="/learning" element={<ProtectedRoute><Learning /></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
+          <Route path="/dictation" element={<ProtectedRoute><Dictation /></ProtectedRoute>} />
 
           {/* Catch-all Redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,5 +1,7 @@
 // Centralized API client with localStorage mock fallback
 import { mockLiabilities } from './liabilityMock';
+import { mockTasks } from './taskMock';
+import { mockDictation } from './dictationMock';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -14,34 +16,6 @@ let useMockFallback = false;
 const initMockDB = () => {
   if (!localStorage.getItem('mock_users')) {
     localStorage.setItem('mock_users', JSON.stringify([]));
-  }
-  if (!localStorage.getItem('mock_notes')) {
-    localStorage.setItem('mock_notes', JSON.stringify([
-      {
-        id: '1',
-        title: 'Học lập trình NestJS',
-        summary: 'Tài liệu ghi chú tổng hợp buổi 1',
-        isPinned: true,
-        createdAt: new Date().toISOString(),
-        noteBlocks: [
-          { id: 'b1', type: 'TEXT', content: 'NestJS là một framework Node.js rất mạnh mẽ.', orderIndex: 1 },
-          { id: 'b2', type: 'CODE', content: '@Controller(\'notes\')\nexport class NotesController {}', orderIndex: 2 }
-        ],
-        tags: ['nestjs', 'backend']
-      },
-      {
-        id: '2',
-        title: 'Lên kế hoạch tuần này',
-        summary: 'Kế hoạch học tập và quản lý tài chính',
-        isPinned: false,
-        createdAt: new Date().toISOString(),
-        noteBlocks: [
-          { id: 'b3', type: 'CHECKLIST', content: 'Học xong khóa tiếng Anh', orderIndex: 1 },
-          { id: 'b4', type: 'CHECKLIST', content: 'Thanh toán tiền điện nước', orderIndex: 2 }
-        ],
-        tags: ['todo']
-      }
-    ]));
   }
   if (!localStorage.getItem('mock_wallets')) {
     localStorage.setItem('mock_wallets', JSON.stringify([
@@ -80,41 +54,6 @@ const initMockDB = () => {
               { id: 'les-1', title: 'Bài 1: Giới thiệu bản thân', summary: 'Học cách chào hỏi cơ bản', content: '# Bài 1: Giới thiệu bản thân\nChào bạn! Để bắt đầu giới thiệu bản thân bằng tiếng Anh, chúng ta sử dụng cấu trúc:\n- "Hello, my name is..."\n- "I am ... years old."\n- "I live in ..."', durationSeconds: 300, orderIndex: 1, isCompleted: true, completedAt: new Date().toISOString() },
               { id: 'les-2', title: 'Bài 2: Giao tiếp công việc', summary: 'Chào hỏi đồng nghiệp và đối tác', content: '# Bài 2: Giao tiếp công việc\nTrong môi trường công sở:\n- "Nice to meet you."\n- "How are you doing today?"', durationSeconds: 400, orderIndex: 2, isCompleted: false, completedAt: null }
             ]
-          }
-        ]
-      }
-    ]));
-  }
-  if (!localStorage.getItem('mock_tasks')) {
-    localStorage.setItem('mock_tasks', JSON.stringify([
-      {
-        id: 'task-1',
-        ownerId: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12',
-        title: 'Hoàn thiện Backend API Phase 2',
-        description: 'Viết tài liệu tích hợp và triển khai test e2e cho Task Module',
-        status: 'PENDING',
-        deadline: '2026-08-15T17:00:00.000Z',
-        createdAt: '2026-07-28T10:35:00.000Z',
-        updatedAt: '2026-07-28T10:35:00.000Z',
-        deletedAt: null,
-        subtasks: [
-          {
-            id: 'subtask-1',
-            taskId: 'task-1',
-            title: 'Viết schema database',
-            isCompleted: false,
-            deadline: '2026-08-05T00:00:00.000Z',
-            createdAt: '2026-07-28T10:35:00.000Z',
-            updatedAt: '2026-07-28T10:35:00.000Z'
-          },
-          {
-            id: 'subtask-2',
-            taskId: 'task-1',
-            title: 'Triển khai module controller và service',
-            isCompleted: true,
-            deadline: null,
-            createdAt: '2026-07-28T10:35:00.000Z',
-            updatedAt: '2026-07-28T10:35:00.000Z'
           }
         ]
       }
@@ -183,9 +122,10 @@ export const api = {
         status: 'ACTIVE'
       };
     }
-    if (url.includes('/api/notes')) {
-      return JSON.parse(localStorage.getItem('mock_notes') || '[]');
-    }
+    const taskRes = mockTasks('GET', url);
+    if (taskRes.handled) return taskRes.data;
+    const dictationRes = mockDictation('GET', url);
+    if (dictationRes.handled) return dictationRes.data;
     const liabilityRes = mockLiabilities('GET', url);
     if (liabilityRes.handled) return liabilityRes.data;
     if (url.includes('/api/finance/categories')) {
@@ -243,65 +183,6 @@ export const api = {
       }
     }
     
-    if (url.includes('/api/tasks') && !url.includes('/subtasks')) {
-      const cleanUrl = url.split('?')[0];
-      const match = cleanUrl.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/);
-      if (match) {
-        const id = match[1];
-        const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
-        const task = tasks.find((t: any) => t.id === id && !t.deletedAt);
-        if (!task) throw new Error('Task not found');
-        return task;
-      }
-
-      const urlObj = new URL(url, 'http://localhost');
-      const page = parseInt(urlObj.searchParams.get('page') || '1', 10);
-      const limit = parseInt(urlObj.searchParams.get('limit') || '20', 10);
-      const keyword = urlObj.searchParams.get('keyword') || '';
-      const status = urlObj.searchParams.get('status') || '';
-      const sort = urlObj.searchParams.get('sort') || 'createdAt';
-      const order = urlObj.searchParams.get('order') || 'desc';
-
-      let tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
-      tasks = tasks.filter((t: any) => !t.deletedAt);
-
-      if (keyword) {
-        const kw = keyword.toLowerCase();
-        tasks = tasks.filter((t: any) => 
-          (t.title || '').toLowerCase().includes(kw) || 
-          (t.description || '').toLowerCase().includes(kw)
-        );
-      }
-
-      if (status) {
-        tasks = tasks.filter((t: any) => t.status === status);
-      }
-
-      tasks.sort((a: any, b: any) => {
-        let valA = a[sort];
-        let valB = b[sort];
-        if (sort === 'createdAt' || sort === 'updatedAt' || sort === 'deadline') {
-          valA = valA ? new Date(valA).getTime() : 0;
-          valB = valB ? new Date(valB).getTime() : 0;
-        }
-        if (valA < valB) return order === 'asc' ? -1 : 1;
-        if (valA > valB) return order === 'asc' ? 1 : -1;
-        return 0;
-      });
-
-      const total = tasks.length;
-      const totalPages = Math.ceil(total / limit);
-      const paginatedTasks = tasks.slice((page - 1) * limit, page * limit);
-
-      return {
-        data: paginatedTasks,
-        total,
-        page,
-        limit,
-        totalPages
-      };
-    }
-    
     throw new Error(`Endpoint not mocked or found: ${url}`);
   },
 
@@ -330,6 +211,10 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const taskRes = mockTasks('POST', url, body);
+    if (taskRes.handled) return taskRes.data;
+    const dictationRes = mockDictation('POST', url, body);
+    if (dictationRes.handled) return dictationRes.data;
     const liabilityRes = mockLiabilities('POST', url, body);
     if (liabilityRes.handled) return liabilityRes.data;
     if (url.includes('/api/auth/login')) {
@@ -348,38 +233,6 @@ export const api = {
         fullName: body.fullName,
         status: 'ACTIVE'
       };
-    }
-    if (url.includes('/api/notes') && !url.includes('/blocks')) {
-      const notes = JSON.parse(localStorage.getItem('mock_notes') || '[]');
-      const newNote = {
-        id: Math.random().toString(36).substring(7),
-        title: body.title,
-        summary: body.summary || '',
-        isPinned: body.isPinned || false,
-        createdAt: new Date().toISOString(),
-        noteBlocks: [],
-        tags: body.tags || []
-      };
-      notes.unshift(newNote);
-      localStorage.setItem('mock_notes', JSON.stringify(notes));
-      return newNote;
-    }
-    if (url.match(/\/api\/notes\/([a-zA-Z0-9-]+)\/blocks/)) {
-      const match = url.match(/\/api\/notes\/([a-zA-Z0-9-]+)\/blocks/);
-      const noteId = match ? match[1] : '';
-      const notes = JSON.parse(localStorage.getItem('mock_notes') || '[]');
-      const noteIndex = notes.findIndex((n: any) => n.id === noteId);
-      if (noteIndex !== -1) {
-        const newBlock = {
-          id: Math.random().toString(36).substring(7),
-          type: body.type,
-          content: body.content,
-          orderIndex: body.orderIndex || 1
-        };
-        notes[noteIndex].noteBlocks.push(newBlock);
-        localStorage.setItem('mock_notes', JSON.stringify(notes));
-        return newBlock;
-      }
     }
     if (url.includes('/api/finance/wallets')) {
       const wallets = JSON.parse(localStorage.getItem('mock_wallets') || '[]');
@@ -526,57 +379,6 @@ export const api = {
       }
     }
 
-    if (url === '/api/tasks') {
-      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
-      const initialSubtasks = (body.subtasks || []).map((st: any) => ({
-        id: Math.random().toString(36).substring(7),
-        taskId: '', // Will be assigned below
-        title: st.title,
-        isCompleted: false,
-        deadline: st.deadline || null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }));
-      const newTaskId = Math.random().toString(36).substring(7);
-      initialSubtasks.forEach((st: any) => { st.taskId = newTaskId; });
-      const newTask = {
-        id: newTaskId,
-        ownerId: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12',
-        title: body.title,
-        description: body.description || '',
-        status: 'PENDING',
-        deadline: body.deadline || null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        deletedAt: null,
-        subtasks: initialSubtasks
-      };
-      tasks.unshift(newTask);
-      localStorage.setItem('mock_tasks', JSON.stringify(tasks));
-      return newTask;
-    }
-    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks$/)) {
-      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks$/);
-      const taskId = match ? match[1] : '';
-      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
-      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
-      if (taskIdx !== -1) {
-        const newSubtask = {
-          id: Math.random().toString(36).substring(7),
-          taskId,
-          title: body.title,
-          isCompleted: false,
-          deadline: body.deadline || null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        if (!tasks[taskIdx].subtasks) tasks[taskIdx].subtasks = [];
-        tasks[taskIdx].subtasks.push(newSubtask);
-        localStorage.setItem('mock_tasks', JSON.stringify(tasks));
-        return newSubtask;
-      }
-    }
-
     throw new Error(`Endpoint not mocked or found: ${url}`);
   },
 
@@ -605,30 +407,12 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const taskRes = mockTasks('PATCH', url, body);
+    if (taskRes.handled) return taskRes.data;
+    const dictationRes = mockDictation('PATCH', url, body);
+    if (dictationRes.handled) return dictationRes.data;
     const liabilityRes = mockLiabilities('PATCH', url, body);
     if (liabilityRes.handled) return liabilityRes.data;
-    if (url.includes('/api/notes/blocks/')) {
-      const blockId = url.split('/').pop();
-      const notes = JSON.parse(localStorage.getItem('mock_notes') || '[]');
-      for (const note of notes) {
-        const block = (note.noteBlocks || []).find((b: any) => b.id === blockId);
-        if (block) {
-          Object.assign(block, body);
-          localStorage.setItem('mock_notes', JSON.stringify(notes));
-          return block;
-        }
-      }
-    }
-    if (url.includes('/api/notes/')) {
-      const noteId = url.split('/').pop();
-      const notes = JSON.parse(localStorage.getItem('mock_notes') || '[]');
-      const noteIdx = notes.findIndex((n: any) => n.id === noteId);
-      if (noteIdx !== -1) {
-        Object.assign(notes[noteIdx], body);
-        localStorage.setItem('mock_notes', JSON.stringify(notes));
-        return notes[noteIdx];
-      }
-    }
     if (url.includes('/api/learning/courses/')) {
       const courseId = url.split('/').pop();
       const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
@@ -666,33 +450,6 @@ export const api = {
       }
     }
 
-    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks\/([a-zA-Z0-9-]+)$/)) {
-      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks\/([a-zA-Z0-9-]+)$/);
-      const taskId = match ? match[1] : '';
-      const subtaskId = match ? match[2] : '';
-      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
-      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
-      if (taskIdx !== -1) {
-        const subtaskIdx = (tasks[taskIdx].subtasks || []).findIndex((s: any) => s.id === subtaskId);
-        if (subtaskIdx !== -1) {
-          Object.assign(tasks[taskIdx].subtasks[subtaskIdx], body, { updatedAt: new Date().toISOString() });
-          localStorage.setItem('mock_tasks', JSON.stringify(tasks));
-          return tasks[taskIdx].subtasks[subtaskIdx];
-        }
-      }
-    }
-    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/)) {
-      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/);
-      const taskId = match ? match[1] : '';
-      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
-      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
-      if (taskIdx !== -1) {
-        Object.assign(tasks[taskIdx], body, { updatedAt: new Date().toISOString() });
-        localStorage.setItem('mock_tasks', JSON.stringify(tasks));
-        return tasks[taskIdx];
-      }
-    }
-
     throw new Error(`Endpoint not mocked or found: ${url}`);
   },
 
@@ -717,27 +474,12 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const taskRes = mockTasks('DELETE', url);
+    if (taskRes.handled) return taskRes.data;
+    const dictationRes = mockDictation('DELETE', url);
+    if (dictationRes.handled) return dictationRes.data;
     const liabilityRes = mockLiabilities('DELETE', url);
     if (liabilityRes.handled) return liabilityRes.data;
-    if (url.includes('/api/notes/blocks/')) {
-      const blockId = url.split('/').pop();
-      const notes = JSON.parse(localStorage.getItem('mock_notes') || '[]');
-      for (const note of notes) {
-        const idx = (note.noteBlocks || []).findIndex((b: any) => b.id === blockId);
-        if (idx !== -1) {
-          note.noteBlocks.splice(idx, 1);
-          localStorage.setItem('mock_notes', JSON.stringify(notes));
-          return { success: true };
-        }
-      }
-    }
-    if (url.includes('/api/notes/')) {
-      const noteId = url.split('/').pop();
-      const notes = JSON.parse(localStorage.getItem('mock_notes') || '[]');
-      const filtered = notes.filter((n: any) => n.id !== noteId);
-      localStorage.setItem('mock_notes', JSON.stringify(filtered));
-      return { message: 'Note soft deleted successfully' };
-    }
     if (url.includes('/api/finance/wallets/')) {
       const id = url.split('/').pop();
       const wallets = JSON.parse(localStorage.getItem('mock_wallets') || '[]');
@@ -818,31 +560,6 @@ export const api = {
         }
       }
       return { success: true };
-    }
-
-    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks\/([a-zA-Z0-9-]+)$/)) {
-      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)\/subtasks\/([a-zA-Z0-9-]+)$/);
-      const taskId = match ? match[1] : '';
-      const subtaskId = match ? match[2] : '';
-      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
-      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
-      if (taskIdx !== -1) {
-        const filtered = (tasks[taskIdx].subtasks || []).filter((s: any) => s.id !== subtaskId);
-        tasks[taskIdx].subtasks = filtered;
-        localStorage.setItem('mock_tasks', JSON.stringify(tasks));
-        return { success: true };
-      }
-    }
-    if (url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/)) {
-      const match = url.match(/\/api\/tasks\/([a-zA-Z0-9-]+)$/);
-      const taskId = match ? match[1] : '';
-      const tasks = JSON.parse(localStorage.getItem('mock_tasks') || '[]');
-      const taskIdx = tasks.findIndex((t: any) => t.id === taskId);
-      if (taskIdx !== -1) {
-        tasks[taskIdx].deletedAt = new Date().toISOString();
-        localStorage.setItem('mock_tasks', JSON.stringify(tasks));
-        return { success: true };
-      }
     }
 
     throw new Error(`Endpoint not mocked or found: ${url}`);

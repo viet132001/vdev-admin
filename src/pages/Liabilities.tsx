@@ -235,7 +235,7 @@ export const Liabilities: React.FC = () => {
                         padding: '10px 12px',
                         borderRadius: 'var(--radius-md)',
                         border: `1px solid ${urgent ? 'var(--danger)' : 'var(--border-color)'}`,
-                        backgroundColor: urgent ? 'hsla(350, 89%, 60%, 0.06)' : 'transparent',
+                        backgroundColor: urgent ? 'color-mix(in srgb, var(--danger) 6%, transparent)' : 'transparent',
                         cursor: 'pointer',
                         gap: '12px'
                       }}
@@ -500,7 +500,7 @@ const LiabilityFormModal: React.FC<{
   const [paidInstallments, setPaidInstallments] = useState(str(liability?.paidInstallments));
   const [monthlyRate, setMonthlyRate] = useState(str(liability?.monthlyRate));
   const [startDate, setStartDate] = useState(liability?.startDate ? liability.startDate.slice(0, 10) : '');
-  const [color, setColor] = useState(liability?.color || '#6366f1');
+  const [color, setColor] = useState(liability?.color || '#71717a');
   const [status, setStatus] = useState<LiabilityStatus>(liability?.status || 'ACTIVE');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);

@@ -18,25 +18,34 @@ Tài liệu này đóng vai trò là kim chỉ nam thiết kế giao diện (UI)
 
 ## 2. Màu Sắc & Kiểu Chữ (Colors & Typography)
 
-Hệ thống sử dụng bộ màu hiện đại dạng **HSL** để tự động thích ứng với cả chế độ Sáng (Light Mode) và Tối (Dark Mode).
+Hệ thống dùng bảng màu **trung tính (đen – trắng – xám, thang zinc)**. Màu chủ đạo là "mực": gần đen ở chế độ Sáng, gần trắng ở chế độ Tối. Màu có sắc độ chỉ dùng cho ý nghĩa trạng thái (thành công / cảnh báo / lỗi), không dùng để trang trí. Token khai báo trong `src/index.css`.
 
 ### 2.1 Bảng Màu Hệ Thống (Color Palette)
 
-| Loại Màu | Mô tả | HSL Light Mode | HSL Dark Mode | Giao diện áp dụng |
+| Token | Mô tả | Light Mode | Dark Mode | Giao diện áp dụng |
 | :--- | :--- | :--- | :--- | :--- |
-| **Primary** | Màu chủ đạo (Tím) | `hsl(265, 90%, 60%)` | `hsl(265, 90%, 60%)` | Nút chính, Active Tab, Icon quan trọng |
-| **Primary Hover** | Màu di chuột | `hsl(265, 85%, 52%)` | `hsl(265, 85%, 52%)` | Trạng thái hover của nút chính |
-| **Primary Light** | Màu nền nhạt | `hsl(265, 90%, 96%)` | `hsl(265, 30%, 18%)` | Nền Active Menu, nền Badge thông tin |
-| **Success** | Thành công (Xanh lá) | `hsl(142, 72%, 45%)` | `hsl(142, 72%, 45%)` | Thu nhập, Hoàn thành, Badge Đang học |
-| **Warning** | Cảnh báo (Vàng) | `hsl(38, 92%, 50%)` | `hsl(38, 92%, 50%)` | Trạng thái Chờ duyệt, Lưu ý quan trọng |
-| **Danger** | Lỗi/Xóa (Đỏ) | `hsl(350, 89%, 60%)` | `hsl(350, 89%, 60%)` | Chi tiêu, Nút Xóa, Thông báo lỗi |
-| **Background App**| Nền ứng dụng | `hsl(240, 15%, 98%)` | `hsl(240, 18%, 10%)` | Toàn bộ nền bao phủ màn hình |
-| **Background Card**| Nền thẻ/bảng | `hsl(0, 0%, 100%)` | `hsl(240, 16%, 13%)` | Thẻ chức năng, dòng của Bảng |
-| **Text Main** | Chữ nội dung | `hsl(240, 10%, 15%)` | `hsl(240, 10%, 92%)` | Tiêu đề, chữ hiển thị chính |
-| **Text Muted** | Chữ mờ/phụ | `hsl(240, 8%, 46%)` | `hsl(240, 6%, 65%)` | Phụ đề, Placeholder, Giờ tạo |
+| `--primary` | Màu chủ đạo (mực) | `#18181b` | `#fafafa` | Nút chính, thanh tiến độ, điểm nhấn |
+| `--primary-hover` | Di chuột nút chính | `#3f3f46` | `#d4d4d8` | Hover nút chính |
+| `--primary-fg` | Chữ trên nền `--primary` | `#ffffff` | `#09090b` | Chữ / icon trong nút chính |
+| `--bg-hover` | Nền khi hover / mục đang chọn | `#f4f4f5` | `#1f1f23` | Menu đang chọn, hàng bảng hover |
+| `--success` | Thành công | `#15803d` | `#4ade80` | Hoàn thành, câu đúng, thu nhập |
+| `--warning` | Cảnh báo | `#b45309` | `#fbbf24` | Ưu tiên cao, lưu ý |
+| `--danger` | Lỗi / Xóa | `#dc2626` | `#f87171` | Nút xóa, quá hạn, từ gõ sai |
+| `--bg-app` | Nền ứng dụng | `#fafafa` | `#09090b` | Nền toàn màn hình |
+| `--bg-card` | Nền thẻ / bảng / sidebar | `#ffffff` | `#111113` | Thẻ, bảng, sidebar |
+| `--text-main` | Chữ chính | `#09090b` | `#fafafa` | Tiêu đề, nội dung |
+| `--text-muted` | Chữ phụ | `#71717a` | `#a1a1aa` | Phụ đề, placeholder, thời gian |
+| `--border-color` | Viền | `#e4e4e7` | `#27272a` | Viền thẻ, input, bảng |
+
+**Nguyên tắc tối giản:**
+* Không dùng gradient, hiệu ứng blur/glass, bóng đổ đậm hay hiệu ứng nhấc thẻ khi hover; phân tách bằng viền 1px.
+* Bo góc nhỏ: `4px` (badge), `6px` (nút, input), `8px` (thẻ, modal).
+* Badge dạng viền mảnh, chữ màu theo ý nghĩa; không tô nền màu.
+* Không dùng emoji làm trang trí giao diện (emoji chỉ xuất hiện khi người dùng tự đặt làm icon).
+* Trạng thái / ưu tiên dùng token CSS (không hard-code mã màu) để tự đổi theo Sáng / Tối.
 
 ### 2.2 Kiểu Chữ (Typography)
-* **Font chữ chính**: `Plus Jakarta Sans`, fallback về `system-ui`, `-apple-system`, `sans-serif`.
+* **Font chữ chính**: `Inter`, fallback về `system-ui`, `-apple-system`, `Segoe UI`, `sans-serif`. Chữ đơn cách (code, gợi ý chính tả): `ui-monospace`.
 * **Thông số tiêu biểu**:
   * **H1 (Tiêu đề trang)**: `1.75rem / 28px`, Bold (`700`), Letter-spacing `-0.02em`.
   * **H2 (Tiêu đề mục)**: `1.25rem / 20px`, Semi-bold (`600`).
