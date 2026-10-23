@@ -315,6 +315,24 @@ export const routeAgent = (db: any, ctx: AgentMockCtx, method: string, seg: stri
     return { result: { workspaceStatus: project.workspaceStatus, workspaceMessage: project.workspaceMessage, workspaceCheckedAt: project.workspaceCheckedAt } };
   }
 
+  // Folder picker (section 14) — the simulated runner "chooses" a folder named after the prompt after 2 seconds
+  if (resource === 'agent' && a === 'folder-picks') {
+    db.folderPicks ||= [];
+    if (!b && method === 'POST') {
+      if (!anyRunnerOnline(db)) fail('No runner is online', 'CONFLICT');
+      const pick = { id: genId(), prompt: body?.prompt || '', createdAt: nowIso() };
+      db.folderPicks.push(pick);
+      return { result: { id: pick.id, status: 'PENDING', expiresAt: new Date(Date.now() + 120_000).toISOString() } };
+    }
+    if (b && method === 'GET') {
+      const pick = db.folderPicks.find((p: any) => p.id === b);
+      if (!pick) fail('Folder pick not found', 'NOT_FOUND');
+      if (Date.now() - new Date(pick.createdAt).getTime() < 2000) return { result: { id: pick.id, status: 'PICKING' } };
+      const name = (pick.prompt.replace(/^Chọn thư mục code cho /, '').trim() || 'du-an').replace(/[^\p{L}\p{N}_.-]+/gu, '-');
+      return { result: { id: pick.id, status: 'DONE', path: `/Users/you/code/${name}`, workspace: { ok: true, message: 'OK · branch main · (mô phỏng offline)' } } };
+    }
+  }
+
   // Plans
   if (resource === 'task-plans') {
     if (!a && method === 'GET') {

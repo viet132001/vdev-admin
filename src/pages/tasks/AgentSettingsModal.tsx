@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
-import { X, FolderGit2, RefreshCw, CircleCheck, CircleAlert, CircleHelp } from 'lucide-react';
+import { X, FolderGit2, FolderOpen, RefreshCw, CircleCheck, CircleAlert, CircleHelp } from 'lucide-react';
 import { agentSettingsOf, useBusy } from './agent';
 
 interface AgentSettingsModalProps {
@@ -95,7 +95,53 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
     }
   });
 
-  const meta = WORKSPACE_STATUS[status.workspaceStatus] || WORKSPACE_STATUS.UNKNOWN;
+  // "Chọn…": the runner opens the OS folder dialog (section 14) because the browser cannot read absolute paths
+  const [picked, setPicked] = useState<{ path: string; ok: boolean; message: string } | null>(null);
+  const [pickNote, setPickNote] = useState<{ error: boolean; text: string } | null>(null);
+  const pickAlive = useRef(true);
+  useEffect(() => () => { pickAlive.current = false; }, []);
+
+  const pickFolder = () => run('pick', async () => {
+    setPickNote({ error: false, text: 'Đang mở hộp chọn thư mục trên máy chạy… (có thể mất vài giây, kiểm tra cửa sổ Finder)' });
+    let request: any;
+    try {
+      request = await api.post('/api/agent/folder-picks', { prompt: `Chọn thư mục code cho ${project.name}` });
+    } catch (err: any) {
+      const unsupported = /Cannot POST|"statusCode":\s*404|\b404\b/.test(String(err?.message));
+      setPickNote({ error: true, text: unsupported ? 'Backend chưa hỗ trợ chọn thư mục qua máy chạy. Dùng ⌥⌘C trong Finder như gợi ý bên dưới.' : getErrorMessage(err, 'Không gửi được yêu cầu chọn thư mục') });
+      return;
+    }
+    const started = Date.now();
+    while (pickAlive.current && Date.now() - started < 150_000) {
+      await new Promise((r) => setTimeout(r, 1000));
+      let state: any;
+      try {
+        state = await api.get(`/api/agent/folder-picks/${request.id}`, { noCache: true });
+      } catch (err) {
+        setPickNote({ error: true, text: getErrorMessage(err, 'Mất kết nối khi chờ chọn thư mục') });
+        return;
+      }
+      if (state.status === 'DONE' && state.path) {
+        setWorkspacePath(state.path);
+        setPicked({ path: state.path, ok: !!state.workspace?.ok, message: state.workspace?.message || '' });
+        setPickNote(null);
+        return;
+      }
+      if (state.status === 'CANCELLED') { setPickNote({ error: false, text: 'Đã huỷ chọn thư mục.' }); return; }
+      if (state.status === 'FAILED' || state.status === 'EXPIRED') {
+        setPickNote({ error: true, text: state.message || (state.status === 'EXPIRED' ? 'Hết thời gian chờ chọn thư mục.' : 'Máy chạy không mở được hộp chọn thư mục.') });
+        return;
+      }
+      if (state.status === 'PENDING' && Date.now() - started > 15_000) {
+        setPickNote({ error: false, text: 'Máy chạy chưa nhận yêu cầu — kiểm tra vdev-agent có đang chạy trên máy này không.' });
+      }
+    }
+  });
+
+  const pickedCurrent = picked && picked.path === workspacePath.trim() ? picked : null;
+  const meta = pickedCurrent
+    ? (pickedCurrent.ok ? WORKSPACE_STATUS.OK : WORKSPACE_STATUS.INVALID)
+    : WORKSPACE_STATUS[status.workspaceStatus] || WORKSPACE_STATUS.UNKNOWN;
   const StatusIcon = meta.icon;
 
   return (
@@ -120,6 +166,9 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
                   spellCheck={false}
                 />
               </div>
+              <button className="btn btn-secondary" disabled={busy !== null} onClick={pickFolder} title="Mở hộp chọn thư mục trên máy chạy Claude">
+                <FolderOpen size={14} /> {busy === 'pick' ? 'Đang chờ...' : 'Chọn…'}
+              </button>
               <button className="btn btn-secondary" disabled={!workspacePath.trim() || !!pathError || busy !== null} onClick={verify}>
                 <RefreshCw size={14} className={busy === 'verify' ? 'spin' : ''} /> {busy === 'verify' ? 'Đang kiểm tra...' : 'Kiểm tra'}
               </button>
@@ -128,11 +177,15 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
             {!pathError && workspacePath.trim() && (
               <span className="flex align-center gap-2" style={{ fontSize: '0.78rem', color: meta.color }}>
                 <StatusIcon size={13} />
-                {pathChanged ? 'Đường dẫn đã đổi — bấm Kiểm tra để máy chạy xác nhận' : `${meta.label}${status.workspaceMessage ? ` · ${status.workspaceMessage}` : ''}`}
+                {pickedCurrent
+                  ? `${meta.label} · ${pickedCurrent.message}${pickedCurrent.ok ? ' — bấm Lưu để dùng thư mục này' : ''}`
+                  : pathChanged ? 'Đường dẫn đã đổi — bấm Kiểm tra để máy chạy xác nhận' : `${meta.label}${status.workspaceMessage ? ` · ${status.workspaceMessage}` : ''}`}
               </span>
             )}
+            {pickNote && <span style={{ fontSize: '0.78rem', color: pickNote.error ? 'var(--danger)' : 'var(--text-muted)' }}>{pickNote.text}</span>}
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Thư mục phải là git repo. Máy chạy (<button className="icon-btn" style={{ padding: 0, fontSize: '0.75rem', textDecoration: 'underline' }} onClick={onOpenRunners}>quản lý máy chạy</button>) cần đang bật để kiểm tra.
+              Thư mục phải là git repo. Máy chạy (<button className="icon-btn" style={{ padding: 0, fontSize: '0.75rem', textDecoration: 'underline' }} onClick={onOpenRunners}>quản lý máy chạy</button>) cần đang bật để chọn và kiểm tra.
+              {' '}Cách khác: trong Finder chọn thư mục, bấm <b>⌥⌘C</b> (Option + Command + C) để copy đường dẫn rồi dán vào ô.
             </span>
           </div>
 

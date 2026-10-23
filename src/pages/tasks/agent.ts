@@ -23,7 +23,16 @@ export const RUN_TYPE: Record<string, string> = { PLAN: 'Lập kế hoạch', EX
 
 export const RUN_ERROR: Record<string, string> = {
   RUNNER_LOST: 'Mất kết nối với máy chạy',
+  RUNNER_STOPPED: 'Máy chạy bị tắt giữa chừng',
   PLAN_NOT_SUBMITTED: 'Claude kết thúc mà chưa gửi kế hoạch'
+};
+
+/** BE codes ("RUNNER_LOST") or runner errors in the form "CODE: message" (e.g. "USAGE_LIMIT: Claude hết hạn mức…") */
+export const runErrorText = (error: string | null | undefined) => {
+  if (!error) return '';
+  if (RUN_ERROR[error]) return RUN_ERROR[error];
+  const coded = /^[A-Z_]+: ([\s\S]+)$/.exec(error);
+  return coded ? coded[1] : error;
 };
 
 // Review notes: section 12 statuses when the BE supports them, otherwise derived from resolvedInRevision

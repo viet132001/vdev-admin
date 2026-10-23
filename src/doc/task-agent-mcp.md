@@ -265,9 +265,13 @@ BE từ chối `finish_task` nếu thiếu `criteria` cho tiêu chí nào của 
 Không có tool duyệt plan, chốt Done, xóa hay đổi project.
 
 ### 6.5 Cài đặt
-* Repo riêng `vdev-agent` (Node 20+), cấu hình `~/.vdev-agent/config.json`: `{ "apiUrl", "runnerToken" }`.
-* Xác thực Claude: biến môi trường `ANTHROPIC_API_KEY` trên máy chạy runner.
-* Chạy nền bằng `launchd` (macOS) / `pm2`. Lệnh `vdev-agent doctor` kiểm tra kết nối BE, token, git, API key.
+* Repo `vdev-agent` (Node 20+, TypeScript, Claude Agent SDK) — hướng dẫn chi tiết trong `vdev-agent/README.md`.
+* `vdev-agent init --api-url <url> --token <vdr_…> [--claude-token …|--api-key …]` lưu `~/.vdev-agent/config.json` (quyền 600).
+* Xác thực Claude: gói Pro / Max qua `claude setup-token` (`CLAUDE_CODE_OAUTH_TOKEN`) hoặc API key (`ANTHROPIC_API_KEY`); có cả hai thì dùng API key. Giới hạn USD chỉ áp dụng khi dùng API key.
+* `vdev-agent doctor [--live]`, `vdev-agent verify <thư-mục>`, `vdev-agent start`, `vdev-agent install-service` (launchd, log ở `~/.vdev-agent/logs/`).
+* Quyền của Claude được kiểm tra trong hook `PreToolUse` (chạy trước cả cơ chế tự cho phép của Claude Code); runner không nạp settings / hook / MCP server của repo.
+* `finish_task` do runner chạy lệnh test / lint / build; lệnh lỗi thì trả lỗi để Claude sửa (tối đa 3 vòng) trước khi gửi review.
+* Lỗi lượt chạy có dạng `MÃ: mô tả` — `USAGE_LIMIT`, `AUTH_FAILED`, `BUDGET_EXCEEDED`, `WORKSPACE_INVALID`, `RUNNER_STOPPED`.
 
 ---
 
@@ -434,3 +438,28 @@ Người dùng đính kèm tài liệu / hình ảnh để Claude lập kế ho�
 * Chỉ xem / mở được tài liệu trên máy có thư mục; máy khác hoặc app iOS chỉ thấy tên file.
 * Server không giữ bản sao — gợi ý đặt `docsRoot` trong iCloud Drive / thư mục có Time Machine.
 * Đổi tên / di chuyển file bằng Finder ⇒ runner báo `missing`; người dùng thêm lại tài liệu.
+
+---
+
+## 14. Chọn thư mục bằng hộp thoại của máy *(chờ BE)*
+
+Trình duyệt không cho web biết đường dẫn tuyệt đối của thư mục người dùng chọn, nên nút **Chọn…** ở "Thư mục làm việc" nhờ **runner** mở hộp chọn thư mục gốc của hệ điều hành (macOS Finder / Windows / Linux zenity) rồi trả đường dẫn về.
+
+```
+FE  POST /api/agent/folder-picks ──► BE tạo yêu cầu (PENDING, hết hạn sau 2 phút)
+runner heartbeat ◄── folderPicks: [{ id, prompt }]  (BE chuyển PICKING, chỉ giao 1 lần)
+runner mở hộp chọn thư mục → POST /api/agent/runner/folder-picks/:id { status, path?, workspace? }
+FE  GET /api/agent/folder-picks/:id (poll 1s) ──► DONE + path → điền vào ô
+```
+
+* Có thể lưu trong bộ nhớ BE (Map + TTL 2 phút), không cần bảng mới.
+
+| Method | Endpoint | Quyền | Ghi chú |
+|---|---|---|---|
+| POST | `/api/agent/folder-picks` | User | `{ prompt? }` (≤ 200 ký tự, ví dụ "Chọn thư mục code cho Satori_ERP") ⇒ `{ id, status: "PENDING", expiresAt }`. `409` nếu không có runner online |
+| GET | `/api/agent/folder-picks/:id` | User (chủ yêu cầu) | `{ id, status, path?, message?, workspace?: { ok, message } }`; `status`: `PENDING / PICKING / DONE / CANCELLED / FAILED / EXPIRED` |
+| POST | `/api/agent/runner/folder-picks/:id` | Runner | `{ status: "DONE" \| "CANCELLED" \| "FAILED", path?, message?, workspace?: { ok, message } }` — chỉ runner đã nhận yêu cầu |
+| — | Heartbeat response | Runner | Thêm `folderPicks: [{ id, prompt }]` — yêu cầu `PENDING` của chủ runner; giao xong chuyển `PICKING` |
+
+* `path` phải là đường dẫn tuyệt đối, ≤ 1000 ký tự. `workspace` là kết quả runner tự kiểm tra (git repo, quyền ghi) để FE hiện luôn.
+* `PICKING` quá 2 phút không có kết quả ⇒ `EXPIRED`.

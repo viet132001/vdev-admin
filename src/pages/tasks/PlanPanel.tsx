@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
 import { Plus, Sparkles, Check, X, RotateCcw, Ban, Pencil, ChevronRight, CircleAlert, Terminal, Library } from 'lucide-react';
-import { PLAN_STATUS, RUN_ERROR, RUN_STATUS, RUN_TYPE, agentSettingsOf, formatRelative, isActiveRun, useBusy } from './agent';
+import { PLAN_STATUS, RUN_STATUS, RUN_TYPE, agentSettingsOf, formatRelative, isActiveRun, runErrorText, useBusy } from './agent';
 import { PRIORITY_OPTIONS, StatusBadge, type ConfirmState } from './shared';
 import { AttachmentList, AttachmentPicker, ProjectDocsModal, imagesFromPaste, submitAttachments, type PendingAttachment } from './ProjectDocs';
 
@@ -52,7 +52,7 @@ export const RunLine: React.FC<{ run: any }> = ({ run }) => {
       {isActiveRun(run) && <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />}
       <span>{RUN_TYPE[run.type] || run.type}:</span>
       <span style={{ color: meta.color }}>{meta.label}{run.cancelRequested && run.status === 'RUNNING' ? ' (đang dừng)' : ''}</span>
-      {run.error && <span style={{ color: 'var(--danger)' }}>· {RUN_ERROR[run.error] || run.error}</span>}
+      {run.error && <span style={{ color: 'var(--danger)' }}>· {runErrorText(run.error)}</span>}
       {typeof run.costUsd === 'number' && <span>· ${run.costUsd.toFixed(2)}</span>}
     </span>
   );
