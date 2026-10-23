@@ -210,6 +210,9 @@ const planView = (db: any, plan: any) => {
     attachments: planAttachments(db, plan.id),
     items: db.planItems.filter((i: any) => i.planId === plan.id).sort((a: any, b: any) => a.position - b.position),
     parentTask: parent ? { id: parent.id, title: parent.title, status: parent.status } : null,
+    tasks: db.tasks
+      .filter((t: any) => t.planId === plan.id && t.assignee === 'AGENT' && !t.deletedAt)
+      .map((t: any) => ({ id: t.id, title: t.title, status: t.status, assignee: t.assignee })),
     latestRun: (() => { const r = latestRunOf(db, (x: any) => x.planId === plan.id); return r ? runSummary(r) : null; })()
   };
 };
@@ -237,11 +240,11 @@ const moveToStatus = (db: any, ctx: AgentMockCtx, task: any, status: string) => 
 
 const completePlanIfDone = (db: any, ctx: AgentMockCtx, planId: string) => {
   const plan = db.plans.find((p: any) => p.id === planId);
-  if (!plan?.parentTaskId || plan.status !== 'APPROVED') return;
-  const children = db.tasks.filter((t: any) => t.parentId === plan.parentTaskId && !t.deletedAt && t.status !== 'CANCELLED');
+  if (!plan || plan.status !== 'APPROVED') return;
+  const children = db.tasks.filter((t: any) => t.planId === plan.id && t.assignee === 'AGENT' && !t.deletedAt && t.status !== 'CANCELLED');
   if (!children.length || children.some((c: any) => c.status !== 'COMPLETED')) return;
   plan.status = 'DONE';
-  const parent = db.tasks.find((t: any) => t.id === plan.parentTaskId);
+  const parent = plan.parentTaskId ? db.tasks.find((t: any) => t.id === plan.parentTaskId) : null;
   if (parent) moveToStatus(db, ctx, parent, 'COMPLETED');
 };
 
@@ -383,16 +386,13 @@ export const routeAgent = (db: any, ctx: AgentMockCtx, method: string, seg: stri
       const ts = nowIso();
       const todo = ctx.columnForStatus(db, plan.projectId, 'PENDING');
       const base = { description: null, icon: null, startDate: null, deadline: null, completedAt: null, content: null, tagIds: [], createdAt: ts, updatedAt: ts, deletedAt: null, reworkNote: null, projectId: plan.projectId, columnId: todo?.id ?? null, planId: plan.id, status: 'PENDING' };
-      const parent = { ...base, id: genId(), title: `Plan: ${plan.title}`, description: plan.goal, parentId: null, assignee: 'USER', priority: 'NONE', position: 0 };
-      parent.position = ctx.appendPosition(db, parent);
-      db.tasks.push(parent);
-      items.forEach((item: any, i: number) => {
-        const child = { ...base, id: genId(), title: item.title, description: item.description, parentId: parent.id, assignee: 'AGENT', priority: item.priority, position: (i + 1) * GAP };
-        db.tasks.push(child);
-        item.acceptanceCriteria.forEach((criterion: string, ci: number) => db.subtasks.push({ id: genId(), taskId: child.id, title: criterion, isCompleted: false, deadline: null, position: (ci + 1) * GAP }));
-        item.taskId = child.id;
+      items.forEach((item: any) => {
+        const task = { ...base, id: genId(), title: item.title, description: item.description, parentId: null, assignee: 'AGENT', priority: item.priority, position: 0 };
+        task.position = ctx.appendPosition(db, task);
+        db.tasks.push(task);
+        item.taskId = task.id;
       });
-      Object.assign(plan, { status: 'APPROVED', approvedAt: ts, parentTaskId: parent.id, updatedAt: ts });
+      Object.assign(plan, { status: 'APPROVED', approvedAt: ts, updatedAt: ts });
       enqueue(db, ctx, { projectId: plan.projectId, type: 'EXECUTE', planId: plan.id });
       return { result: planView(db, plan) };
     }

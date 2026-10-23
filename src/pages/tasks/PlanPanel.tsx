@@ -136,7 +136,10 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
     try {
       const detail = await api.get(`/api/task-plans/${id}`, { noCache: true });
       setPlan(detail);
-      if (detail.parentTaskId) {
+      // Plans approved before tasks became top-level keep them under a "Plan: …" parent task
+      if (detail.tasks?.length) {
+        setChildren(detail.tasks);
+      } else if (detail.parentTaskId) {
         const parent = await api.get(`/api/tasks/${detail.parentTaskId}`, { noCache: true });
         setChildren(parent.children || []);
       } else {
