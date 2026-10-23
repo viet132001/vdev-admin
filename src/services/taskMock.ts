@@ -1,4 +1,5 @@
 // localStorage mock for the Task module (/api/tasks, /api/task-projects, /api/task-tags) — mirrors src/doc/tasks-api.md
+import { DEFAULT_AGENT_SETTINGS, routeAgent, upgradeAgentDb, type AgentMockCtx } from './taskAgentMock';
 
 const STORAGE_KEY = 'mock_task_module';
 const GAP = 1024;
@@ -20,6 +21,7 @@ interface DB {
   subtasks: any[];
   comments: any[];
   tags: any[];
+  [agentTable: string]: any[]; // Task Agent tables, see taskAgentMock.ts
 }
 
 const load = (): DB => JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
@@ -28,8 +30,25 @@ const save = (db: DB) => localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 const defaultColumns = (projectId: string) => [
   { id: genId(), projectId, name: 'Cần làm', color: '#a1a1aa', category: 'PENDING', position: GAP },
   { id: genId(), projectId, name: 'Đang làm', color: '#3f3f46', category: 'IN_PROGRESS', position: GAP * 2 },
-  { id: genId(), projectId, name: 'Hoàn thành', color: '#15803d', category: 'COMPLETED', position: GAP * 3 }
+  { id: genId(), projectId, name: 'Chờ review', color: '#71717a', category: 'IN_REVIEW', position: GAP * 3 },
+  { id: genId(), projectId, name: 'Done', color: '#15803d', category: 'COMPLETED', position: GAP * 4 }
 ];
+
+// Same as the BE migration: projects without an IN_REVIEW column get "Chờ review" right before the first Done column
+const addReviewColumns = (db: DB) => {
+  let changed = false;
+  db.projects.forEach((p) => {
+    const cols = db.columns.filter((c) => c.projectId === p.id).sort((a, b) => a.position - b.position);
+    if (cols.some((c) => c.category === 'IN_REVIEW')) return;
+    const doneIndex = cols.findIndex((c) => c.category === 'COMPLETED');
+    const done = cols[doneIndex];
+    const prev = doneIndex > 0 ? cols[doneIndex - 1] : null;
+    const position = !done ? (cols.length ? cols[cols.length - 1].position + GAP : GAP) : prev ? (prev.position + done.position) / 2 : done.position - GAP;
+    db.columns.push({ id: genId(), projectId: p.id, name: 'Chờ review', color: '#71717a', category: 'IN_REVIEW', position });
+    changed = true;
+  });
+  return changed;
+};
 
 const seed = () => {
   if (localStorage.getItem(STORAGE_KEY)) return;
@@ -50,7 +69,7 @@ const seed = () => {
       { ...baseTask, id: 'task-1', title: 'Thiết kế màn hình login', projectId, columnId: columns[1].id, status: 'IN_PROGRESS', priority: 'HIGH', startDate: new Date(Date.now() - 2 * 864e5).toISOString(), deadline: new Date(Date.now() + 3 * 864e5).toISOString(), position: GAP, tagIds: [tagFe.id], content: { blocks: [{ id: 'b1', type: 'paragraph', text: 'Màn hình đăng nhập theo design guideline.' }, { id: 'b2', type: 'todo', text: 'Form validation', checked: false }] } },
       { ...baseTask, id: 'task-2', title: 'Sửa lỗi refresh token', projectId, columnId: columns[0].id, status: 'PENDING', priority: 'URGENT', deadline: new Date(Date.now() + 864e5).toISOString(), position: GAP, tagIds: [tagBug.id] },
       { ...baseTask, id: 'task-3', title: 'Viết test e2e cho Task Module', projectId, columnId: columns[0].id, status: 'PENDING', priority: 'MEDIUM', position: GAP * 2 },
-      { ...baseTask, id: 'task-4', title: 'Thiết lập CI', projectId, columnId: columns[2].id, status: 'COMPLETED', completedAt: ts, position: GAP },
+      { ...baseTask, id: 'task-4', title: 'Thiết lập CI', projectId, columnId: columns[3].id, status: 'COMPLETED', completedAt: ts, position: GAP },
       { ...baseTask, id: 'task-5', title: 'Responsive mobile', projectId, columnId: columns[1].id, status: 'IN_PROGRESS', parentId: 'task-1', position: GAP },
       { ...baseTask, id: 'task-6', title: 'Mua sách tham khảo', projectId: null, columnId: null, status: 'PENDING', position: GAP }
     ],
@@ -123,8 +142,12 @@ const descendants = (db: DB, id: string): any[] => {
 const taskCard = (db: DB, t: any) => {
   const subtasks = db.subtasks.filter((s) => s.taskId === t.id).sort(byPosition);
   const { content: _content, tagIds, deletedAt: _deletedAt, ...rest } = t;
+  const latest = (db.changeSets || []).filter((cs: any) => cs.taskId === t.id).sort((a: any, b: any) => b.revision - a.revision)[0];
   return {
+    assignee: 'USER',
+    planId: null,
     ...rest,
+    latestChangeSet: latest ? { id: latest.id, revision: latest.revision, stats: latest.stats, createdAt: latest.createdAt } : null,
     subtasks,
     tags: db.tags.filter((tag) => (tagIds || []).includes(tag.id)),
     subtaskProgress: { total: subtasks.length, completed: subtasks.filter((s) => s.isCompleted).length },
@@ -184,7 +207,9 @@ const handleProjects = (db: DB, method: string, parts: string[], query: URLSearc
       const p = {
         id: genId(), name: body.name, description: body.description ?? null, icon: body.icon ?? null, color: body.color ?? null,
         position: active.length ? Math.max(...active.map((x) => x.position)) + GAP : GAP,
-        isArchived: false, createdAt: ts, updatedAt: ts, deletedAt: null
+        isArchived: false, createdAt: ts, updatedAt: ts, deletedAt: null,
+        workspacePath: body.workspacePath || null, workspaceStatus: 'UNKNOWN', workspaceMessage: null, workspaceCheckedAt: null,
+        agentSettings: { ...DEFAULT_AGENT_SETTINGS, ...(body.agentSettings || {}) }
       };
       db.projects.push(p);
       db.columns.push(...defaultColumns(p.id));
@@ -205,6 +230,19 @@ const handleProjects = (db: DB, method: string, parts: string[], query: URLSearc
     if (method === 'GET') return projectDetail(db, project);
     if (method === 'PATCH') {
       ['name', 'description', 'icon', 'color', 'isArchived'].forEach((k) => { if (k in (body || {})) project[k] = body[k]; });
+      if ('workspacePath' in (body || {})) {
+        const next = body.workspacePath || null;
+        if (next && !/^(\/|[A-Za-z]:[\\/])/.test(next)) fail('workspacePath must be an absolute path');
+        if (next !== (project.workspacePath ?? null)) Object.assign(project, { workspacePath: next, workspaceStatus: 'UNKNOWN', workspaceMessage: null, workspaceCheckedAt: null });
+      }
+      if ('docsFolder' in (body || {}) && body.docsFolder !== project.docsFolder) {
+        if (project.docsFolder) fail('docsFolder đã được đặt, không đổi được', 'CONFLICT');
+        const name = String(body.docsFolder || '').trim();
+        if (!name || /[/\\]/.test(name) || name === '..') fail('docsFolder không hợp lệ');
+        if (db.projects.some((p) => p.id !== project.id && (p.docsFolder || '').toLowerCase() === name.toLowerCase())) fail('docsFolder trùng với project khác', 'CONFLICT');
+        project.docsFolder = name;
+      }
+      if (body?.agentSettings) project.agentSettings = { ...DEFAULT_AGENT_SETTINGS, ...(project.agentSettings || {}), ...body.agentSettings };
       project.updatedAt = nowIso();
       return projectDetail(db, project);
     }
@@ -585,18 +623,30 @@ const route = (method: string, url: string, body?: any): any => {
   const segments = urlObj.pathname.split('/').filter(Boolean); // ['api', 'tasks', ...]
   if (segments[0] !== 'api') return NO_MATCH;
   const resource = segments[1];
-  if (resource !== 'tasks' && resource !== 'task-projects' && resource !== 'task-tags') return NO_MATCH;
+  if (!['tasks', 'task-projects', 'task-tags', 'task-plans', 'agent', 'changesets', 'review-notes'].includes(resource)) return NO_MATCH;
 
   const db = load();
+  let upgraded = addReviewColumns(db);
+  upgraded = upgradeAgentDb(db, agentCtx) || upgraded;
+  if (upgraded) save(db);
+
+  const agent = routeAgent(db, agentCtx, method, segments, urlObj.searchParams, body);
+  if (agent.result !== NO_MATCH) {
+    if (method !== 'GET' || agent.mutated) save(db);
+    return agent.result;
+  }
+
   const parts = segments.slice(2);
-  let result: any;
+  let result: any = NO_MATCH;
   if (resource === 'tasks') result = handleTasks(db, method, parts, urlObj.searchParams, body);
   else if (resource === 'task-projects') result = handleProjects(db, method, parts, urlObj.searchParams, body);
-  else result = handleTags(db, method, parts, body);
+  else if (resource === 'task-tags') result = handleTags(db, method, parts, body);
 
   if (result !== NO_MATCH && method !== 'GET') save(db);
   return result;
 };
+
+const agentCtx: AgentMockCtx = { NO_MATCH, fail, genId, nowIso, setStatus, columnForStatus, appendPosition, findTask, findProject };
 
 export const mockTasks = (method: string, url: string, body?: any): { handled: boolean; data?: any } => {
   seed();

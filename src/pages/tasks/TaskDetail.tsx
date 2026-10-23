@@ -5,6 +5,7 @@ import {
   Plus, Send, Pencil, GripVertical, Clock3, FileText, ChevronRight, Loader
 } from 'lucide-react';
 import { BlockEditor, parseContent, type Block } from './BlockEditor';
+import { TaskReview } from './TaskReview';
 import {
   COLOR_PRESETS, PRIORITY_OPTIONS, STATUS_OPTIONS, Popover, StatusBadge, TagChip, formatDate, isOverdue, toDateInput,
   type ConfirmState
@@ -40,6 +41,7 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, 
   const [newComment, setNewComment] = useState('');
   const [editingComment, setEditingComment] = useState<{ id: string; content: string } | null>(null);
   const [dragSubtaskId, setDragSubtaskId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'page' | 'review' | null>(null);
 
   const saveTimer = useRef<number | null>(null);
   const pendingBlocks = useRef<Block[] | null>(null);
@@ -288,10 +290,13 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, 
 
   const progress = task.subtaskProgress || { total: 0, completed: 0 };
   const currentColumn = columns.find((c) => c.id === task.columnId);
+  // Claude's tasks open on the review tab when they are waiting for review
+  const hasReview = task.assignee === 'AGENT' || !!task.latestChangeSet;
+  const activeTab = !hasReview ? 'page' : tab ?? (task.status === 'IN_REVIEW' ? 'review' : 'page');
 
   return (
     <div className="tw-drawer-overlay" onMouseDown={close}>
-      <div className="tw-drawer" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={`tw-drawer ${activeTab === 'review' ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
         <div className="tw-drawer-top">
           <span className="flex align-center" style={{ gap: '4px', minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>
             <span>{task.project ? task.project.name : 'Inbox'}</span>
@@ -305,6 +310,7 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, 
             )}
             <ChevronRight size={12} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-main)' }}>{task.title}</span>
+            {task.assignee === 'AGENT' && <span className="tw-agent-badge" style={{ marginLeft: 4 }}>Claude</span>}
           </span>
           <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}>
             {contentState === 'saving' && <><Loader size={12} /> Đang lưu...</>}
@@ -343,6 +349,28 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, 
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           />
 
+          {hasReview && (
+            <div className="tabs" style={{ marginTop: 8 }}>
+              <button className={`tab ${activeTab === 'page' ? 'active' : ''}`} onClick={() => setTab('page')}>Nội dung</button>
+              <button className={`tab ${activeTab === 'review' ? 'active' : ''}`} onClick={() => setTab('review')}>
+                Thay đổi code{task.latestChangeSet ? ` · rev ${task.latestChangeSet.revision}` : ''}
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'review' ? (
+            <div style={{ marginTop: 16 }}>
+              <TaskReview
+                task={task}
+                onConfirm={onConfirm}
+                onChanged={async () => {
+                  await loadTask();
+                  loadComments();
+                  onChanged();
+                }}
+              />
+            </div>
+          ) : (<>
           <div className="tw-props">
             <div className="tw-prop-label"><Circle size={14} /> Trạng thái</div>
             <div className="tw-prop-value flex align-center gap-2">
@@ -576,6 +604,8 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, 
             {comments.map((c) => (
               <div key={c.id} style={{ padding: '10px 12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--bg-sidebar)', fontSize: '0.85rem' }}>
                 <div className="flex align-center" style={{ gap: '6px', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  {c.authorType === 'AGENT' && <span className="tw-agent-badge">Claude</span>}
+                  {c.authorType === 'SYSTEM' && <span className="badge">Hệ thống</span>}
                   <span>{new Date(c.createdAt).toLocaleString('vi-VN')}{c.updatedAt !== c.createdAt ? ' (đã sửa)' : ''}</span>
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: '2px' }}>
                     <button className="icon-btn" onClick={() => setEditingComment({ id: c.id, content: c.content })}><Pencil size={12} /></button>
@@ -633,6 +663,7 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, 
               <button className="btn btn-primary" onClick={addComment} disabled={!newComment.trim()}><Send size={14} /></button>
             </div>
           </div>
+          </>)}
         </div>
       </div>
     </div>

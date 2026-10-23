@@ -5,7 +5,8 @@ import { CalendarDays, ChartGantt, List, SquareKanban, Table, AlertCircle } from
 export const STATUS_OPTIONS = [
   { value: 'PENDING', label: 'Chờ xử lý', color: 'var(--text-muted)' },
   { value: 'IN_PROGRESS', label: 'Đang làm', color: 'var(--text-main)' },
-  { value: 'COMPLETED', label: 'Hoàn thành', color: 'var(--success)' },
+  { value: 'IN_REVIEW', label: 'Chờ review', color: 'var(--warning)' },
+  { value: 'COMPLETED', label: 'Done', color: 'var(--success)' },
   { value: 'CANCELLED', label: 'Đã hủy', color: 'var(--text-muted)' }
 ];
 

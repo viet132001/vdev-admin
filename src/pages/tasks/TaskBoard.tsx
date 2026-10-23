@@ -26,6 +26,17 @@ export const TaskCard: React.FC<{ task: any; onClick: () => void }> = ({ task, o
       {task.icon && <span>{task.icon}</span>}
       <span style={{ textDecoration: task.status === 'COMPLETED' ? 'line-through' : 'none', wordBreak: 'break-word' }}>{task.title}</span>
     </div>
+    {(task.assignee === 'AGENT' || task.planId || task.latestChangeSet) && (
+      <div className="tw-card-meta">
+        {task.assignee === 'AGENT' && <span className="tw-agent-badge">Claude</span>}
+        {task.assignee !== 'AGENT' && task.planId && <span className="tw-agent-badge">Kế hoạch</span>}
+        {task.latestChangeSet && (
+          <span className="tw-diff-stat">
+            rev {task.latestChangeSet.revision} · <span className="plus">+{task.latestChangeSet.stats?.additions ?? 0}</span> <span className="minus">−{task.latestChangeSet.stats?.deletions ?? 0}</span>
+          </span>
+        )}
+      </div>
+    )}
     {(task.tags?.length > 0 || task.priority !== 'NONE') && (
       <div className="tw-card-meta">
         <PriorityBadge priority={task.priority} />

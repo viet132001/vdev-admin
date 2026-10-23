@@ -3,18 +3,25 @@ import { useSearchParams } from 'react-router-dom';
 import { api, getErrorMessage } from '../services/api';
 import {
   Plus, Inbox, Search, Ellipsis, Pencil, Trash2, Archive, ArchiveRestore, ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
-  Tag, X, SlidersHorizontal
+  Tag, X, SlidersHorizontal, Sparkles, GitPullRequestArrow, Monitor, FolderGit2
 } from 'lucide-react';
 import { TaskBoard } from './tasks/TaskBoard';
 import { TaskTable } from './tasks/TaskTable';
 import { TaskCalendar } from './tasks/TaskCalendar';
 import { TaskDetail } from './tasks/TaskDetail';
+import { PlanPanel } from './tasks/PlanPanel';
+import { ReviewQueue } from './tasks/ReviewQueue';
+import { RunnersModal } from './tasks/RunnersModal';
+import { AgentSettingsModal, WorkspaceBadge } from './tasks/AgentSettingsModal';
 import {
   COLOR_PRESETS, INBOX_VIEWS, PRIORITY_OPTIONS, VIEW_TYPES, ConfirmDialog, Popover, TagChip,
   type ConfirmState, type TaskFilters
 } from './tasks/shared';
 
 const INBOX = 'inbox';
+const REVIEW = 'review';
+// Not a saved view: the Claude plans of a project, shown as the last tab
+const PLANS_VIEW = { id: '__plans', name: 'Kế hoạch', type: 'PLANS', config: null, virtual: true };
 
 interface ProjectForm {
   id?: string;
@@ -22,9 +29,10 @@ interface ProjectForm {
   description: string;
   icon: string;
   color: string;
+  workspacePath: string;
 }
 
-const emptyProjectForm: ProjectForm = { name: '', description: '', icon: '', color: COLOR_PRESETS[0] };
+const emptyProjectForm: ProjectForm = { name: '', description: '', icon: '', color: COLOR_PRESETS[0], workspacePath: '' };
 
 export const Tasks: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -50,6 +58,10 @@ export const Tasks: React.FC = () => {
   const [renamingView, setRenamingView] = useState<{ id: string; name: string } | null>(null);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [newTag, setNewTag] = useState({ name: '', color: COLOR_PRESETS[0] });
+  const [reviewCount, setReviewCount] = useState<number | null>(null);
+  const [pendingPlans, setPendingPlans] = useState<any[]>([]);
+  const [agentSettingsOpen, setAgentSettingsOpen] = useState<any | null>(null);
+  const [runnersOpen, setRunnersOpen] = useState(false);
 
   const updateParams = useCallback((patch: Record<string, string | null>) => {
     setSearchParams((prev) => {
@@ -72,6 +84,12 @@ export const Tasks: React.FC = () => {
     } catch (err) {
       console.error('Failed to load projects', err);
     }
+    const [review, plans] = await Promise.allSettled([
+      api.get('/api/tasks?status=IN_REVIEW&limit=1', { noCache: true }),
+      api.get('/api/task-plans?status=PENDING_APPROVAL', { noCache: true })
+    ]);
+    setReviewCount(review.status === 'fulfilled' ? review.value?.total ?? null : null);
+    setPendingPlans(plans.status === 'fulfilled' && Array.isArray(plans.value) ? plans.value : []);
   }, [showArchived]);
 
   const loadTags = useCallback(async () => {
@@ -84,7 +102,7 @@ export const Tasks: React.FC = () => {
   }, []);
 
   const loadProject = useCallback(async () => {
-    if (scope === INBOX) {
+    if (scope === INBOX || scope === REVIEW) {
       setProject(null);
       return;
     }
@@ -116,7 +134,8 @@ export const Tasks: React.FC = () => {
 
   // ---------- views ----------
 
-  const views: any[] = scope === INBOX ? INBOX_VIEWS : project?.id === scope ? project.views || [] : [];
+  const views: any[] = scope === INBOX ? INBOX_VIEWS : project?.id === scope ? [...(project.views || []), PLANS_VIEW] : [];
+  const projectPendingPlans = pendingPlans.filter((p) => p.projectId === scope).length;
   const activeView = views.find((v) => v.id === searchParams.get('view')) || views[0] || null;
   const viewConfig = (scope === INBOX ? inboxConfig[activeView?.id] : activeView?.config) || {};
 
@@ -127,7 +146,7 @@ export const Tasks: React.FC = () => {
 
   // Filters / sort live in the view's `config`, so each view remembers its own setup
   const updateViewConfig = async (patch: any) => {
-    if (!activeView) return;
+    if (!activeView || activeView.virtual) return;
     const config = { ...viewConfig, ...patch };
     if (scope === INBOX) {
       setInboxConfig({ ...inboxConfig, [activeView.id]: config });
@@ -202,8 +221,13 @@ export const Tasks: React.FC = () => {
       name: projectForm.name.trim(),
       description: projectForm.description.trim() || null,
       icon: projectForm.icon || null,
-      color: projectForm.color
+      color: projectForm.color,
+      workspacePath: projectForm.workspacePath.trim() || null
     };
+    if (payload.workspacePath && !/^(\/|[A-Za-z]:[\\/])/.test(payload.workspacePath)) {
+      alert('Thư mục làm việc phải là đường dẫn tuyệt đối, ví dụ /Users/ban/code/du-an');
+      return;
+    }
     try {
       if (projectForm.id) {
         await api.patch(`/api/task-projects/${projectForm.id}`, payload);
@@ -322,6 +346,9 @@ export const Tasks: React.FC = () => {
   // ---------- render ----------
 
   const renderView = () => {
+    if (scope === REVIEW) {
+      return <ReviewQueue projects={projects} refreshKey={refreshKey} onOpenTask={(t) => updateParams({ task: t.id })} />;
+    }
     if (!activeView) {
       return <div className="loading-container"><span className="spinner"></span><span>Đang tải...</span></div>;
     }
@@ -350,6 +377,18 @@ export const Tasks: React.FC = () => {
       case 'CALENDAR':
       case 'TIMELINE':
         return <TaskCalendar mode={activeView.type} projectId={projectId} filters={filters} refreshKey={refreshKey} onOpenTask={openTask} onChanged={handleChanged} />;
+      case 'PLANS':
+        return project ? (
+          <PlanPanel
+            project={project}
+            refreshKey={refreshKey}
+            onOpenTask={openTask}
+            onOpenSettings={() => setAgentSettingsOpen(project)}
+            onChanged={() => { handleChanged(); refreshViews(); }}
+            onProjectChanged={loadProject}
+            onConfirm={setConfirm}
+          />
+        ) : null;
       default:
         return null;
     }
@@ -367,7 +406,10 @@ export const Tasks: React.FC = () => {
       >
         {p.icon ? <span>{p.icon}</span> : <span className="tw-column-dot" style={{ backgroundColor: p.color || 'var(--text-muted)', margin: '0 3px' }} />}
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-        <span className="tw-count">{p.taskCount ?? ''}</span>
+        <span className="tw-count">
+          {pendingPlans.some((pl) => pl.projectId === p.id) && <span className="tw-pending-dot" title="Có kế hoạch chờ duyệt" />}
+          {p.taskCount ?? ''}
+        </span>
         <span className="tw-nav-actions">
           <span className="icon-btn" role="button" onClick={(e) => { e.stopPropagation(); setProjectMenuId(projectMenuId === p.id ? null : p.id); }}>
             <Ellipsis size={14} />
@@ -376,8 +418,11 @@ export const Tasks: React.FC = () => {
       </button>
       {projectMenuId === p.id && (
         <Popover onClose={() => setProjectMenuId(null)} style={{ top: '100%', left: 16 }}>
-          <button className="tw-popover-item" onClick={() => { setProjectMenuId(null); setProjectForm({ id: p.id, name: p.name, description: p.description || '', icon: p.icon || '', color: p.color || COLOR_PRESETS[8] }); }}>
+          <button className="tw-popover-item" onClick={() => { setProjectMenuId(null); setProjectForm({ id: p.id, name: p.name, description: p.description || '', icon: p.icon || '', color: p.color || COLOR_PRESETS[0], workspacePath: p.workspacePath || '' }); }}>
             <Pencil size={14} /> Chỉnh sửa
+          </button>
+          <button className="tw-popover-item" onClick={() => { setProjectMenuId(null); setAgentSettingsOpen(p); }}>
+            <FolderGit2 size={14} /> Thư mục & Claude
           </button>
           {!p.isArchived && (
             <>
@@ -401,6 +446,10 @@ export const Tasks: React.FC = () => {
         <button className={`tw-nav-item ${scope === INBOX ? 'active' : ''}`} onClick={() => updateParams({ project: null, view: null, task: null })}>
           <Inbox size={16} /> Inbox
           <span className="tw-count">{inboxCount ?? ''}</span>
+        </button>
+        <button className={`tw-nav-item ${scope === REVIEW ? 'active' : ''}`} onClick={() => updateParams({ project: REVIEW, view: null, task: null })}>
+          <GitPullRequestArrow size={16} /> Chờ review
+          <span className="tw-count">{reviewCount ? <b style={{ color: 'var(--text-main)' }}>{reviewCount}</b> : ''}</span>
         </button>
 
         <div className="tw-nav-title">
@@ -439,6 +488,10 @@ export const Tasks: React.FC = () => {
             </span>
           ))}
         </div>
+
+        <button className="tw-nav-item" style={{ marginTop: 'auto', fontSize: '0.8rem', color: 'var(--text-muted)' }} onClick={() => setRunnersOpen(true)}>
+          <Monitor size={14} /> Claude trên máy này
+        </button>
       </aside>
 
       {/* Main area */}
@@ -446,21 +499,30 @@ export const Tasks: React.FC = () => {
         <header className="flex justify-between align-center" style={{ gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 600 }}>
-              {scope === INBOX ? 'Inbox' : project ? `${project.icon ? `${project.icon} ` : ''}${project.name}` : '...'}
+              {scope === INBOX ? 'Inbox' : scope === REVIEW ? 'Chờ review' : project ? `${project.icon ? `${project.icon} ` : ''}${project.name}` : '...'}
               {project?.isArchived && <span className="badge" style={{ marginLeft: 8, verticalAlign: 'middle' }}>Đã lưu trữ</span>}
             </h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              {scope === INBOX ? 'Công việc chưa thuộc project nào' : project?.description || 'Quản lý công việc theo dạng bảng, danh sách, lịch'}
+              {scope === INBOX ? 'Công việc chưa thuộc project nào'
+                : scope === REVIEW ? 'Task Claude đã làm xong, đang chờ bạn xem thay đổi và chốt Done'
+                : project?.description || 'Quản lý công việc theo dạng bảng, danh sách, lịch'}
             </p>
           </div>
-          <button className="btn btn-primary" onClick={createTask}><Plus size={16} /> Tạo công việc</button>
+          <div className="flex align-center gap-2" style={{ flexWrap: 'wrap' }}>
+            {project && scope !== INBOX && scope !== REVIEW && (
+              <button className="btn btn-secondary" onClick={() => setAgentSettingsOpen(project)} title="Thư mục làm việc & cài đặt Claude">
+                <WorkspaceBadge project={project} />
+              </button>
+            )}
+            {scope !== REVIEW && <button className="btn btn-primary" onClick={createTask}><Plus size={16} /> Tạo công việc</button>}
+          </div>
         </header>
 
         {/* View tabs */}
         <div className="tabs" style={{ alignItems: 'center', overflow: 'visible', flexWrap: 'wrap' }}>
           {views.map((v, i) => {
             const meta = VIEW_TYPES.find((t) => t.value === v.type);
-            const Icon = meta?.icon;
+            const Icon = v.type === 'PLANS' ? Sparkles : meta?.icon;
             const isActive = activeView?.id === v.id;
             return (
               <div key={v.id} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -485,12 +547,13 @@ export const Tasks: React.FC = () => {
                     className={`tab ${isActive ? 'active' : ''}`}
                     style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                     onClick={() => updateParams({ view: v.id })}
-                    onDoubleClick={() => scope !== INBOX && setRenamingView({ id: v.id, name: v.name })}
+                    onDoubleClick={() => scope !== INBOX && !v.virtual && setRenamingView({ id: v.id, name: v.name })}
                   >
                     {Icon && <Icon size={14} />} {v.name}
+                    {v.type === 'PLANS' && projectPendingPlans > 0 && <span className="badge" style={{ color: 'var(--warning)' }}>{projectPendingPlans} chờ duyệt</span>}
                   </button>
                 )}
-                {scope !== INBOX && isActive && !renamingView && (
+                {scope !== INBOX && isActive && !renamingView && !v.virtual && (
                   <button className="icon-btn" onClick={() => setViewMenuId(viewMenuId === v.id ? null : v.id)}><Ellipsis size={14} /></button>
                 )}
                 {viewMenuId === v.id && (
@@ -507,8 +570,8 @@ export const Tasks: React.FC = () => {
                     })}
                     <hr className="tw-divider" style={{ margin: '4px 0' }} />
                     <button className="tw-popover-item" disabled={i === 0} onClick={() => { setViewMenuId(null); moveView(v.id, -1); }}><ArrowLeft size={14} /> Chuyển sang trái</button>
-                    <button className="tw-popover-item" disabled={i === views.length - 1} onClick={() => { setViewMenuId(null); moveView(v.id, 1); }}><ArrowRight size={14} /> Chuyển sang phải</button>
-                    <button className="tw-popover-item danger" disabled={views.length <= 1} onClick={() => { setViewMenuId(null); deleteView(v); }}><Trash2 size={14} /> Xóa view</button>
+                    <button className="tw-popover-item" disabled={i >= views.filter((x) => !x.virtual).length - 1} onClick={() => { setViewMenuId(null); moveView(v.id, 1); }}><ArrowRight size={14} /> Chuyển sang phải</button>
+                    <button className="tw-popover-item danger" disabled={views.filter((x) => !x.virtual).length <= 1} onClick={() => { setViewMenuId(null); deleteView(v); }}><Trash2 size={14} /> Xóa view</button>
                   </Popover>
                 )}
               </div>
@@ -530,7 +593,7 @@ export const Tasks: React.FC = () => {
         </div>
 
         {/* Filters */}
-        <div className="tw-toolbar">
+        {scope !== REVIEW && activeView?.type !== 'PLANS' && <div className="tw-toolbar">
           <div style={{ position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-muted)' }} />
             <input className="form-input" style={{ paddingLeft: 30, width: 220 }} placeholder="Tìm công việc..." value={keyword} onChange={(e) => setKeyword(e.target.value)} />
@@ -548,7 +611,7 @@ export const Tasks: React.FC = () => {
               <X size={12} /> Xóa lọc
             </button>
           )}
-        </div>
+        </div>}
 
         <div className="tw-content">{renderView()}</div>
       </section>
@@ -592,6 +655,18 @@ export const Tasks: React.FC = () => {
                   <textarea className="form-input" style={{ resize: 'none', height: 70 }} value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} />
                 </div>
                 <div className="form-group">
+                  <label className="form-label">Thư mục code (để Claude làm task — tùy chọn)</label>
+                  <input
+                    className="form-input"
+                    style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}
+                    placeholder="/Users/ban/code/du-an"
+                    value={projectForm.workspacePath}
+                    onChange={(e) => setProjectForm({ ...projectForm, workspacePath: e.target.value })}
+                    spellCheck={false}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lệnh test / lint và các cài đặt khác chỉnh trong “Thư mục & Claude” của project.</span>
+                </div>
+                <div className="form-group">
                   <label className="form-label">Màu</label>
                   <div className="flex" style={{ gap: '8px', flexWrap: 'wrap' }}>
                     {COLOR_PRESETS.map((c) => (
@@ -605,7 +680,7 @@ export const Tasks: React.FC = () => {
                   </div>
                 </div>
                 {!projectForm.id && (
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Project mới có sẵn 3 cột “Cần làm / Đang làm / Hoàn thành” và một view Bảng.</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Project mới có sẵn 4 cột “Cần làm / Đang làm / Chờ review / Done” và một view Bảng.</p>
                 )}
               </div>
               <div className="modal-footer">
@@ -666,6 +741,17 @@ export const Tasks: React.FC = () => {
           </div>
         </div>
       )}
+
+      {agentSettingsOpen && (
+        <AgentSettingsModal
+          project={agentSettingsOpen}
+          onClose={() => setAgentSettingsOpen(null)}
+          onSaved={() => { loadProjects(); if (agentSettingsOpen.id === scope) loadProject(); }}
+          onOpenRunners={() => setRunnersOpen(true)}
+        />
+      )}
+
+      {runnersOpen && <RunnersModal onClose={() => setRunnersOpen(false)} onConfirm={setConfirm} />}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>
