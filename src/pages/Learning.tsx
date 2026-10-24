@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../services/api';
+import { api, authFetch } from '../services/api';
 import { Plus, BookOpen, Clock, Award, CheckCircle, CheckCircle2, ChevronRight, GraduationCap, Volume2, Trash2, Upload, Music, Edit, Repeat, AlertCircle } from 'lucide-react';
 export const Learning: React.FC = () => {
   const [courses, setCourses] = useState<any[]>([]);
@@ -90,12 +90,7 @@ export const Learning: React.FC = () => {
       try {
         const formData = new FormData();
         formData.append('file', file);
-        const token = localStorage.getItem('vdev_token');
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/storage/upload`, {
-          method: 'POST',
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-          body: formData
-        });
+        const response = await authFetch('/api/storage/upload', { method: 'POST', body: formData });
 
         if (response.ok) {
           const resData = await response.json();

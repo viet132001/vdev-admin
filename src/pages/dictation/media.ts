@@ -1,4 +1,4 @@
-import { api } from '../../services/api';
+import { api, authFetch } from '../../services/api';
 
 export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -84,12 +84,7 @@ export const uploadAudio = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append('file', file);
   try {
-    const token = localStorage.getItem('vdev_token');
-    const response = await fetch(`${API_BASE}/api/storage/upload`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData
-    });
+    const response = await authFetch('/api/storage/upload', { method: 'POST', body: formData });
     if (!response.ok) throw new Error(await response.text() || 'Upload failed');
     const json = await response.json();
     const id = json.data?.file?.id || json.file?.id || json.data?.id || json.id;

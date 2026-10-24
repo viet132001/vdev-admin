@@ -5,9 +5,67 @@ import { mockDictation } from './dictationMock';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+const TOKEN_KEY = 'vdev_token';
+const REFRESH_TOKEN_KEY = 'vdev_refresh_token';
+export const SESSION_EXPIRED_EVENT = 'vdev:session-expired';
+
 const getAuthHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('vdev_token');
+  const token = localStorage.getItem(TOKEN_KEY);
   return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+export const setAuthTokens = (accessToken: string, refreshToken?: string) => {
+  localStorage.setItem(TOKEN_KEY, accessToken);
+  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+};
+
+export const clearAuthTokens = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
+// Shared so concurrent 401s trigger a single refresh request
+let refreshPromise: Promise<boolean> | null = null;
+
+const refreshAccessToken = (): Promise<boolean> => {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      if (!refreshToken) return false;
+      try {
+        const response = await fetch(`${BASE_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken })
+        });
+        if (!response.ok) return false;
+        const json = await response.json();
+        const data = json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
+        if (!data?.accessToken) return false;
+        setAuthTokens(data.accessToken, data.refreshToken);
+        return true;
+      } catch {
+        return false;
+      }
+    })().finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+};
+
+// fetch against the backend with the access token; on 401 refreshes once and retries,
+// and if that fails clears the session so AuthContext sends the user back to login
+export const authFetch = async (path: string, init: RequestInit = {}): Promise<Response> => {
+  const send = () => fetch(`${BASE_URL}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), ...getAuthHeaders() } });
+  const hadToken = !!localStorage.getItem(TOKEN_KEY);
+  let response = await send();
+  if (response.status !== 401 || !hadToken) return response;
+  if (await refreshAccessToken()) {
+    response = await send();
+    if (response.status !== 401) return response;
+  }
+  clearAuthTokens();
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  return response;
 };
 
 let useMockFallback = false;
@@ -93,9 +151,7 @@ export const api = {
     }
     if (!useMockFallback) {
       try {
-        const response = await fetch(`${BASE_URL}${url}`, {
-          headers: { ...getAuthHeaders() }
-        });
+        const response = await authFetch(url);
         if (!response.ok) throw new Error(await response.text() || 'API Error');
         const json = await response.json();
         const data = json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
@@ -190,12 +246,9 @@ export const api = {
     cache.clear();
     if (!useMockFallback) {
       try {
-        const response = await fetch(`${BASE_URL}${url}`, {
+        const response = await authFetch(url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
         if (!response.ok) throw new Error(await response.text() || 'API Error');
@@ -386,12 +439,9 @@ export const api = {
     cache.clear();
     if (!useMockFallback) {
       try {
-        const response = await fetch(`${BASE_URL}${url}`, {
+        const response = await authFetch(url, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
         if (!response.ok) throw new Error(await response.text() || 'API Error');
@@ -457,10 +507,7 @@ export const api = {
     cache.clear();
     if (!useMockFallback) {
       try {
-        const response = await fetch(`${BASE_URL}${url}`, {
-          method: 'DELETE',
-          headers: { ...getAuthHeaders() }
-        });
+        const response = await authFetch(url, { method: 'DELETE' });
         if (!response.ok) throw new Error(await response.text() || 'API Error');
         const json = await response.json();
         return json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;

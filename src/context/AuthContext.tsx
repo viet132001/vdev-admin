@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api, clearApiCache } from '../services/api';
+import { api, clearApiCache, setAuthTokens, clearAuthTokens, SESSION_EXPIRED_EVENT } from '../services/api';
 
 interface User {
   id: string;
@@ -34,7 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch (err) {
       setUser(null);
-      localStorage.removeItem('vdev_token');
+      clearAuthTokens();
     } finally {
       setLoading(false);
     }
@@ -47,12 +47,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       setLoading(false);
     }
+
+    // api.ts fires this when the refresh token is also rejected
+    const onSessionExpired = () => {
+      clearApiCache();
+      setUser(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
   }, []);
 
   const login = async (email: string, password: string) => {
     const res = await api.post('/api/auth/login', { email, password });
     const loginData = res.data ? res.data : res;
-    localStorage.setItem('vdev_token', loginData.accessToken);
+    setAuthTokens(loginData.accessToken, loginData.refreshToken);
     setUser({
       id: loginData.user.id,
       email: loginData.user.email,
@@ -66,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem('vdev_token');
+    clearAuthTokens();
     localStorage.removeItem('vdev_user_email');
     localStorage.removeItem('vdev_user_name');
     clearApiCache();

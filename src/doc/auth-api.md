@@ -49,9 +49,33 @@ Tài liệu này cung cấp chi tiết đặc tả API của **Authentication Mo
     "fullName": "Nguyen Van A",
     "avatarFileId": null
   },
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3YjJkNWEzZi0xZDg5LTRlNzgtYmEyZS0zZjg5MGFkNjdhMTIiLCJlbWFpbCI6InVzZXJAdmRldi5sb2NhbCIsImlhdCI6MTc4NTEyODAwMCwiZXhwIjoxNzg1MjE0NDAwfQ.xxxxxxx"
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3YjJkNWEzZi0xZDg5LTRlNzgtYmEyZS0zZjg5MGFkNjdhMTIiLCJlbWFpbCI6InVzZXJAdmRldi5sb2NhbCIsImlhdCI6MTc4NTEyODAwMCwiZXhwIjoxNzg1MjE0NDAwfQ.xxxxxxx",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxx"
 }
 ```
+
+* `accessToken` hết hạn sau **1 giờ**, `refreshToken` hết hạn sau **7 ngày**.
+
+---
+
+## 2.1. Làm mới token (Refresh)
+
+* **Endpoint:** `POST /api/auth/refresh`
+* **Mô tả:** Đổi `refreshToken` lấy cặp token mới khi `accessToken` hết hạn (API trả 401). `refreshToken` không dùng được làm Bearer token cho các API khác.
+* **Payload (Body):**
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxx"
+}
+```
+* **Phản hồi thành công (201 Created):**
+```json
+{
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ..."
+}
+```
+* **Lỗi (401):** refresh token sai/hết hạn → client xoá token và chuyển về màn đăng nhập.
 
 ---
 

@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { api } from '../../services/api';
+import { api, authFetch } from '../../services/api';
 import { X, Upload, Download, FileSpreadsheet, FileJson, CircleAlert, ChevronRight, ChevronDown } from 'lucide-react';
-import { API_BASE } from './media';
 
 // Session import — src/doc/dictation-api.md section 12
 
@@ -17,11 +16,6 @@ interface ImportError {
   message: string;
   errors: string[];
 }
-
-const authHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('vdev_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
 
 const toImportError = (raw: string, status: number): ImportError => {
   try {
@@ -39,7 +33,7 @@ const postImport = async (file: File, dryRun: boolean) => {
   formData.append('file', file);
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${IMPORT_URL}?dryRun=${dryRun}`, { method: 'POST', headers: authHeaders(), body: formData });
+    response = await authFetch(`${IMPORT_URL}?dryRun=${dryRun}`, { method: 'POST', body: formData });
   } catch (err: any) {
     if (err?.name !== 'TypeError') throw err;
     try {
@@ -85,7 +79,7 @@ const saveBlob = (blob: Blob, fileName: string) => {
 const downloadTemplate = async (format: 'xlsx' | 'json') => {
   const fallbackName = `dictation-import-template.${format}`;
   try {
-    const response = await fetch(`${API_BASE}${IMPORT_URL}/template?format=${format}`, { headers: authHeaders() });
+    const response = await authFetch(`${IMPORT_URL}/template?format=${format}`);
     if (!response.ok) throw new Error(toImportError(await response.text(), response.status).message);
     const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(response.headers.get('Content-Disposition') || '');
     saveBlob(await response.blob(), match ? decodeURIComponent(match[1]) : fallbackName);
