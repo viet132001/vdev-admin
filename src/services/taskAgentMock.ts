@@ -24,7 +24,7 @@ export const DEFAULT_AGENT_SETTINGS = {
   buildCommand: null,
   excludePatterns: ['.env*', '*.pem', '*.key', 'node_modules/', 'dist/'],
   contextPaths: [],
-  maxTurnsPerTask: 80,
+  maxTurnsPerTask: 40,
   maxBudgetUsdPerRun: 5
 };
 

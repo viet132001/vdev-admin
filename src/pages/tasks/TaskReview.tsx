@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
-import { Check, RotateCcw, CircleCheck, CircleX, MessageSquarePlus, ChevronDown, ChevronRight, FileCode2, X } from 'lucide-react';
+import { Check, RotateCcw, CircleCheck, CircleX, CircleAlert, MessageSquarePlus, ChevronDown, ChevronRight, FileCode2, FlaskConical, Undo2, X } from 'lucide-react';
 import { NOTE_STATUS, formatRelative, isNoteOpen, noteStatus, useBusy } from './agent';
-import type { ConfirmState } from './shared';
+import { RollbackDialog, type ConfirmState } from './shared';
 import { Markdown } from './PlanPanel';
 
 interface TaskReviewProps {
@@ -78,6 +78,7 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
   const [reworkOpen, setReworkOpen] = useState(false);
   const [reworkNote, setReworkNote] = useState('');
   const [showChecks, setShowChecks] = useState(false);
+  const [rollbackOpen, setRollbackOpen] = useState(false);
   const { busy, run } = useBusy();
 
   const loadChangeSets = useCallback(async () => {
@@ -134,6 +135,10 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
   const supportsThreads = notes.some((n) => Array.isArray(n.replies) || 'status' in n);
   const isAgentTask = task.assignee === 'AGENT';
   const inReview = task.status === 'IN_REVIEW';
+  const testing = task.status === 'TESTING';
+  // Chờ test can be reviewed too: the user may test by hand, then Done or send back
+  const reviewable = inReview || testing;
+  const untested: string | undefined = changeSets?.[0]?.selfReview?.untested;
 
   const setDiffMode = (next: 'unified' | 'split') => {
     setMode(next);
@@ -187,6 +192,24 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
       alert(getErrorMessage(err, 'Gửi yêu cầu làm lại thất bại'));
     }
   });
+
+  const retest = () => run('retest', async () => {
+    try {
+      await api.post(`/api/tasks/${task.id}/retest`, {});
+      onChanged();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không xếp được lượt chạy test'));
+    }
+  });
+
+  const rollback = async (then: 'PENDING' | 'CANCELLED') => {
+    try {
+      await api.post(`/api/tasks/${task.id}/rollback`, { then });
+      onChanged();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không xếp được lượt rollback'));
+    }
+  };
 
   const renderComposer = (anchor: { side: 'OLD' | 'NEW'; line: number }) =>
     composer && composer.side === anchor.side && composer.line === anchor.line ? (
@@ -247,25 +270,40 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
   return (
     <div className="flex flex-col gap-4">
       {isAgentTask && (
-        <div className={`tw-review-bar ${inReview ? 'ready' : ''}`}>
+        <div className={`tw-review-bar ${reviewable ? 'ready' : ''}`}>
           <div style={{ flexGrow: 1, minWidth: 0 }}>
             <b style={{ fontSize: '0.875rem' }}>
-              {inReview ? 'Claude đã xong · chờ bạn review' : task.status === 'COMPLETED' ? 'Đã Done' : task.status === 'IN_PROGRESS' ? 'Claude đang làm task này' : 'Đang chờ Claude làm'}
+              {inReview ? 'Claude đã xong · chờ bạn review' : testing ? 'Code xong nhưng chưa test được · chờ test' : task.status === 'COMPLETED' ? 'Đã Done' : task.status === 'IN_PROGRESS' ? 'Claude đang làm task này' : task.status === 'CANCELLED' ? 'Đã hủy' : 'Đang chờ Claude làm'}
             </b>
-            {inReview && openNotes.length > 0 && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{openNotes.length} góp ý đang mở sẽ được gửi cho Claude khi yêu cầu làm lại</div>}
+            {testing && untested && <div className="flex gap-2" style={{ fontSize: '0.78rem', color: 'var(--warning)', alignItems: 'flex-start', whiteSpace: 'pre-wrap' }}><CircleAlert size={13} style={{ flexShrink: 0, marginTop: 2 }} /> {untested}</div>}
+            {testing && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Bật lại môi trường (Docker / DB…) rồi bấm Chạy test lại. Task phụ thuộc task này sẽ chờ tới khi test qua.</div>}
+            {reviewable && openNotes.length > 0 && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{openNotes.length} góp ý đang mở sẽ được gửi cho Claude khi yêu cầu làm lại</div>}
           </div>
-          {inReview && (
-            <div className="flex gap-2">
-              <button className="btn btn-secondary" disabled={busy !== null} onClick={() => { setReworkNote(''); setReworkOpen(true); }}>
-                <RotateCcw size={14} /> Ghi chú & làm lại
+          <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+            {changeSets.length > 0 && task.status !== 'IN_PROGRESS' && (
+              <button className="btn btn-secondary" disabled={busy !== null} onClick={() => setRollbackOpen(true)} title="Trả các file task đã sửa về như trước khi Claude làm">
+                <Undo2 size={14} /> Rollback
               </button>
-              <button className="btn btn-primary" disabled={busy !== null} onClick={accept}>
-                <Check size={14} /> {busy === 'accept' ? 'Đang lưu...' : 'Done'}
+            )}
+            {testing && (
+              <button className="btn btn-secondary" disabled={busy !== null} onClick={retest}>
+                <FlaskConical size={14} /> {busy === 'retest' ? 'Đang gửi...' : 'Chạy test lại'}
               </button>
-            </div>
-          )}
+            )}
+            {reviewable && (
+              <>
+                <button className="btn btn-secondary" disabled={busy !== null} onClick={() => { setReworkNote(''); setReworkOpen(true); }}>
+                  <RotateCcw size={14} /> Ghi chú & làm lại
+                </button>
+                <button className="btn btn-primary" disabled={busy !== null} onClick={accept} title={testing ? 'Bạn đã tự test và chấp nhận' : undefined}>
+                  <Check size={14} /> {busy === 'accept' ? 'Đang lưu...' : testing ? 'Done (đã tự test)' : 'Done'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
+      {rollbackOpen && <RollbackDialog scope="task" onClose={() => setRollbackOpen(false)} onSubmit={rollback} />}
 
       {changeSets.length === 0 ? (
         <div className="empty-state" style={{ padding: 32 }}>
@@ -303,11 +341,11 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
                 <>
                   <button className="icon-btn" style={{ fontSize: '0.78rem', padding: '2px 0', alignSelf: 'flex-start' }} onClick={() => setShowChecks(!showChecks)}>
                     {showChecks ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    Lệnh kiểm tra: {changeSet.selfReview.checks.map((ch: any) => `${ch.name} ${ch.passed ? '✓' : '✗'}`).join(' · ')}
+                    Lệnh kiểm tra: {changeSet.selfReview.checks.map((ch: any) => `${ch.name} ${ch.passed ? '✓' : ch.notRun ? '— chưa chạy' : '✗'}`).join(' · ')}
                   </button>
                   {showChecks && changeSet.selfReview.checks.map((ch: any, i: number) => (
                     <div key={i}>
-                      <div style={{ fontSize: '0.78rem', color: ch.passed ? 'var(--success)' : 'var(--danger)' }}><code>{ch.command}</code> — {ch.passed ? 'pass' : 'fail'}</div>
+                      <div style={{ fontSize: '0.78rem', color: ch.passed ? 'var(--success)' : ch.notRun ? 'var(--warning)' : 'var(--danger)' }}><code>{ch.command}</code> — {ch.passed ? 'pass' : ch.notRun ? 'chưa chạy được (môi trường)' : 'fail'}</div>
                       {ch.output && <pre className="tw-code-block">{ch.output}</pre>}
                     </div>
                   ))}

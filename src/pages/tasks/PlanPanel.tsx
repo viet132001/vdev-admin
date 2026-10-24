@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
-import { Plus, Sparkles, Check, X, RotateCcw, Ban, Pencil, ChevronRight, CircleAlert, Terminal, Library } from 'lucide-react';
+import { Plus, Sparkles, Check, X, RotateCcw, Ban, Pencil, ChevronRight, CircleAlert, Terminal, Library, Undo2 } from 'lucide-react';
 import { PLAN_STATUS, RUN_STATUS, RUN_TYPE, agentSettingsOf, formatRelative, isActiveRun, runErrorText, useBusy } from './agent';
-import { PRIORITY_OPTIONS, StatusBadge, type ConfirmState } from './shared';
+import { PRIORITY_OPTIONS, RollbackDialog, StatusBadge, type ConfirmState } from './shared';
 import { AttachmentList, AttachmentPicker, ProjectDocsModal, imagesFromPaste, submitAttachments, type PendingAttachment } from './ProjectDocs';
 
 interface PlanPanelProps {
@@ -111,6 +111,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
   const [rejectOpen, setRejectOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [rollbackOpen, setRollbackOpen] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [rejectAttachments, setRejectAttachments] = useState<PendingAttachment[]>([]);
@@ -230,6 +231,10 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
     (plan.status === 'APPROVED' && children.some((c) => c.assignee === 'AGENT' && (c.status === 'PENDING' || c.status === 'IN_PROGRESS')))
   );
   const childDone = children.filter((c) => c.status === 'COMPLETED').length;
+  // Tasks Claude already coded; the BE checks for real changesets
+  const canRollback = plan && !isActiveRun(plan.latestRun) && ['APPROVED', 'DONE', 'CANCELLED'].includes(plan.status) &&
+    children.some((c) => ['TESTING', 'IN_REVIEW', 'COMPLETED'].includes(c.status));
+  const itemNumber = (id: string) => (plan?.items?.findIndex((i: any) => i.id === id) ?? -1) + 1;
 
   return (
     <div className="tw-plan-shell">
@@ -307,6 +312,11 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                     <Ban size={14} /> {busy === 'stop' ? 'Đang dừng...' : 'Dừng'}
                   </button>
                 )}
+                {canRollback && (
+                  <button className="btn btn-secondary" disabled={busy !== null} onClick={() => setRollbackOpen(true)} title="Trả mọi file các task của kế hoạch đã sửa về như trước khi Claude làm">
+                    <Undo2 size={14} /> Rollback kế hoạch
+                  </button>
+                )}
                 {['DRAFTING', 'PENDING_APPROVAL', 'REJECTED', 'APPROVED'].includes(plan.status) && (
                   <button
                     className="btn btn-secondary"
@@ -323,6 +333,14 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                 )}
               </div>
             </div>
+
+            {rollbackOpen && (
+              <RollbackDialog
+                scope="plan"
+                onClose={() => setRollbackOpen(false)}
+                onSubmit={async (then) => { await planAction('rollback', 'rollback', { then }, 'Không xếp được lượt rollback'); }}
+              />
+            )}
 
             <div>
               <div className="tw-label">Yêu cầu</div>
@@ -382,6 +400,26 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                                 <textarea className="form-input" rows={2} value={editingItem.description} onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })} />
                                 <label className="form-label">Tiêu chí hoàn thành (mỗi dòng một tiêu chí)</label>
                                 <textarea className="form-input" rows={3} value={editingItem.criteria} onChange={(e) => setEditingItem({ ...editingItem, criteria: e.target.value })} />
+                                {index > 0 && (
+                                  <div className="flex align-center gap-2" style={{ flexWrap: 'wrap', fontSize: '0.8rem' }}>
+                                    <span className="form-label" style={{ margin: 0 }}>Cần xong trước:</span>
+                                    {plan.items.slice(0, index).map((dep: any, di: number) => {
+                                      const on = editingItem.dependsOn.includes(dep.id);
+                                      return (
+                                        <button
+                                          key={dep.id}
+                                          type="button"
+                                          className={`badge ${on ? 'active' : ''}`}
+                                          style={{ cursor: 'pointer', borderColor: on ? 'var(--text-main)' : undefined, color: on ? 'var(--text-main)' : 'var(--text-muted)' }}
+                                          title={dep.title}
+                                          onClick={() => setEditingItem({ ...editingItem, dependsOn: on ? editingItem.dependsOn.filter((x: string) => x !== dep.id) : [...editingItem.dependsOn, dep.id] })}
+                                        >
+                                          {on ? '✓ ' : ''}Mục {di + 1}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                                 <div className="flex gap-2 align-center">
                                   <select className="form-input" value={editingItem.priority} onChange={(e) => setEditingItem({ ...editingItem, priority: e.target.value })}>
                                     {PRIORITY_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -395,7 +433,8 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                                       title: editingItem.title.trim(),
                                       description: editingItem.description,
                                       priority: editingItem.priority,
-                                      acceptanceCriteria: editingItem.criteria.split('\n').map((c: string) => c.trim()).filter(Boolean)
+                                      acceptanceCriteria: editingItem.criteria.split('\n').map((c: string) => c.trim()).filter(Boolean),
+                                      dependsOn: editingItem.dependsOn
                                     })}
                                   >
                                     {busy === `item-${item.id}` ? 'Đang lưu...' : 'Lưu'}
@@ -408,7 +447,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                                   <b style={{ fontSize: '0.875rem' }}>{item.title}</b>
                                   {task && <StatusBadge status={task.status} />}
                                   {editable && (
-                                    <button className="icon-btn" title="Sửa mục" onClick={() => setEditingItem({ id: item.id, title: item.title, description: item.description || '', priority: item.priority, criteria: (item.acceptanceCriteria || []).join('\n') })}>
+                                    <button className="icon-btn" title="Sửa mục" onClick={() => setEditingItem({ id: item.id, title: item.title, description: item.description || '', priority: item.priority, criteria: (item.acceptanceCriteria || []).join('\n'), dependsOn: item.dependsOn || [] })}>
                                       <Pencil size={12} />
                                     </button>
                                   )}
@@ -418,6 +457,11 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                                     </button>
                                   )}
                                 </div>
+                                {item.dependsOn?.length > 0 && (
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                                    Cần xong trước (Chờ review / Done): {item.dependsOn.map((id: string) => `mục ${itemNumber(id)}`).join(', ')}
+                                  </div>
+                                )}
                                 {item.description && <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'pre-wrap' }}>{item.description}</p>}
                                 {item.acceptanceCriteria?.length > 0 && (
                                   <ul className="tw-criteria">

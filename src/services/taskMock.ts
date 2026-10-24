@@ -30,6 +30,7 @@ const save = (db: DB) => localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 const defaultColumns = (projectId: string) => [
   { id: genId(), projectId, name: 'Cần làm', color: '#a1a1aa', category: 'PENDING', position: GAP },
   { id: genId(), projectId, name: 'Đang làm', color: '#3f3f46', category: 'IN_PROGRESS', position: GAP * 2 },
+  { id: genId(), projectId, name: 'Chờ test', color: '#7e22ce', category: 'TESTING', position: GAP * 2.5 },
   { id: genId(), projectId, name: 'Chờ review', color: '#71717a', category: 'IN_REVIEW', position: GAP * 3 },
   { id: genId(), projectId, name: 'Done', color: '#15803d', category: 'COMPLETED', position: GAP * 4 }
 ];
@@ -45,6 +46,23 @@ const addReviewColumns = (db: DB) => {
     const prev = doneIndex > 0 ? cols[doneIndex - 1] : null;
     const position = !done ? (cols.length ? cols[cols.length - 1].position + GAP : GAP) : prev ? (prev.position + done.position) / 2 : done.position - GAP;
     db.columns.push({ id: genId(), projectId: p.id, name: 'Chờ review', color: '#71717a', category: 'IN_REVIEW', position });
+    changed = true;
+  });
+  return changed;
+};
+
+// Same as the BE migration: "Chờ test" right before the first review column (else Done, else at the end)
+const addTestingColumns = (db: DB) => {
+  let changed = false;
+  db.projects.forEach((p) => {
+    const cols = db.columns.filter((c) => c.projectId === p.id).sort((a, b) => a.position - b.position);
+    if (cols.some((c) => c.category === 'TESTING')) return;
+    let anchorIndex = cols.findIndex((c) => c.category === 'IN_REVIEW');
+    if (anchorIndex === -1) anchorIndex = cols.findIndex((c) => c.category === 'COMPLETED');
+    const anchor = cols[anchorIndex];
+    const prev = anchorIndex > 0 ? cols[anchorIndex - 1] : null;
+    const position = !anchor ? (cols.length ? cols[cols.length - 1].position + GAP : GAP) : prev ? (prev.position + anchor.position) / 2 : anchor.position - GAP;
+    db.columns.push({ id: genId(), projectId: p.id, name: 'Chờ test', color: '#7e22ce', category: 'TESTING', position });
     changed = true;
   });
   return changed;
@@ -627,6 +645,7 @@ const route = (method: string, url: string, body?: any): any => {
 
   const db = load();
   let upgraded = addReviewColumns(db);
+  upgraded = addTestingColumns(db) || upgraded;
   upgraded = upgradeAgentDb(db, agentCtx) || upgraded;
   if (upgraded) save(db);
 

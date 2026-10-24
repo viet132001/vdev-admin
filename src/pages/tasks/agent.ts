@@ -19,7 +19,7 @@ export const RUN_STATUS: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: 'Đã hủy', color: 'var(--text-muted)' }
 };
 
-export const RUN_TYPE: Record<string, string> = { PLAN: 'Lập kế hoạch', EXECUTE: 'Thực hiện', REWORK: 'Làm lại' };
+export const RUN_TYPE: Record<string, string> = { PLAN: 'Lập kế hoạch', EXECUTE: 'Thực hiện', REWORK: 'Làm lại', TEST: 'Chạy test lại', ROLLBACK: 'Rollback' };
 
 export const RUN_ERROR: Record<string, string> = {
   RUNNER_LOST: 'Mất kết nối với máy chạy',

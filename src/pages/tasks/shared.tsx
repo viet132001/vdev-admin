@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CalendarDays, ChartGantt, List, SquareKanban, Table, AlertCircle } from 'lucide-react';
 
 // Colors are CSS variables so they follow light / dark mode; only "done" and "urgent" carry a hue
 export const STATUS_OPTIONS = [
   { value: 'PENDING', label: 'Chờ xử lý', color: 'var(--text-muted)' },
   { value: 'IN_PROGRESS', label: 'Đang làm', color: 'var(--text-main)' },
+  { value: 'TESTING', label: 'Chờ test', color: 'var(--warning)' },
   { value: 'IN_REVIEW', label: 'Chờ review', color: 'var(--warning)' },
   { value: 'COMPLETED', label: 'Done', color: 'var(--success)' },
   { value: 'CANCELLED', label: 'Đã hủy', color: 'var(--text-muted)' }
@@ -122,6 +123,60 @@ export const ConfirmDialog: React.FC<{ state: ConfirmState | null; onClose: () =
             }}
           >
             {state.confirmLabel || 'Đồng ý'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Rollback code of a task / a whole plan: the runner puts the files back the way they were before
+ * Claude, then the task(s) move to "Cần làm" or "Hủy".
+ */
+export const RollbackDialog: React.FC<{
+  scope: 'task' | 'plan';
+  onClose: () => void;
+  onSubmit: (then: 'PENDING' | 'CANCELLED') => Promise<void>;
+}> = ({ scope, onClose, onSubmit }) => {
+  const [then, setThen] = useState<'PENDING' | 'CANCELLED'>('PENDING');
+  const [busy, setBusy] = useState(false);
+  const what = scope === 'task' ? 'task này' : 'mọi task của kế hoạch';
+  return (
+    <div className="modal-overlay" style={{ zIndex: 120 }}>
+      <div className="modal-content" style={{ maxWidth: '460px' }}>
+        <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+          <div className="flex align-center gap-2" style={{ color: 'var(--danger)' }}>
+            <AlertCircle size={20} />
+            <h3 style={{ margin: 0 }}>{scope === 'task' ? 'Rollback code của task' : 'Rollback cả kế hoạch'}</h3>
+          </div>
+        </div>
+        <div className="modal-body flex flex-col gap-3" style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+          <span>
+            Máy chạy sẽ trả mọi file {what} đã sửa về như trước khi Claude làm (kể cả phần bạn đã commit, nếu có — thay đổi nằm trong thư mục làm việc, bạn tự commit lại).
+            Nếu file nào đã bị sửa tiếp sau đó (task khác hoặc sửa tay) thì dừng, không đụng file nào và báo danh sách.
+          </span>
+          <div className="flex flex-col gap-2" style={{ color: 'var(--text-main)' }}>
+            <label className="flex align-center gap-2"><input type="radio" checked={then === 'PENDING'} onChange={() => setThen('PENDING')} /> Sau đó đưa về <b>Cần làm</b> (làm lại sau)</label>
+            <label className="flex align-center gap-2"><input type="radio" checked={then === 'CANCELLED'} onChange={() => setThen('CANCELLED')} /> Sau đó <b>Hủy</b>{scope === 'plan' ? ' cả kế hoạch' : ' task'}</label>
+          </div>
+        </div>
+        <div className="modal-footer" style={{ borderTop: 'none', backgroundColor: 'transparent' }}>
+          <button className="btn btn-secondary" onClick={onClose}>Hủy</button>
+          <button
+            className="btn btn-danger"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onSubmit(then);
+                onClose();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? 'Đang gửi...' : 'Rollback'}
           </button>
         </div>
       </div>

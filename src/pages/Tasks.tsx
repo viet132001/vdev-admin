@@ -22,6 +22,7 @@ const INBOX = 'inbox';
 const REVIEW = 'review';
 // Not a saved view: the Claude plans of a project, shown as the last tab
 const PLANS_VIEW = { id: '__plans', name: 'Kế hoạch', type: 'PLANS', config: null, virtual: true };
+const AGENT_POLL_MS = 4000;
 
 interface ProjectForm {
   id?: string;
@@ -131,6 +132,28 @@ export const Tasks: React.FC = () => {
   }, [loadProjects, loadTags]);
 
   const refreshViews = () => setRefreshKey((k) => k + 1);
+
+  // Claude moves tasks in the background (Đang làm → Chờ test / Chờ review…). While a run of this
+  // project is going, every view reloads silently; once more when it ends, plus the sidebar counts.
+  useEffect(() => {
+    if (scope === INBOX || scope === REVIEW) return;
+    let wasRunning = false;
+    const tick = async () => {
+      if (document.hidden) return;
+      try {
+        const runs = await api.get(`/api/agent/runs?projectId=${scope}&status=RUNNING`, { noCache: true });
+        const running = Array.isArray(runs) && runs.length > 0;
+        if (running || wasRunning) setRefreshKey((k) => k + 1);
+        if (wasRunning && !running) handleChanged();
+        wasRunning = running;
+      } catch {
+        // Next tick tries again; the views keep their data meanwhile
+      }
+    };
+    tick();
+    const timer = setInterval(tick, AGENT_POLL_MS);
+    return () => clearInterval(timer);
+  }, [scope, handleChanged]);
 
   // ---------- views ----------
 
@@ -625,6 +648,7 @@ export const Tasks: React.FC = () => {
           onClose={closeTask}
           onOpenTask={openTask}
           onChanged={handleChanged}
+          refreshKey={refreshKey}
           onTagsChanged={loadTags}
           onConfirm={setConfirm}
         />

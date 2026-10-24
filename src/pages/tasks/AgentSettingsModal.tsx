@@ -203,7 +203,7 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
             ))}
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: -8, marginBottom: 16 }}>
-            Claude chỉ được chạy các lệnh này để tự kiểm tra; để trống thì bỏ qua bước đó.
+            Chạy sau mỗi task để tự kiểm tra; để trống thì bỏ qua bước đó. Chỉ kiểm phần task đã sửa bằng <code>{'{module}'}</code> (chạy một lần cho mỗi module có file sửa) và <code>{'{files}'}</code> / <code>{'{files:.py}'}</code> (các file đã sửa), ví dụ <code>{'make desktop-test M={module}'}</code>.
           </p>
 
           <div className="form-group">

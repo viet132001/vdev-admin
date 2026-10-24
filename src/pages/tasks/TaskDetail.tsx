@@ -18,13 +18,15 @@ interface TaskDetailProps {
   onClose: () => void;
   onOpenTask: (id: string) => void;
   onChanged: () => void;
+  /** Bumped while Claude works on the project: status, column and comments follow without a reload */
+  refreshKey?: number;
   onTagsChanged: () => void;
   onConfirm: (state: ConfirmState) => void;
 }
 
 const CONTENT_SAVE_DELAY = 800;
 
-export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, onClose, onOpenTask, onChanged, onTagsChanged, onConfirm }) => {
+export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, onClose, onOpenTask, onChanged, refreshKey, onTagsChanged, onConfirm }) => {
   const [task, setTask] = useState<any | null>(null);
   const [columns, setColumns] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
@@ -113,6 +115,20 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, 
       flushContent();
     };
   }, [loadTask, loadComments, flushContent]);
+
+  // Only what Claude changes: what the user may be typing (title, description, content) is left alone
+  useEffect(() => {
+    if (!refreshKey) return;
+    let cancelled = false;
+    api.get(`/api/tasks/${taskId}`, { noCache: true }).then((data) => {
+      if (cancelled || !data) return;
+      setTask((prev: any) => (!prev || (prev.status === data.status && prev.updatedAt === data.updatedAt) ? prev : {
+        ...prev, status: data.status, columnId: data.columnId, completedAt: data.completedAt, reworkNote: data.reworkNote, updatedAt: data.updatedAt
+      }));
+    }).catch(() => undefined);
+    loadComments();
+    return () => { cancelled = true; };
+  }, [refreshKey, taskId, loadComments]);
 
   const handleBlocksChange = (next: Block[]) => {
     setBlocks(next);
@@ -292,7 +308,7 @@ export const TaskDetail: React.FC<TaskDetailProps> = ({ taskId, projects, tags, 
   const currentColumn = columns.find((c) => c.id === task.columnId);
   // Claude's tasks open on the review tab when they are waiting for review
   const hasReview = task.assignee === 'AGENT' || !!task.latestChangeSet;
-  const activeTab = !hasReview ? 'page' : tab ?? (task.status === 'IN_REVIEW' ? 'review' : 'page');
+  const activeTab = !hasReview ? 'page' : tab ?? (task.status === 'IN_REVIEW' || task.status === 'TESTING' ? 'review' : 'page');
 
   return (
     <div className="tw-drawer-overlay" onMouseDown={close}>
