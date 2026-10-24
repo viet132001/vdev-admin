@@ -4,6 +4,7 @@ import { Check, RotateCcw, CircleCheck, CircleX, CircleAlert, MessageSquarePlus,
 import { NOTE_STATUS, formatRelative, isNoteOpen, noteStatus, useBusy } from './agent';
 import { RollbackDialog, type ConfirmState } from './shared';
 import { Markdown } from './PlanPanel';
+import { getDocsRoot, isLocalDocsSupported, readDocument } from './localDocs';
 
 interface TaskReviewProps {
   task: any;
@@ -59,6 +60,64 @@ const anchorOf = (line: DiffLine): { side: 'OLD' | 'NEW'; line: number } | null 
   line.kind === 'del' ? { side: 'OLD', line: line.oldNo! } : line.kind === 'hunk' ? null : { side: 'NEW', line: line.newNo! };
 
 const FILE_STATUS: Record<string, string> = { A: 'Thêm', M: 'Sửa', D: 'Xóa', R: 'Đổi tên' };
+
+// ---------- before / after screenshots (files in the docs folder on the runner's machine) ----------
+
+const LocalShot: React.FC<{ root: any; path?: string; label: string }> = ({ root, path, label }) => {
+  const [url, setUrl] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    if (!root || !path) return;
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    const [folder, ...rest] = path.split('/');
+    readDocument(root, folder, rest.join('/'))
+      .then((file) => { if (!cancelled) { objectUrl = URL.createObjectURL(file); setUrl(objectUrl); } })
+      .catch(() => { if (!cancelled) setMissing(true); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [root, path]);
+  return (
+    <figure className="tw-shot">
+      <figcaption>{label}</figcaption>
+      {!path ? <div className="tw-shot-empty">Không có ảnh</div>
+        : url ? <a href={url} target="_blank" rel="noopener noreferrer" title="Mở ảnh đầy đủ"><img src={url} alt={label} /></a>
+        : <div className="tw-shot-empty">{missing ? 'Không tìm thấy file trên máy này' : root ? 'Đang tải…' : ''}</div>}
+    </figure>
+  );
+};
+
+const ScreenshotReport: React.FC<{ shots: any[] }> = ({ shots }) => {
+  // undefined: still checking, null: no folder / no permission on this browser
+  const [root, setRoot] = useState<any | null | undefined>(undefined);
+  useEffect(() => { getDocsRoot(false).then(setRoot).catch(() => setRoot(null)); }, []);
+  const grant = async () => setRoot(await getDocsRoot(true).catch(() => null));
+  return (
+    <div className="tw-selfreview">
+      <div className="tw-label">Ảnh chụp màn hình · trước → sau</div>
+      {root === null && (
+        <div className="tw-warning" style={{ color: 'var(--text-muted)' }}>
+          <CircleAlert size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>
+            Ảnh nằm trong thư mục tài liệu trên máy chạy.{' '}
+            {isLocalDocsSupported()
+              ? <button className="icon-btn" style={{ padding: 0, textDecoration: 'underline', fontSize: 'inherit' }} onClick={grant}>Cấp quyền đọc thư mục tài liệu</button>
+              : 'Mở bằng Chrome / Edge trên máy chạy để xem.'}
+          </span>
+        </div>
+      )}
+      {shots.map((shot) => (
+        <div key={shot.name} className="flex flex-col gap-2" style={{ marginTop: 6 }}>
+          <div style={{ fontSize: '0.82rem' }}><b>{shot.name}</b> <code style={{ color: 'var(--text-muted)' }}>{shot.path}</code></div>
+          {shot.error && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>{shot.error}</div>}
+          <div className="tw-shot-pair">
+            <LocalShot root={root} path={shot.before} label="Trước" />
+            <LocalShot root={root} path={shot.after} label="Sau" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const NoteBadge: React.FC<{ note: any }> = ({ note }) => {
   const meta = NOTE_STATUS[noteStatus(note)];
@@ -354,6 +413,8 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
               {changeSet.selfReview.notes && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Ghi chú: {changeSet.selfReview.notes}</div>}
             </div>
           )}
+
+          {changeSet.selfReview?.screenshots?.length > 0 && <ScreenshotReport key={changeSet.id} shots={changeSet.selfReview.screenshots} />}
 
           <div className="tw-diff-shell">
             <div className="tw-diff-files">

@@ -40,7 +40,11 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
     excludePatterns: (initial.excludePatterns || []).join('\n'),
     contextPaths: (initial.contextPaths || []).join('\n'),
     maxTurnsPerTask: initial.maxTurnsPerTask,
-    maxBudgetUsdPerRun: initial.maxBudgetUsdPerRun
+    maxBudgetUsdPerRun: initial.maxBudgetUsdPerRun,
+    previewUrl: initial.previewUrl || '',
+    previewLoginPath: initial.previewLoginPath || '',
+    previewUsername: initial.previewUsername || '',
+    previewApplyCommand: initial.previewApplyCommand || ''
   });
   const [status, setStatus] = useState({
     workspaceStatus: project.workspaceStatus || 'UNKNOWN',
@@ -54,6 +58,7 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
   const contextError = contextList.some((p: string) => p.includes('..') || /^(\/|[A-Za-z]:)/.test(p))
     ? 'Đường dẫn tương đối trong repo, không bắt đầu bằng / và không chứa ..'
     : contextList.length > 20 ? 'Tối đa 20 mục' : '';
+  const previewError = settings.previewUrl.trim() && !/^https?:\/\/\S+$/.test(settings.previewUrl.trim()) ? 'Cần URL http(s), ví dụ http://localhost:8069' : '';
   const pathError = workspacePath.trim() && !isAbsolutePath(workspacePath.trim()) ? 'Cần đường dẫn tuyệt đối, ví dụ /Users/ban/code/du-an' : '';
 
   const payload = () => ({
@@ -66,7 +71,11 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
       excludePatterns: settings.excludePatterns.split('\n').map((p: string) => p.trim()).filter(Boolean),
       contextPaths: contextList,
       maxTurnsPerTask: Number(settings.maxTurnsPerTask) || initial.maxTurnsPerTask,
-      maxBudgetUsdPerRun: Number(settings.maxBudgetUsdPerRun) || initial.maxBudgetUsdPerRun
+      maxBudgetUsdPerRun: Number(settings.maxBudgetUsdPerRun) || initial.maxBudgetUsdPerRun,
+      previewUrl: settings.previewUrl.trim() || null,
+      previewLoginPath: settings.previewLoginPath.trim() || null,
+      previewUsername: settings.previewUsername.trim() || null,
+      previewApplyCommand: settings.previewApplyCommand.trim() || null
     }
   });
 
@@ -225,6 +234,21 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
             <textarea className="form-input" rows={4} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', resize: 'vertical' }} value={settings.excludePatterns} onChange={(e) => setSettings({ ...settings, excludePatterns: e.target.value })} />
           </div>
 
+          <div className="form-group">
+            <label className="form-label">Chụp màn hình trước / sau cho task sửa giao diện</label>
+            <div className="grid grid-cols-2 gap-2">
+              <input className={`form-input ${previewError ? 'form-input-error' : ''}`} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }} placeholder="URL app, vd http://localhost:8069" value={settings.previewUrl} onChange={(e) => setSettings({ ...settings, previewUrl: e.target.value })} />
+              <input className="form-input" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }} placeholder="Trang đăng nhập, vd /web/login" value={settings.previewLoginPath} onChange={(e) => setSettings({ ...settings, previewLoginPath: e.target.value })} />
+              <input className="form-input" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }} placeholder="Tài khoản, vd dev@satori.local" value={settings.previewUsername} onChange={(e) => setSettings({ ...settings, previewUsername: e.target.value })} />
+              <input className="form-input" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }} placeholder="Lệnh áp dụng trước khi chụp, vd make desktop-update M={module}" value={settings.previewApplyCommand} onChange={(e) => setSettings({ ...settings, previewApplyCommand: e.target.value })} />
+            </div>
+            {previewError && <span className="form-error-text">{previewError}</span>}
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Để trống URL thì không chụp. Máy chạy chụp bằng Chrome trên máy, ảnh lưu trong thư mục tài liệu (không lên server).
+              {settings.previewUsername.trim() && settings.previewUrl.trim() && !previewError && <> Mật khẩu chỉ lưu trên máy chạy: <code>{`vdev-agent app-password --url ${settings.previewUrl.trim()} --user ${settings.previewUsername.trim()}`}</code></>}
+            </span>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div className="form-group">
               <label className="form-label">Số lượt tối đa mỗi task</label>
@@ -238,7 +262,7 @@ export const AgentSettingsModal: React.FC<AgentSettingsModalProps> = ({ project,
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>Hủy</button>
-          <button className="btn btn-primary" disabled={!!pathError || !!contextError || busy !== null} onClick={save}>{busy === 'save' ? 'Đang lưu...' : 'Lưu'}</button>
+          <button className="btn btn-primary" disabled={!!pathError || !!contextError || !!previewError || busy !== null} onClick={save}>{busy === 'save' ? 'Đang lưu...' : 'Lưu'}</button>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
-import { Plus, Sparkles, Check, X, RotateCcw, Ban, Pencil, ChevronRight, CircleAlert, Terminal, Library, Undo2 } from 'lucide-react';
+import { Plus, Sparkles, Check, X, RotateCcw, Ban, Pencil, ChevronRight, CircleAlert, Terminal, Library, Undo2, Camera } from 'lucide-react';
 import { PLAN_STATUS, RUN_STATUS, RUN_TYPE, agentSettingsOf, formatRelative, isActiveRun, runErrorText, useBusy } from './agent';
 import { PRIORITY_OPTIONS, RollbackDialog, StatusBadge, type ConfirmState } from './shared';
 import { AttachmentList, AttachmentPicker, ProjectDocsModal, imagesFromPaste, submitAttachments, type PendingAttachment } from './ProjectDocs';
@@ -112,6 +112,9 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
   const [feedback, setFeedback] = useState('');
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [rollbackOpen, setRollbackOpen] = useState(false);
+  const [screenshotReport, setScreenshotReport] = useState(false);
+  // Opt-in per plan: never carried over from the plan viewed before
+  useEffect(() => { setScreenshotReport(false); }, [selectedId]);
   const [showLogs, setShowLogs] = useState(false);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [rejectAttachments, setRejectAttachments] = useState<PendingAttachment[]>([]);
@@ -283,14 +286,23 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                 <h2 style={{ fontSize: '1.25rem', margin: 0 }}>{plan.title}</h2>
                 <div className="flex align-center gap-2" style={{ marginTop: 6, flexWrap: 'wrap' }}>
                   <PlanStatusBadge status={plan.status} />
+                  {plan.screenshotReport && <span className="badge" title="Máy chạy chụp màn hình trước / sau các mục sửa giao diện"><Camera size={11} /> Report bằng ảnh</span>}
                   <RunLine run={plan.latestRun} />
                 </div>
               </div>
               <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
                 {plan.status === 'PENDING_APPROVAL' && (
                   <>
+                    <label
+                      className="flex align-center gap-2"
+                      style={{ fontSize: '0.82rem', color: settings.previewUrl ? 'var(--text-main)' : 'var(--text-muted)', cursor: settings.previewUrl ? 'pointer' : 'not-allowed' }}
+                      title={settings.previewUrl ? 'Máy chạy chụp màn hình trước / sau các mục sửa giao diện, xem ở tab Thay đổi code' : 'Cần nhập URL app trong cài đặt Thư mục làm việc & Claude'}
+                    >
+                      <input type="checkbox" disabled={!settings.previewUrl} checked={screenshotReport && !!settings.previewUrl} onChange={(e) => setScreenshotReport(e.target.checked)} style={{ accentColor: 'var(--primary)' }} />
+                      <Camera size={14} /> Report bằng ảnh
+                    </label>
                     <button className="btn btn-secondary" disabled={busy !== null} onClick={() => { setFeedback(''); setRejectOpen(true); }}><X size={14} /> Từ chối</button>
-                    <button className="btn btn-primary" disabled={busy !== null || included === 0} onClick={() => planAction('approve', 'approve', {}, 'Duyệt kế hoạch thất bại')}>
+                    <button className="btn btn-primary" disabled={busy !== null || included === 0} onClick={() => planAction('approve', 'approve', { screenshotReport: screenshotReport && !!settings.previewUrl }, 'Duyệt kế hoạch thất bại')}>
                       <Check size={14} /> {busy === 'approve' ? 'Đang duyệt...' : `Duyệt ${included} mục`}
                     </button>
                   </>
@@ -460,6 +472,11 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                                 {item.dependsOn?.length > 0 && (
                                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
                                     Cần xong trước (Chờ review / Done): {item.dependsOn.map((id: string) => `mục ${itemNumber(id)}`).join(', ')}
+                                  </div>
+                                )}
+                                {item.screenshots?.length > 0 && (
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {plan.status === 'PENDING_APPROVAL' ? 'Màn hình sẽ chụp nếu tích Report bằng ảnh' : 'Màn hình chụp trước / sau'}: {item.screenshots.map((s: any) => s.name).join(', ')}
                                   </div>
                                 )}
                                 {item.description && <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'pre-wrap' }}>{item.description}</p>}

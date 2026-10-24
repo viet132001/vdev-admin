@@ -57,8 +57,12 @@ export const AGENT_SETTINGS_DEFAULT = {
   buildCommand: null as string | null,
   excludePatterns: ['.env*', '*.pem', '*.key', 'node_modules/', 'dist/'],
   contextPaths: [] as string[],
-  maxTurnsPerTask: 80,
-  maxBudgetUsdPerRun: 5
+  maxTurnsPerTask: 40,
+  maxBudgetUsdPerRun: 5,
+  previewUrl: null as string | null,
+  previewLoginPath: null as string | null,
+  previewUsername: null as string | null,
+  previewApplyCommand: null as string | null
 };
 
 export const agentSettingsOf = (project: any) => ({ ...AGENT_SETTINGS_DEFAULT, ...(project?.agentSettings || {}) });
