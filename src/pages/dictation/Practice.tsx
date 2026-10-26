@@ -470,7 +470,7 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
       </div>
 
       {navigator}
-      <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+      <p className="dc-shortcuts" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center' }}>
         Phím tắt: <span className="dc-kbd">Ctrl + Space</span> nghe lại · <span className="dc-kbd">Ctrl + Shift + Space</span> nghe chậm · <span className="dc-kbd">Enter</span> kiểm tra / câu tiếp
       </p>
     </div>

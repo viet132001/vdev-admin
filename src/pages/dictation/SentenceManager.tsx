@@ -170,7 +170,7 @@ export const SentenceManager: React.FC<SentenceManagerProps> = ({ lessonId, onCh
         </form>
       )}
 
-      <div className="table-container" style={{ marginTop: 0 }}>
+      <div className="table-container dc-sentence-table" style={{ marginTop: 0 }}>
         <table>
           <thead>
             <tr><th style={{ width: 40 }}>#</th><th>Câu tiếng Anh</th><th>Nghĩa / ghi chú</th><th style={{ width: 120 }}>Audio</th><th style={{ width: 150 }}></th></tr>

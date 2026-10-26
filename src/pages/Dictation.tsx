@@ -5,7 +5,7 @@ import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, Chev
 import { Practice } from './dictation/Practice';
 import { SentenceManager } from './dictation/SentenceManager';
 import { ImportSessions } from './dictation/ImportSessions';
-import { VocabDefense } from './dictation/VocabDefense';
+import { VocabGames } from './dictation/games/VocabGames';
 import { ConfirmDialog, Popover, type ConfirmState } from './tasks/shared';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -202,7 +202,7 @@ export const Dictation: React.FC = () => {
               <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Nghe câu tiếng Anh, gõ lại, xem chỗ sai và nghĩa của câu.</p>
             </div>
             {sessions.length > 0 && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 dc-header-actions">
                 <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={16} /> Import</button>
                 <button className="btn btn-primary" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={16} /> Tạo session</button>
               </div>
@@ -247,7 +247,7 @@ export const Dictation: React.FC = () => {
             </div>
             <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 600 }}>Game từ vựng — cả session</h1>
           </header>
-          <VocabDefense key={sessionId} scope="session" id={sessionId} />
+          <VocabGames key={sessionId} scope="session" id={sessionId} />
         </div>
       );
     }
@@ -257,12 +257,13 @@ export const Dictation: React.FC = () => {
         <div className="flex flex-col gap-4">
           <header className="flex justify-between align-center" style={{ gap: 12, flexWrap: 'wrap' }}>
             <div>
+              <button className="dc-crumb" onClick={() => go({})}>Tất cả session <ChevronRight size={12} /></button>
               <h1 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 600 }}>
                 {session.title} <span className="badge" style={{ verticalAlign: 'middle' }}>{session.level}</span>
               </h1>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{session.description || `${session.lessonCount} bài · ${session.sentenceCount} câu`}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 dc-header-actions">
               <button className="btn btn-secondary" onClick={() => setSessionForm({ id: session.id, title: session.title, description: session.description || '', level: session.level })}><Pencil size={14} /> Sửa</button>
               <button className="btn btn-secondary" disabled={session.sentenceCount === 0} onClick={() => go({ session: sessionId, tab: 'game' })}><Gamepad2 size={16} /> Game từ vựng</button>
               <button className="btn btn-primary" onClick={() => setLessonForm({ title: '', description: '' })}><Plus size={16} /> Thêm bài</button>
@@ -273,7 +274,7 @@ export const Dictation: React.FC = () => {
           ) : (
             <div className="flex flex-col gap-2">
               {lessons.map((l, i) => (
-                <div key={l.id} className="card flex align-center gap-4" style={{ padding: 16 }}>
+                <div key={l.id} className="card flex align-center gap-4 dc-lesson-row" style={{ padding: 16 }}>
                   <div style={{ flexGrow: 1, minWidth: 0 }}>
                     <b>{i + 1}. {l.title}</b>
                     {l.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{l.description}</div>}
@@ -320,7 +321,7 @@ export const Dictation: React.FC = () => {
           <button className={`tab ${tab === 'manage' ? 'active' : ''}`} onClick={() => go({ session: sessionId, lesson: lesson.id, tab: 'manage' })}>Quản lý câu ({lesson.sentenceCount})</button>
         </div>
         {tab === 'game' ? (
-          <VocabDefense key={lesson.id} scope="lesson" id={lesson.id} onManage={() => go({ session: sessionId, lesson: lesson.id, tab: 'manage' })} />
+          <VocabGames key={lesson.id} scope="lesson" id={lesson.id} onManage={() => go({ session: sessionId, lesson: lesson.id, tab: 'manage' })} />
         ) : tab === 'practice' ? (
           <Practice
             key={lesson.id}
@@ -338,7 +339,7 @@ export const Dictation: React.FC = () => {
   };
 
   return (
-    <div className="tw-shell">
+    <div className="tw-shell dc-shell">
       <aside className="tw-nav">
         <div className="tw-nav-title">
           Sessions

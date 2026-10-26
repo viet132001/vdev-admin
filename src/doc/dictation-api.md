@@ -368,9 +368,9 @@ Phản hồi `summary` có thêm `vocabularies` (tổng số từ vựng sẽ t�
 
 ---
 
-## 13. Game thủ thành từ vựng
+## 13. Game từ vựng
 
-Nghĩa tiếng Việt rơi từ trên xuống "thành". Người dùng gõ đúng từ tiếng Anh tương ứng + Enter để phá hủy; phá hủy đúng thì phát âm thanh đọc lại từ đó (file audio không có cho từ ⇒ Web Speech API giọng en-US, theo cài đặt giọng / tốc độ của màn luyện tập).
+Năm trò chơi dùng chung danh sách từ vựng (7.3). Mọi trò đều đọc to từ tiếng Anh khi trả lời đúng (Web Speech API giọng en-US, theo cài đặt giọng / tốc độ của màn luyện tập; có nút tắt âm thanh).
 
 ### 13.1 Lấy danh sách từ
 | Method | Endpoint | Ghi chú |
@@ -390,13 +390,21 @@ Thứ tự theo bài → câu; bỏ trùng theo khoá so sánh (7.3), giữ lầ
 ]
 ```
 
-### 13.2 Luật chơi (FE — `vdev-admin/src/pages/dictation/VocabDefense.tsx`)
-* Mỗi từ xuất hiện một lần, thứ tự ngẫu nhiên. 5 mạng; nghĩa chạm thành ⇒ mất 1 mạng, hiện đáp án tại chỗ, combo về 0.
-* Độ khó: Dễ / Vừa / Khó (thời gian rơi 16 / 11 / 7.5 s, nhịp xuất hiện 3.4 / 2.4 / 1.6 s, tối đa 3 / 4 / 6 nghĩa trên sân). Cứ 5 từ phá được tốc độ tăng 8% (tối đa ×1.8).
-* So khớp đáp án bằng khoá so sánh (không phân biệt hoa thường, dấu câu). Sai ⇒ ô nhập rung đỏ, combo về 0.
-* Điểm mỗi từ = `10 + (phá càng sớm càng nhiều, tối đa +10) + min(combo, 10) × 2`. Nghĩa rơi quá nửa sân hiện gợi ý chữ cái đầu (`l____ l____`).
-* Kết thúc khi hết mạng hoặc hết từ: điểm, số từ phá / tổng, combo cao nhất, tỉ lệ gõ đúng, danh sách từ bị lọt (nghe lại được), "Chơi lại các từ bị lọt".
-* Kỷ lục và bật / tắt đọc từ lưu ở `localStorage` (theo bài / session + độ khó). Phase 1 **không** lưu kết quả game lên BE.
+### 13.2 Các trò chơi (FE — `vdev-admin/src/pages/dictation/games/`)
+
+| Trò | File | Cách chơi | Độ khó (Dễ / Vừa / Khó) | Tối thiểu |
+|---|---|---|---|---|
+| Thủ thành | `DefenseGame.tsx` (`prompt="meaning"`) | Nghĩa tiếng Việt rơi xuống thành, gõ từ tiếng Anh + Enter để phá hủy. 5 mạng; nghĩa chạm thành ⇒ mất mạng, hiện đáp án. Rơi quá nửa sân ⇒ hiện chữ cái đầu (`l____ l____`). Cứ 5 từ phá được thì nhanh thêm 8% (tối đa ×1.8) | rơi 16 / 11 / 7.5 s; xuất hiện mỗi 3.4 / 2.4 / 1.6 s; tối đa 3 / 4 / 6 ô trên sân | 1 từ |
+| Thủ thành nghe | `DefenseGame.tsx` (`prompt="audio"`) | Như trên nhưng ô rơi không có chữ: từ được đọc khi xuất hiện, chạm ô để nghe lại, chỉ hiện số ký tự. Rơi chậm hơn 25%, +5 điểm mỗi từ | như trên | 1 từ |
+| Trắc nghiệm tốc độ | `QuizGame.tsx` | Mỗi từ một câu, ngẫu nhiên chiều Việt → Anh hoặc Anh → Việt (chiều Anh → Việt đọc to từ hỏi). 4 lựa chọn (đáp án nhiễu lấy từ các từ khác); phím 1–4 trên máy tính | 12 / 8 / 5 s mỗi câu | 2 từ |
+| Ghép cặp | `MatchGame.tsx` | Hai cột Anh / Việt xáo trộn, chạm từ rồi chạm nghĩa. Chia lượt; hết giờ ⇒ cặp còn lại tính là sai. Ghép nhầm ⇒ cả hai từ vào danh sách ôn | 4 / 5 / 6 cặp mỗi lượt, 12 / 8 / 5 s mỗi cặp | 2 từ |
+| Xếp chữ | `ScrambleGame.tsx` | Chữ cái của từ bị xáo thành ô; chạm (hoặc gõ phím) theo thứ tự, chạm ô đã điền để gỡ. Gợi ý khoá chữ đúng tiếp theo (−5 điểm); bỏ qua / hết giờ ⇒ hiện đáp án | không giới hạn / 40 s / 20 s mỗi từ | 1 từ |
+
+* So khớp đáp án gõ phím bằng khoá so sánh (7.3): không phân biệt hoa thường, dấu câu.
+* Điểm: mỗi câu đúng khoảng 10 điểm + thưởng thời gian (trả lời càng nhanh càng cao) + `min(combo, 10) × 2`. Sai / hết giờ ⇒ combo về 0.
+* Kết thúc: điểm, số đúng / tổng, combo cao nhất, tỉ lệ chính xác, danh sách "từ cần ôn lại" (chạm để nghe), nút "Ôn từ sai" (chơi lại chỉ với các từ đó), "Chơi lại", "Trò khác".
+* Kỷ lục theo trò + bài / session + độ khó, độ khó đã chọn và bật / tắt âm thanh lưu ở `localStorage`. Phase 1 **không** lưu kết quả game lên BE.
+* **Mobile:** khi đang chơi, game chiếm toàn màn hình và co theo `visualViewport` để sân chơi + ô nhập luôn nằm trên bàn phím ảo; rung nhẹ (`navigator.vibrate`) khi đúng / sai; các trò chạm (trắc nghiệm, ghép cặp, xếp chữ) không cần bàn phím.
 
 ### 13.3 Phase 2 (đề xuất)
-* `POST /api/dictation/game-results` lưu điểm, từ bị lọt ⇒ kỷ lục đồng bộ giữa thiết bị, thống kê "từ hay quên" để ôn lại.
+* `POST /api/dictation/game-results` lưu điểm theo trò, từ cần ôn ⇒ kỷ lục đồng bộ giữa thiết bị, thống kê "từ hay quên" để ôn lại.
