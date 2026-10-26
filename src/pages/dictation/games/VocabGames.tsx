@@ -6,7 +6,7 @@ import { DefenseGame } from './DefenseGame';
 import { QuizGame } from './QuizGame';
 import { MatchGame } from './MatchGame';
 import { ScrambleGame } from './ScrambleGame';
-import { DIFFICULTY_LABEL, type Difficulty, type GameProps, type GameResult, type GameWord, readStore, speakTerm, writeStore } from './common';
+import { DIFFICULTY_LABEL, type Difficulty, type GameProps, type GameResult, type GameWord, readStore, speakTerm, unlockSpeech, writeStore } from './common';
 
 type Mode = 'defense' | 'listen' | 'quiz' | 'match' | 'scramble';
 
@@ -104,6 +104,8 @@ export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) =
   const bestOf = (m: Mode) => Number(readStore(bestKey(m))) || 0;
 
   const start = (m: Mode, list: GameWord[]) => {
+    // Runs inside the click, so iOS lets the game speak later from timers / animation frames
+    unlockSpeech();
     setMode(m);
     setResult(null);
     setPlaying((p) => ({ run: (p?.run ?? 0) + 1, words: list }));

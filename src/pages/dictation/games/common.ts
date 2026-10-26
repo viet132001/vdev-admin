@@ -1,5 +1,7 @@
 import { loadSettings, playSentence } from '../media';
 
+export { unlockSpeech } from '../media';
+
 // Shared types and helpers for the vocabulary mini-games (see src/doc/dictation-api.md section 13)
 
 export interface GameWord {

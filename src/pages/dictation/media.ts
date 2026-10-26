@@ -36,12 +36,33 @@ export const englishVoices = (): SpeechSynthesisVoice[] =>
 
 let currentAudio: HTMLAudioElement | null = null;
 
+// Chrome drops (and can get stuck on) a speak() issued right after cancel() interrupted speech,
+// so remember when we last interrupted something and give the engine a moment.
+let interruptedAt = 0;
+const RESTART_DELAY_MS = 80;
+
+// Kept at module level: Chrome may garbage-collect an unreferenced utterance, and then onend never fires
+let currentUtterance: SpeechSynthesisUtterance | null = null;
+
 export const stopPlayback = () => {
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
   }
-  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  if ('speechSynthesis' in window) {
+    const synth = window.speechSynthesis;
+    if (synth.speaking || synth.pending) interruptedAt = performance.now();
+    synth.cancel();
+  }
+};
+
+// iOS only allows speech that starts inside a user gesture until it has been "unlocked" once.
+// Call this from a tap/click handler before speech that will start from a timer or animation frame.
+export const unlockSpeech = () => {
+  if (!('speechSynthesis' in window) || window.speechSynthesis.speaking) return;
+  const utterance = new SpeechSynthesisUtterance(' ');
+  utterance.volume = 0;
+  window.speechSynthesis.speak(utterance);
 };
 
 const speak = (text: string, rate: number, voiceURI: string) =>
@@ -50,14 +71,46 @@ const speak = (text: string, rate: number, voiceURI: string) =>
       resolve();
       return;
     }
+    const synth = window.speechSynthesis;
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = englishVoices();
     utterance.voice = voices.find((v) => v.voiceURI === voiceURI) || voices.find((v) => v.lang === 'en-US') || voices[0] || null;
     utterance.lang = utterance.voice?.lang || 'en-US';
     utterance.rate = rate;
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
-    window.speechSynthesis.speak(utterance);
+
+    let started = false;
+    let done = false;
+    const timers: number[] = [];
+    const finish = () => {
+      if (done) return;
+      done = true;
+      timers.forEach((t) => window.clearTimeout(t));
+      if (currentUtterance === utterance) currentUtterance = null;
+      resolve();
+    };
+    utterance.onstart = () => { started = true; };
+    utterance.onend = finish;
+    utterance.onerror = finish;
+    currentUtterance = utterance;
+
+    const start = () => {
+      if (currentUtterance !== utterance) return finish(); // superseded while waiting
+      // A tab that was hidden can leave the engine paused, which silences everything after it
+      if (synth.paused) synth.resume();
+      synth.speak(utterance);
+      // Watchdogs so callers (e.g. the play button) never wait forever on a stuck engine:
+      // nothing started → reset the engine; started but onend never came → give up after a generous estimate
+      timers.push(window.setTimeout(() => {
+        if (started || done) return;
+        synth.cancel();
+        finish();
+      }, 2500));
+      timers.push(window.setTimeout(finish, 3000 + (text.length * 150) / Math.max(rate, 0.1)));
+    };
+
+    // Speak synchronously when possible: on iOS the first speech must happen inside the user gesture
+    if (performance.now() - interruptedAt < RESTART_DELAY_MS) window.setTimeout(start, RESTART_DELAY_MS);
+    else start();
   });
 
 // Plays the sentence's uploaded audio when it has one, otherwise (or if the file fails) the browser's English voice
