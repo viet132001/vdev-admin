@@ -58,8 +58,14 @@ const TEMPLATE_JSON = {
         {
           title: 'At the coffee shop',
           sentences: [
-            { text: 'Could I get a large latte, please?', translation: 'Cho tôi một ly latte lớn được không?', note: 'Could I get...? — cách gọi món lịch sự' },
-            'Can I pay by card?'
+            {
+              text: 'Could I get a large latte, please?',
+              translation: 'Cho tôi một ly latte lớn được không?',
+              note: 'Could I get...? — cách gọi món lịch sự',
+              vocabularies: [{ term: 'large latte', meaning: 'ly latte lớn' }, { term: 'please', meaning: 'làm ơn' }]
+            },
+            { text: 'Can I pay by card?', vocabularies: { 'pay by card': 'trả bằng thẻ' } },
+            'Is it for here or to go?'
           ]
         }
       ]
@@ -211,8 +217,8 @@ export const ImportSessions: React.FC<ImportSessionsProps> = ({ onClose, onImpor
 
           {preview && summary && (
             <div className="flex flex-col gap-2">
-              <div className="grid grid-cols-3 gap-2">
-                {[['Session', summary.sessions], ['Bài', summary.lessons], ['Câu', summary.sentences]].map(([label, value]) => (
+              <div className="grid grid-cols-4 gap-2">
+                {[['Session', summary.sessions], ['Bài', summary.lessons], ['Câu', summary.sentences], ['Từ vựng', summary.vocabularies ?? 0]].map(([label, value]) => (
                   <div key={label} style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{label}</div>
                     <div style={{ fontSize: '1.3rem', fontWeight: 600 }}>{value}</div>

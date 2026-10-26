@@ -436,6 +436,13 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
           <div style={{ fontSize: '1.15rem', fontWeight: 600 }}>{sentence.text}</div>
           {sentence.translation && <div className="dc-meaning" style={{ marginTop: 6 }}>{sentence.translation}</div>}
           {sentence.note && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 6, whiteSpace: 'pre-wrap' }}>Ghi chú: {sentence.note}</div>}
+          {sentence.vocabularies?.length > 0 && (
+            <div className="dc-vocab-list" style={{ marginTop: 8 }}>
+              {sentence.vocabularies.map((v: any) => (
+                <span key={v.term} className="dc-vocab-chip"><b>{v.term}</b> {v.meaning}</span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

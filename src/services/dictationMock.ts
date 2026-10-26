@@ -1,5 +1,5 @@
 // localStorage mock for the Dictation API (/api/dictation) — mirrors src/doc/dictation-api.md
-import { grade } from '../pages/dictation/grading';
+import { grade, parseVocabularyText, vocabularyKey } from '../pages/dictation/grading';
 
 const STORAGE_KEY = 'mock_dictation';
 const GAP = 1024;
@@ -29,8 +29,9 @@ const seed = () => {
   if (localStorage.getItem(STORAGE_KEY)) return;
   const ts = nowIso();
   const base = { createdAt: ts, updatedAt: ts, deletedAt: null };
-  const sentence = (lessonId: string, i: number, text: string, translation: string, note: string | null = null) => ({
-    ...base, id: genId(), lessonId, position: (i + 1) * GAP, text, translation, note, audioFileId: null
+  const sentence = (lessonId: string, i: number, text: string, translation: string, note: string | null = null, vocab = '') => ({
+    ...base, id: genId(), lessonId, position: (i + 1) * GAP, text, translation, note, audioFileId: null,
+    vocabularies: parseVocabularyText(vocab).items
   });
   save({
     sessions: [{ ...base, id: 'ds-1', title: 'Daily Conversation', description: 'Hội thoại hằng ngày', level: 'A2', position: GAP }],
@@ -39,13 +40,13 @@ const seed = () => {
       { ...base, id: 'dl-2', sessionId: 'ds-1', title: 'Introducing yourself', description: null, position: GAP * 2 }
     ],
     sentences: [
-      sentence('dl-1', 0, 'Could I get a large latte, please?', 'Cho tôi một ly latte lớn được không?', 'Could I get...? — cách gọi món lịch sự'),
-      sentence('dl-1', 1, "I'd like it with oat milk.", 'Tôi muốn dùng sữa yến mạch.', "I'd like = I would like"),
-      sentence('dl-1', 2, 'Is it for here or to go?', 'Uống tại đây hay mang đi?', 'to go = mang đi'),
-      sentence('dl-1', 3, 'That will be five dollars.', 'Tổng cộng năm đô la.'),
-      sentence('dl-2', 0, 'Hi, my name is Viet.', 'Xin chào, tên tôi là Việt.'),
-      sentence('dl-2', 1, "I'm a software developer.", 'Tôi là lập trình viên phần mềm.'),
-      sentence('dl-2', 2, 'Nice to meet you.', 'Rất vui được gặp bạn.')
+      sentence('dl-1', 0, 'Could I get a large latte, please?', 'Cho tôi một ly latte lớn được không?', 'Could I get...? — cách gọi món lịch sự', 'large latte: ly latte lớn\nplease: làm ơn'),
+      sentence('dl-1', 1, "I'd like it with oat milk.", 'Tôi muốn dùng sữa yến mạch.', "I'd like = I would like", "oat milk: sữa yến mạch\nI'd like: tôi muốn"),
+      sentence('dl-1', 2, 'Is it for here or to go?', 'Uống tại đây hay mang đi?', 'to go = mang đi', 'for here: dùng tại chỗ\nto go: mang đi'),
+      sentence('dl-1', 3, 'That will be five dollars.', 'Tổng cộng năm đô la.', null, 'five dollars: năm đô la'),
+      sentence('dl-2', 0, 'Hi, my name is Viet.', 'Xin chào, tên tôi là Việt.', null, 'my name is: tên tôi là'),
+      sentence('dl-2', 1, "I'm a software developer.", 'Tôi là lập trình viên phần mềm.', null, 'software developer: lập trình viên phần mềm'),
+      sentence('dl-2', 2, 'Nice to meet you.', 'Rất vui được gặp bạn.', null, 'nice to meet you: rất vui được gặp bạn')
     ],
     progress: [],
     attempts: []
@@ -81,6 +82,7 @@ const sentenceView = (db: DB, s: any) => {
   const { deletedAt: _deletedAt, ...rest } = s;
   return {
     ...rest,
+    vocabularies: s.vocabularies || [],
     audioUrl: s.audioFileId ? `/api/storage/files/${s.audioFileId}/download` : null,
     progress: progressOf(db, s.id)
   };
@@ -118,6 +120,31 @@ const sessionSummary = (db: DB, s: any) => {
   };
 };
 
+// Accepts [{ term, meaning }], ["term: meaning"], { term: meaning } or "term: meaning; ..." — see doc section 7.3
+const normalizeVocabularies = (raw: any, path = 'vocabularies'): any[] => {
+  if (raw === undefined || raw === null || raw === '') return [];
+  let lines: string[] = [];
+  if (typeof raw === 'string') lines = [raw];
+  else if (Array.isArray(raw)) lines = raw.map((v) => (typeof v === 'string' ? v : `${v?.term ?? ''}: ${v?.meaning ?? ''}`));
+  else if (typeof raw === 'object') lines = Object.entries(raw).map(([term, meaning]) => `${term}: ${meaning ?? ''}`);
+  else fail('Validation failed', 'BADREQUEST', [`${path}: phải là mảng, object hoặc chuỗi "từ: nghĩa"`]);
+  const { items, invalid } = parseVocabularyText(lines.join('\n'));
+  if (invalid.length) fail('Validation failed', 'BADREQUEST', invalid.map((l) => `${path} "${l}": cần dạng "từ: nghĩa" hoặc { term, meaning }`));
+  if (items.length > 20) fail('Validation failed', 'BADREQUEST', [`${path}: tối đa 20 từ vựng mỗi câu`]);
+  return items;
+};
+
+// Game words: deduplicated by normalized term, in lesson → sentence order
+const collectVocabularies = (sentences: any[]) => {
+  const seen = new Set<string>();
+  return sentences.flatMap((s) => (s.vocabularies || []).flatMap((v: any) => {
+    const key = vocabularyKey(v.term);
+    if (!key || seen.has(key)) return [];
+    seen.add(key);
+    return [{ ...v, sentenceId: s.id, lessonId: s.lessonId, sentence: s.text, translation: s.translation }];
+  }));
+};
+
 const find = (list: any[], id: string, label: string) => {
   const item = list.find((x) => x.id === id && alive(x));
   if (!item) fail(`${label} not found`, 'NOT_FOUND');
@@ -145,7 +172,7 @@ const newSentence = (lessonId: string, item: any, position: number) => {
   const ts = nowIso();
   return {
     id: genId(), lessonId, position, text, translation: item.translation || null, note: item.note || null,
-    audioFileId: item.audioFileId || null, createdAt: ts, updatedAt: ts, deletedAt: null
+    vocabularies: normalizeVocabularies(item.vocabularies), audioFileId: item.audioFileId || null, createdAt: ts, updatedAt: ts, deletedAt: null
   };
 };
 
@@ -190,7 +217,13 @@ const parseImport = (body: any) => {
         const text = str(obj.text);
         if (!text) err(`${sPath}: thiếu câu (text)`);
         else if (text.length > 500) err(`${sPath}: câu tối đa 500 ký tự`);
-        return { text, translation: str(obj.translation) || null, note: str(obj.note) || null };
+        let vocabularies: any[] = [];
+        try {
+          vocabularies = normalizeVocabularies(obj.vocabularies, `${sPath}.vocabularies`);
+        } catch (e: any) {
+          JSON.parse(e.message).errors.forEach(err);
+        }
+        return { text, translation: str(obj.translation) || null, note: str(obj.note) || null, vocabularies };
       });
       sentenceTotal += sentences.length;
       return { title: lTitle, description: str(l?.description) || null, sentences };
@@ -209,7 +242,8 @@ const importSessions = (db: DB, body: any, dryRun: boolean) => {
   const summary = {
     sessions: parsed.length,
     lessons: parsed.reduce((n: number, s: any) => n + s.lessons.length, 0),
-    sentences: parsed.reduce((n: number, s: any) => n + s.lessons.reduce((m: number, l: any) => m + l.sentences.length, 0), 0)
+    sentences: parsed.reduce((n: number, s: any) => n + s.lessons.reduce((m: number, l: any) => m + l.sentences.length, 0), 0),
+    vocabularies: parsed.reduce((n: number, s: any) => n + s.lessons.reduce((m: number, l: any) => m + l.sentences.reduce((k: number, t: any) => k + t.vocabularies.length, 0), 0), 0)
   };
   if (dryRun) {
     return {
@@ -286,6 +320,8 @@ const route = (method: string, url: string, body?: any): any => {
         };
         db.lessons.push(l);
         result = lessonSummary(db, l);
+      } else if (sub === 'vocabularies' && method === 'GET') {
+        result = collectVocabularies(sessionLessons(db, id).flatMap((l) => lessonSentences(db, l.id)));
       } else if (sub === 'lessons' && subId === 'reorder' && method === 'PATCH') {
         reorderByIds(db.lessons, body?.ids || []);
         result = sessionLessons(db, id).map((l) => lessonSummary(db, l));
@@ -310,6 +346,8 @@ const route = (method: string, url: string, body?: any): any => {
       lesson.deletedAt = ts;
       db.sentences.filter((s) => s.lessonId === id).forEach((s) => { s.deletedAt = s.deletedAt || ts; });
       result = { success: true };
+    } else if (sub === 'vocabularies' && method === 'GET') {
+      result = collectVocabularies(lessonSentences(db, id));
     } else if (sub === 'reset-progress' && method === 'POST') {
       const ids = new Set(lessonSentences(db, id).map((s) => s.id));
       db.progress = db.progress.filter((p) => !ids.has(p.sentenceId));
@@ -340,7 +378,8 @@ const route = (method: string, url: string, body?: any): any => {
     const sentence = find(db.sentences, id, 'Sentence');
     if (!sub && method === 'PATCH') {
       if ('text' in (body || {}) && !String(body.text || '').trim()) fail('text is required');
-      pick(sentence, body, ['text', 'translation', 'note', 'audioFileId']);
+      if ('vocabularies' in (body || {})) body = { ...body, vocabularies: normalizeVocabularies(body.vocabularies) };
+      pick(sentence, body, ['text', 'translation', 'note', 'vocabularies', 'audioFileId']);
       result = sentenceView(db, sentence);
     } else if (!sub && method === 'DELETE') {
       sentence.deletedAt = nowIso();

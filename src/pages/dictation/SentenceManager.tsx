@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
 import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, Volume2, Upload, FileAudio, X, ClipboardList } from 'lucide-react';
-import { splitSentences } from './grading';
+import { formatVocabularyText, parseVocabularyText, splitSentences } from './grading';
 import { loadSettings, playSentence, uploadAudio } from './media';
 
 interface SentenceManagerProps {
@@ -15,9 +15,10 @@ interface SentenceForm {
   text: string;
   translation: string;
   note: string;
+  vocabularies: string;
 }
 
-const emptyForm: SentenceForm = { text: '', translation: '', note: '' };
+const emptyForm: SentenceForm = { text: '', translation: '', note: '', vocabularies: '' };
 
 export const SentenceManager: React.FC<SentenceManagerProps> = ({ lessonId, onChanged, onConfirm }) => {
   const [sentences, setSentences] = useState<any[] | null>(null);
@@ -57,7 +58,16 @@ export const SentenceManager: React.FC<SentenceManagerProps> = ({ lessonId, onCh
   const saveForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form || !form.text.trim()) return;
-    const payload = { text: form.text.trim(), translation: form.translation.trim() || null, note: form.note.trim() || null };
+    const { items: vocabularies, invalid } = parseVocabularyText(form.vocabularies);
+    if (invalid.length) {
+      alert(`Từ vựng cần dạng "từ: nghĩa" (mỗi dòng một từ):\n${invalid.join('\n')}`);
+      return;
+    }
+    if (vocabularies.length > 20) {
+      alert('Tối đa 20 từ vựng mỗi câu');
+      return;
+    }
+    const payload = { text: form.text.trim(), translation: form.translation.trim() || null, note: form.note.trim() || null, vocabularies };
     const ok = await run(
       () => (form.id ? api.patch(`/api/dictation/sentences/${form.id}`, payload) : api.post(`/api/dictation/lessons/${lessonId}/sentences`, payload)),
       'Lưu câu thất bại'
@@ -139,7 +149,15 @@ export const SentenceManager: React.FC<SentenceManagerProps> = ({ lessonId, onCh
           </div>
           <input autoFocus required maxLength={500} className="form-input" placeholder="Câu tiếng Anh *" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} />
           <input className="form-input" placeholder="Nghĩa tiếng Việt" value={form.translation} onChange={(e) => setForm({ ...form, translation: e.target.value })} />
-          <textarea className="form-input" rows={2} style={{ resize: 'vertical' }} placeholder="Ghi chú: từ vựng, ngữ pháp..." value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <textarea className="form-input" rows={2} style={{ resize: 'vertical' }} placeholder="Ghi chú: ngữ pháp, cách dùng..." value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <textarea
+            className="form-input"
+            rows={3}
+            style={{ resize: 'vertical' }}
+            placeholder={'Từ vựng (dùng cho game thủ thành), mỗi dòng một từ:\nlarge latte: ly latte lớn\nplease: làm ơn'}
+            value={form.vocabularies}
+            onChange={(e) => setForm({ ...form, vocabularies: e.target.value })}
+          />
           <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
             {form.text.trim() && (
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => playSentence({ text: form.text }, settings.rate, settings.voiceURI)}>
@@ -168,6 +186,11 @@ export const SentenceManager: React.FC<SentenceManagerProps> = ({ lessonId, onCh
                 <td>
                   <div style={{ fontSize: '0.85rem' }}>{s.translation || <span style={{ color: 'var(--text-muted)' }}>—</span>}</div>
                   {s.note && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ghi chú: {s.note}</div>}
+                  {s.vocabularies?.length > 0 && (
+                    <div className="dc-vocab-list" style={{ marginTop: 4 }}>
+                      {s.vocabularies.map((v: any) => <span key={v.term} className="dc-vocab-chip"><b>{v.term}</b> {v.meaning}</span>)}
+                    </div>
+                  )}
                 </td>
                 <td>
                   <div className="flex align-center" style={{ gap: 2 }}>
@@ -196,7 +219,7 @@ export const SentenceManager: React.FC<SentenceManagerProps> = ({ lessonId, onCh
                   <div className="flex" style={{ gap: 2, justifyContent: 'flex-end' }}>
                     <button className="icon-btn" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp size={14} /></button>
                     <button className="icon-btn" disabled={i === sentences.length - 1} onClick={() => move(i, 1)}><ArrowDown size={14} /></button>
-                    <button className="icon-btn" onClick={() => setForm({ id: s.id, text: s.text, translation: s.translation || '', note: s.note || '' })}><Pencil size={14} /></button>
+                    <button className="icon-btn" onClick={() => setForm({ id: s.id, text: s.text, translation: s.translation || '', note: s.note || '', vocabularies: formatVocabularyText(s.vocabularies) })}><Pencil size={14} /></button>
                     <button
                       className="icon-btn danger"
                       onClick={() => onConfirm('Xóa câu', `Xóa câu “${s.text}”?`, async () => { await run(() => api.delete(`/api/dictation/sentences/${s.id}`), 'Xóa câu thất bại'); })}

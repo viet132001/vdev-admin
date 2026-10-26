@@ -100,3 +100,36 @@ export const splitSentences = (raw: string): { text: string; translation: string
   });
   return items;
 };
+
+// ---------- vocabulary (game) — mirrors vdev-be dictation-vocabulary.util.ts ----------
+
+export interface Vocabulary {
+  term: string;
+  meaning: string;
+}
+
+// Same normalization as sentence grading, so "Large latte!" matches "large latte"
+export const vocabularyKey = (term: string) => tokenize(term).join(' ');
+
+// Textarea format: one "term: meaning" (or "term = meaning") per line; duplicates keep the first
+export const parseVocabularyText = (text: string): { items: Vocabulary[]; invalid: string[] } => {
+  const items: Vocabulary[] = [];
+  const invalid: string[] = [];
+  const seen = new Set<string>();
+  text.split(/[;\n]/).map((l) => l.trim()).filter(Boolean).forEach((line) => {
+    const match = /^(.*?)\s*[:=]\s*(.*)$/.exec(line);
+    const term = match?.[1].trim() || '';
+    const meaning = match?.[2].trim() || '';
+    if (!vocabularyKey(term) || !meaning) {
+      invalid.push(line);
+      return;
+    }
+    const key = vocabularyKey(term);
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push({ term, meaning });
+  });
+  return { items, invalid };
+};
+
+export const formatVocabularyText = (items: Vocabulary[] = []) => items.map((v) => `${v.term}: ${v.meaning}`).join('\n');

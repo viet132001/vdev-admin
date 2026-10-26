@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, getErrorMessage } from '../services/api';
-import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload } from 'lucide-react';
+import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2 } from 'lucide-react';
 import { Practice } from './dictation/Practice';
 import { SentenceManager } from './dictation/SentenceManager';
 import { ImportSessions } from './dictation/ImportSessions';
+import { VocabDefense } from './dictation/VocabDefense';
 import { ConfirmDialog, Popover, type ConfirmState } from './tasks/shared';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -32,7 +33,8 @@ export const Dictation: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const sessionId = searchParams.get('session');
   const lessonId = searchParams.get('lesson');
-  const tab = searchParams.get('tab') === 'manage' ? 'manage' : 'practice';
+  const tabParam = searchParams.get('tab');
+  const tab = tabParam === 'manage' || tabParam === 'game' ? tabParam : 'practice';
 
   const [sessions, setSessions] = useState<any[] | null>(null);
   const [session, setSession] = useState<any | null>(null);
@@ -236,6 +238,20 @@ export const Dictation: React.FC = () => {
 
     if (!session || session.id !== sessionId) return <div className="loading-container"><span className="spinner"></span><span>Đang tải...</span></div>;
 
+    if (!lessonId && tab === 'game') {
+      return (
+        <div className="flex flex-col gap-4">
+          <header>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => go({ session: sessionId })}>
+              {session.title} <ChevronRight size={12} style={{ verticalAlign: 'middle' }} />
+            </div>
+            <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 600 }}>Game từ vựng — cả session</h1>
+          </header>
+          <VocabDefense key={sessionId} scope="session" id={sessionId} />
+        </div>
+      );
+    }
+
     if (!lessonId) {
       return (
         <div className="flex flex-col gap-4">
@@ -248,6 +264,7 @@ export const Dictation: React.FC = () => {
             </div>
             <div className="flex gap-2">
               <button className="btn btn-secondary" onClick={() => setSessionForm({ id: session.id, title: session.title, description: session.description || '', level: session.level })}><Pencil size={14} /> Sửa</button>
+              <button className="btn btn-secondary" disabled={session.sentenceCount === 0} onClick={() => go({ session: sessionId, tab: 'game' })}><Gamepad2 size={16} /> Game từ vựng</button>
               <button className="btn btn-primary" onClick={() => setLessonForm({ title: '', description: '' })}><Plus size={16} /> Thêm bài</button>
             </div>
           </header>
@@ -299,9 +316,12 @@ export const Dictation: React.FC = () => {
         </header>
         <div className="tabs">
           <button className={`tab ${tab === 'practice' ? 'active' : ''}`} onClick={() => go({ session: sessionId, lesson: lesson.id })}>Luyện tập</button>
+          <button className={`tab ${tab === 'game' ? 'active' : ''}`} onClick={() => go({ session: sessionId, lesson: lesson.id, tab: 'game' })}>Game từ vựng</button>
           <button className={`tab ${tab === 'manage' ? 'active' : ''}`} onClick={() => go({ session: sessionId, lesson: lesson.id, tab: 'manage' })}>Quản lý câu ({lesson.sentenceCount})</button>
         </div>
-        {tab === 'practice' ? (
+        {tab === 'game' ? (
+          <VocabDefense key={lesson.id} scope="lesson" id={lesson.id} onManage={() => go({ session: sessionId, lesson: lesson.id, tab: 'manage' })} />
+        ) : tab === 'practice' ? (
           <Practice
             key={lesson.id}
             lessonId={lesson.id}

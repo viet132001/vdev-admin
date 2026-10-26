@@ -43,7 +43,7 @@ Cuối bài có màn tổng kết (số câu đúng, độ chính xác trung bì
 |---|---|---|
 | `DictationSession` | `id`, `ownerId`, `title`, `description?`, `level` (enum), `position`, `createdAt`, `updatedAt`, `deletedAt` | |
 | `DictationLesson` | `id`, `sessionId`, `title`, `description?`, `position`, timestamps, `deletedAt` | |
-| `DictationSentence` | `id`, `lessonId`, `text`, `translation?`, `note?`, `audioFileId?`, `position`, timestamps, `deletedAt` | `text` ≤ 500 ký tự, bắt buộc |
+| `DictationSentence` | `id`, `lessonId`, `text`, `translation?`, `note?`, `vocabularies` (JSON, mặc định `[]`), `audioFileId?`, `position`, timestamps, `deletedAt` | `text` ≤ 500 ký tự, bắt buộc. `vocabularies` xem 7.3 |
 | `DictationProgress` | `id`, `userId`, `sentenceId` (unique cùng `userId`), `status`, `attemptCount`, `bestAccuracy`, `lastInput?`, `completedAt?`, `updatedAt` | 1 dòng / user / câu |
 | `DictationAttempt` | `id`, `userId`, `sentenceId`, `input`, `isCorrect`, `accuracy`, `playCount`, `hintCount`, `revealed`, `durationMs`, `createdAt` | Lịch sử từng lượt kiểm tra |
 
@@ -156,6 +156,10 @@ Ví dụ: đáp án `I don't think so.`, người dùng gõ `i dont think` ⇒
   "text": "Could I get a large latte, please?",
   "translation": "Cho tôi một ly latte lớn được không?",
   "note": "Could I get...? — cách gọi món lịch sự",
+  "vocabularies": [
+    { "term": "large latte", "meaning": "ly latte lớn" },
+    { "term": "please", "meaning": "làm ơn" }
+  ],
   "audioFileId": null,
   "audioUrl": null,
   "progress": { "status": "COMPLETED", "attemptCount": 2, "bestAccuracy": 100, "lastInput": "...", "completedAt": "..." }
@@ -167,13 +171,22 @@ Ví dụ: đáp án `I don't think so.`, người dùng gõ `i dont think` ⇒
 ### 7.2 API
 | Method | Endpoint | Body / Ghi chú |
 |---|---|---|
-| POST | `/api/dictation/lessons/:id/sentences` | `{ "text": "...", "translation": "...", "note": "...", "audioFileId": "uuid" }` — thêm vào cuối |
+| POST | `/api/dictation/lessons/:id/sentences` | `{ "text": "...", "translation": "...", "note": "...", "vocabularies": [{ "term": "...", "meaning": "..." }], "audioFileId": "uuid" }` — thêm vào cuối |
 | POST | `/api/dictation/lessons/:id/sentences/bulk` | `{ "items": [{ "text": "...", "translation": "..." }] }` — tối đa 200 câu / lần, thêm vào cuối theo thứ tự. Phản hồi: mảng Sentence đã tạo |
 | PATCH | `/api/dictation/lessons/:id/sentences/reorder` | `{ "ids": [...] }` |
-| PATCH | `/api/dictation/sentences/:id` | `text`, `translation`, `note`, `audioFileId` (gửi `null` để gỡ audio) |
+| PATCH | `/api/dictation/sentences/:id` | `text`, `translation`, `note`, `vocabularies` (gửi `[]` để xoá hết, bỏ trường = không đổi), `audioFileId` (gửi `null` để gỡ audio) |
 | DELETE | `/api/dictation/sentences/:id` | Xóa mềm |
 
 > FE tự tách đoạn văn thành câu trước khi gọi bulk (tách theo `.`, `!`, `?` và xuống dòng; dòng dạng `English | Tiếng Việt` được hiểu là câu + nghĩa).
+
+### 7.3 Từ vựng của câu (`vocabularies`)
+
+Một câu có thể có nhiều từ / cụm từ mới, dùng cho game thủ thành (mục 13) và hiển thị sau khi luyện câu.
+
+* Dạng lưu và trả về: `[{ "term": "large latte", "meaning": "ly latte lớn" }]` — `term` là tiếng Anh, `meaning` là nghĩa tiếng Việt.
+* Giới hạn: tối đa **20** từ / câu; `term` ≤ 100 ký tự, `meaning` ≤ 200 ký tự; cả hai bắt buộc.
+* **Khoá so sánh** của `term` = chuẩn hoá giống mục 4 rồi nối bằng một dấu cách (`"Large latte!"` ≡ `"large latte"`). Từ trùng khoá trong cùng câu ⇒ giữ mục đầu tiên. `term` chỉ gồm dấu câu ⇒ lỗi.
+* Không bắt buộc `term` phải xuất hiện nguyên văn trong câu (cho phép dạng gốc, ví dụ câu có `ran` còn từ vựng là `run`).
 
 **Audio:** dùng lại luồng upload sẵn có — `POST /api/storage/upload` (multipart, trường `file`) lấy `fileId`, sau đó PATCH `audioFileId` cho câu. Chấp nhận `audio/mpeg`, `audio/wav`, `audio/webm`, `audio/ogg`, tối đa 5MB.
 
@@ -237,7 +250,8 @@ Ví dụ: đáp án `I don't think so.`, người dùng gõ `i dont think` ⇒
 
 ## 11. Ghi chú triển khai BE
 
-* **Module:** `src/modules/dictation`. Migration `20261022100000_add_dictation`.
+* **Module:** `src/modules/dictation`. Migration `20261022100000_add_dictation`, `20261026000200_add_dictation_vocabularies` (cột `vocabularies` JSONB).
+* **Từ vựng:** `dictation-vocabulary.util.ts` (parse / chuẩn hoá / bỏ trùng) dùng chung cho API câu, import JSON và Excel. FE có bản tương ứng `vocabularyKey` / `parseVocabularyText` trong `grading.ts`.
 * **Level:** dùng lại enum `CEFRLevel` (`A1`…`C2`) đã có trong schema thay vì tạo `DictationLevel` — giá trị API không đổi. Mặc định `A1`.
 * **Chấm câu:** `dictation-grading.util.ts` là bản port 1:1 của `vdev-admin/src/pages/dictation/grading.ts`. Sửa quy tắc ở một bên thì phải sửa bên kia.
 * **Attempt lưu `diff`** (JSON) để `GET /sentences/:id/attempts` trả lại được và phục vụ thống kê "từ hay sai" ở phase 2.
@@ -304,8 +318,17 @@ Mảng session, hoặc object `{ "sessions": [...] }`. Câu có thể là chuỗ
         {
           "title": "At the coffee shop",
           "sentences": [
-            { "text": "Could I get a large latte, please?", "translation": "Cho tôi một ly latte lớn được không?", "note": "..." },
-            "Can I pay by card?"
+            {
+              "text": "Could I get a large latte, please?",
+              "translation": "Cho tôi một ly latte lớn được không?",
+              "note": "...",
+              "vocabularies": [
+                { "term": "large latte", "meaning": "ly latte lớn" },
+                { "term": "please", "meaning": "làm ơn" }
+              ]
+            },
+            { "text": "Can I pay by card?", "vocabularies": { "pay by card": "trả bằng thẻ" } },
+            "Is it for here or to go?"
           ]
         }
       ]
@@ -314,6 +337,8 @@ Mảng session, hoặc object `{ "sessions": [...] }`. Câu có thể là chuỗ
 }
 ```
 `level` không phân biệt hoa thường, bỏ trống ⇒ `A1`. `lessons` / `sentences` có thể rỗng.
+
+`vocabularies` của câu chấp nhận các dạng: mảng `{ term, meaning }`; object `{ "từ": "nghĩa" }`; mảng chuỗi `["large latte: ly latte lớn"]`; hoặc một chuỗi `"large latte: ly latte lớn; please: làm ơn"`. Lỗi ghi theo vị trí, ví dụ `sessions[0].lessons[0].sentences[2].vocabularies [0]: thiếu nghĩa (meaning)`.
 
 ### 12.4 Định dạng Excel
 Đọc sheet tên `Sentences` (không có thì sheet đầu tiên), dòng 1 là tiêu đề, **mỗi dòng là một câu**.
@@ -328,6 +353,7 @@ Mảng session, hoặc object `{ "sessions": [...] }`. Câu có thể là chuỗ
 | Text | `Text`, `Sentence`, `Câu` | ✔ |
 | Translation | `Translation`, `Nghĩa` | |
 | Note | `Note`, `Ghi chú` | |
+| Vocabulary | `Vocabulary`, `Vocabularies`, `Từ vựng` | |
 
 Quy tắc:
 * Ô `Session` / `Lesson` để trống ⇒ dùng giá trị của dòng trên (tiện khi merge ô). Đổi session mà không ghi `Lesson` ⇒ lỗi.
@@ -335,4 +361,42 @@ Quy tắc:
 * `Level`, mô tả: lấy giá trị không rỗng đầu tiên của session / bài.
 * Dòng không có `Text` (chỉ có Session hoặc Session + Lesson) ⇒ tạo session / bài rỗng; dòng trống hoàn toàn bị bỏ qua.
 * Lỗi ghi theo số dòng Excel (`Dòng 5: ...`).
+* Cột `Vocabulary`: các cặp `từ: nghĩa` (hoặc `từ = nghĩa`) cách nhau bằng `;` hoặc xuống dòng trong ô, ví dụ `large latte: ly latte lớn; please: làm ơn`. Lỗi: `Dòng 3: từ vựng "oops": cần dạng "từ: nghĩa" hoặc { term, meaning }`.
 * Chỉ hỗ trợ `.xlsx`; file `.xls` / `.csv` cần lưu lại thành `.xlsx`.
+
+Phản hồi `summary` có thêm `vocabularies` (tổng số từ vựng sẽ tạo).
+
+---
+
+## 13. Game thủ thành từ vựng
+
+Nghĩa tiếng Việt rơi từ trên xuống "thành". Người dùng gõ đúng từ tiếng Anh tương ứng + Enter để phá hủy; phá hủy đúng thì phát âm thanh đọc lại từ đó (file audio không có cho từ ⇒ Web Speech API giọng en-US, theo cài đặt giọng / tốc độ của màn luyện tập).
+
+### 13.1 Lấy danh sách từ
+| Method | Endpoint | Ghi chú |
+|---|---|---|
+| GET | `/api/dictation/lessons/:id/vocabularies` | Từ vựng của một bài |
+| GET | `/api/dictation/sessions/:id/vocabularies` | Từ vựng của cả session (mọi bài) |
+
+Thứ tự theo bài → câu; bỏ trùng theo khoá so sánh (7.3), giữ lần xuất hiện đầu. Câu / bài đã xoá mềm bị bỏ qua.
+```json
+[
+  {
+    "term": "large latte", "meaning": "ly latte lớn",
+    "sentenceId": "uuid", "lessonId": "uuid",
+    "sentence": "Could I get a large latte, please?",
+    "translation": "Cho tôi một ly latte lớn được không?"
+  }
+]
+```
+
+### 13.2 Luật chơi (FE — `vdev-admin/src/pages/dictation/VocabDefense.tsx`)
+* Mỗi từ xuất hiện một lần, thứ tự ngẫu nhiên. 5 mạng; nghĩa chạm thành ⇒ mất 1 mạng, hiện đáp án tại chỗ, combo về 0.
+* Độ khó: Dễ / Vừa / Khó (thời gian rơi 16 / 11 / 7.5 s, nhịp xuất hiện 3.4 / 2.4 / 1.6 s, tối đa 3 / 4 / 6 nghĩa trên sân). Cứ 5 từ phá được tốc độ tăng 8% (tối đa ×1.8).
+* So khớp đáp án bằng khoá so sánh (không phân biệt hoa thường, dấu câu). Sai ⇒ ô nhập rung đỏ, combo về 0.
+* Điểm mỗi từ = `10 + (phá càng sớm càng nhiều, tối đa +10) + min(combo, 10) × 2`. Nghĩa rơi quá nửa sân hiện gợi ý chữ cái đầu (`l____ l____`).
+* Kết thúc khi hết mạng hoặc hết từ: điểm, số từ phá / tổng, combo cao nhất, tỉ lệ gõ đúng, danh sách từ bị lọt (nghe lại được), "Chơi lại các từ bị lọt".
+* Kỷ lục và bật / tắt đọc từ lưu ở `localStorage` (theo bài / session + độ khó). Phase 1 **không** lưu kết quả game lên BE.
+
+### 13.3 Phase 2 (đề xuất)
+* `POST /api/dictation/game-results` lưu điểm, từ bị lọt ⇒ kỷ lục đồng bộ giữa thiết bị, thống kê "từ hay quên" để ôn lại.
