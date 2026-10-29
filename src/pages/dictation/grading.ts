@@ -25,9 +25,65 @@ export const tokenize = (text: string): string[] =>
     .map((w) => w.replace(/^['-]+|['-]+$/g, ''))
     .filter(Boolean);
 
+// Contractions: "I am" = "I'm", "it isn't" = "it is not" = "it's not", "do not" = "don't", "cannot" = "can't".
+// Both sides are rewritten to one canonical form, so either spelling is accepted:
+// 1. expand "n't" → "<aux> not"; 2. contract pronoun + auxiliary ("i am" → "i'm"), except has/have/had/will/would
+// before "not" ("he hasn't", not "he's not"); 3. re-contract the remaining "<aux> not" ("do not" → "don't").
+const NEGATIVE_AUX = ['is', 'are', 'was', 'were', 'do', 'does', 'did', 'has', 'have', 'had', 'would', 'should', 'could', 'must', 'need', 'might'];
+const NEGATIVE_IRREGULAR: Record<string, string> = { will: "won't", can: "can't", shall: "shan't" };
+const NEGATIVE_EXPAND: Record<string, string[]> = { "won't": ['will', 'not'], "can't": ['can', 'not'], cannot: ['can', 'not'], "shan't": ['shall', 'not'] };
+const IS_SUBJECTS = ['he', 'she', 'it', 'that', 'there', 'here', 'what', 'where', 'who', 'how', 'when', 'why'];
+const WILL_SUBJECTS = ['i', 'you', 'he', 'she', 'it', 'we', 'they', 'that', 'there', 'who', 'what'];
+const PRONOUN_AUX: Record<string, { suffix: string; subjects: string[] }> = {
+  am: { suffix: "'m", subjects: ['i'] },
+  are: { suffix: "'re", subjects: ['you', 'we', 'they'] },
+  is: { suffix: "'s", subjects: IS_SUBJECTS },
+  has: { suffix: "'s", subjects: IS_SUBJECTS },
+  have: { suffix: "'ve", subjects: ['i', 'you', 'we', 'they'] },
+  will: { suffix: "'ll", subjects: WILL_SUBJECTS },
+  would: { suffix: "'d", subjects: WILL_SUBJECTS },
+  had: { suffix: "'d", subjects: WILL_SUBJECTS }
+};
+const KEEP_BEFORE_NOT = ['has', 'have', 'had', 'will', 'would'];
+
+export const normalizeContractions = (tokens: string[]): string[] => {
+  const expanded = tokens.flatMap((w) => {
+    if (NEGATIVE_EXPAND[w]) return NEGATIVE_EXPAND[w];
+    const stem = w.endsWith("n't") ? w.slice(0, -3) : '';
+    return NEGATIVE_AUX.includes(stem) ? [stem, 'not'] : [w];
+  });
+
+  const contracted: string[] = [];
+  for (let i = 0; i < expanded.length; i++) {
+    const [w, next, after] = [expanded[i], expanded[i + 1], expanded[i + 2]];
+    const aux = next ? PRONOUN_AUX[next] : undefined;
+    if (aux?.subjects.includes(w) && !(KEEP_BEFORE_NOT.includes(next) && after === 'not')) {
+      contracted.push(w + aux.suffix);
+      i++;
+    } else if (w === 'let' && next === 'us') {
+      contracted.push("let's");
+      i++;
+    } else {
+      contracted.push(w);
+    }
+  }
+
+  const result: string[] = [];
+  for (let i = 0; i < contracted.length; i++) {
+    const w = contracted[i];
+    if (contracted[i + 1] === 'not' && (NEGATIVE_IRREGULAR[w] || NEGATIVE_AUX.includes(w))) {
+      result.push(NEGATIVE_IRREGULAR[w] || `${w}n't`);
+      i++;
+    } else {
+      result.push(w);
+    }
+  }
+  return result;
+};
+
 export const grade = (expectedText: string, actualText: string): GradeResult => {
-  const expected = tokenize(expectedText);
-  const actual = tokenize(actualText);
+  const expected = normalizeContractions(tokenize(expectedText));
+  const actual = normalizeContractions(tokenize(actualText));
   const n = expected.length;
   const m = actual.length;
 
@@ -108,8 +164,8 @@ export interface Vocabulary {
   meaning: string;
 }
 
-// Same normalization as sentence grading, so "Large latte!" matches "large latte"
-export const vocabularyKey = (term: string) => tokenize(term).join(' ');
+// Same normalization as sentence grading, so "Large latte!" matches "large latte" and "I am" matches "I'm"
+export const vocabularyKey = (term: string) => normalizeContractions(tokenize(term)).join(' ');
 
 // Textarea format: one "term: meaning" (or "term = meaning") per line; duplicates keep the first
 export const parseVocabularyText = (text: string): { items: Vocabulary[]; invalid: string[] } => {

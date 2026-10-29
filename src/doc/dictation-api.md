@@ -71,6 +71,11 @@ FE tự chấm ngay để phản hồi tức thì; BE **chấm lại** khi nhậ
 2. Chuyển về chữ thường.
 3. Bỏ dấu câu `. , ! ? ; : " ( ) [ ] { } …` và dấu `'` / `-` ở đầu hoặc cuối từ (giữ `'` và `-` nằm giữa từ, ví dụ `don't`, `well-known`).
 4. Tách từ theo khoảng trắng, bỏ token rỗng.
+5. Đưa dạng rút gọn và dạng đầy đủ về một dạng chuẩn để gõ kiểu nào cũng đúng (`I am` = `I'm`, `it is not` = `it isn't` = `it's not`, `do not` = `don't`, `cannot` = `can't`, `let us` = `let's`):
+   1. Tách `n't` thành `<trợ động từ> not` (`won't` → `will not`, `can't` / `cannot` → `can not`, `shan't` → `shall not`; `is are was were do does did has have had would should could must need might` + `n't`).
+   2. Rút gọn đại từ + trợ động từ: `i am` → `i'm`; `you/we/they are` → `'re`; `he/she/it/that/there/here/what/where/who/how/when/why is|has` → `'s`; `i/you/we/they have` → `'ve`; `i/you/he/she/it/we/they/that/there/who/what will` → `'ll`, `would|had` → `'d`; `let us` → `let's`. Không rút gọn `has/have/had/will/would` khi ngay sau là `not` (giữ `he hasn't`, `i won't`).
+   3. Ghép lại `<trợ động từ> not` còn lại thành dạng `n't` (`do not` → `don't`, `will not` → `won't`).
+   `'s` sau danh từ (sở hữu, `John's`) giữ nguyên. Diff trả về token ở dạng chuẩn này. `vocabularyKey` (game) dùng cùng quy tắc.
 
 **Đánh giá:**
 * `isCorrect` ⇔ hai dãy token giống hệt nhau.
@@ -394,7 +399,7 @@ Thứ tự theo bài → câu; bỏ trùng theo khoá so sánh (7.3), giữ lầ
 
 | Trò | File | Cách chơi | Độ khó (Dễ / Vừa / Khó) | Tối thiểu |
 |---|---|---|---|---|
-| Thủ thành | `DefenseGame.tsx` (`prompt="meaning"`) | Nghĩa tiếng Việt rơi xuống thành, gõ từ tiếng Anh + Enter để phá hủy. 5 mạng; nghĩa chạm thành ⇒ mất mạng, hiện đáp án. Rơi quá nửa sân ⇒ hiện chữ cái đầu (`l____ l____`). Cứ 5 từ phá được thì nhanh thêm 8% (tối đa ×1.8) | rơi 16 / 11 / 7.5 s; xuất hiện mỗi 3.4 / 2.4 / 1.6 s; tối đa 3 / 4 / 6 ô trên sân | 1 từ |
+| Thủ thành | `DefenseGame.tsx` (`prompt="meaning"`) | Nghĩa tiếng Việt rơi xuống thành, gõ từ tiếng Anh + Enter để phá hủy. 5 mạng; nghĩa chạm thành ⇒ mất mạng, hiện đáp án; combo mỗi 10 từ ⇒ hồi 1 mạng. Rơi quá nửa sân ⇒ hiện chữ cái đầu (`l____ l____`). Tốc độ tự điều chỉnh: mỗi từ phá được +1.5% (tối đa ×1.4), mỗi từ chạm thành −15% (không dưới ×1). Nút **EN** cạnh ô đáp án đổi ô sang `type="password"` (chữ vẫn hiện nhờ `-webkit-text-security: none`) để bàn phím điện thoại tắt gõ Telex/VNI; lựa chọn lưu ở `localStorage` | rơi 16 / 11 / 7.5 s; xuất hiện mỗi 3.4 / 2.4 / 1.6 s; tối đa 3 / 4 / 6 ô trên sân | 1 từ |
 | Thủ thành nghe | `DefenseGame.tsx` (`prompt="audio"`) | Như trên nhưng ô rơi không có chữ: từ được đọc khi xuất hiện, chạm ô để nghe lại, chỉ hiện số ký tự. Rơi chậm hơn 25%, +5 điểm mỗi từ | như trên | 1 từ |
 | Trắc nghiệm tốc độ | `QuizGame.tsx` | Mỗi từ một câu, ngẫu nhiên chiều Việt → Anh hoặc Anh → Việt (chiều Anh → Việt đọc to từ hỏi). 4 lựa chọn (đáp án nhiễu lấy từ các từ khác); phím 1–4 trên máy tính | 12 / 8 / 5 s mỗi câu | 2 từ |
 | Ghép cặp | `MatchGame.tsx` | Hai cột Anh / Việt xáo trộn, chạm từ rồi chạm nghĩa. Chia lượt; hết giờ ⇒ cặp còn lại tính là sai. Ghép nhầm ⇒ cả hai từ vào danh sách ôn | 4 / 5 / 6 cặp mỗi lượt, 12 / 8 / 5 s mỗi cặp | 2 từ |

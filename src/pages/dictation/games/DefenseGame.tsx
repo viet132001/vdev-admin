@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Castle, Headphones, Heart, Pause, Play, SendHorizontal } from 'lucide-react';
+import { Castle, Headphones, Heart, Keyboard, Pause, Play, SendHorizontal } from 'lucide-react';
 import { vocabularyKey } from '../grading';
 import { GameHud } from './GameStage';
-import { type GameProps, type GameWord, accuracyOf, buzz, maskTerm, nextUid, shuffle, speakTerm, startLoop } from './common';
+import { type GameProps, type GameWord, accuracyOf, buzz, maskTerm, nextUid, readStore, shuffle, speakTerm, startLoop, writeStore } from './common';
 
 // Tower defense: prompts fall towards the castle, typing the English term destroys them.
 // prompt "meaning" shows the Vietnamese meaning; "audio" only plays the term (tap to replay).
@@ -31,8 +31,15 @@ const CONFIG = {
   hard: { fall: 7.5, spawn: 1.6, maxOnField: 6 }
 };
 const LIVES = 5;
+// Adaptive speed: each destroyed prompt nudges it up, each one reaching the wall eases it off,
+// so long sessions settle at a pace the player can keep instead of ramping forever
+const SPEED = { max: 1.4, up: 0.015, down: 0.15 };
+const HEAL_COMBO = 10; // regain a life every this many prompts destroyed in a row
 const FX_MS = { hit: 900, miss: 1800 };
 const HINT_FROM = 0.5; // reveal first letters once a prompt has fallen this far
+// Pages can't turn off a phone's Vietnamese IME (Telex turns "nurse" into "núe"), but keyboards drop it
+// in password fields, so this mode renders the answer box as a password input with visible text
+const PLAIN_KEYS_KEY = 'dictation_game_plain_keyboard';
 
 export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> = ({ words, difficulty, sound, onFinish, prompt }) => {
   const listen = prompt === 'audio';
@@ -41,6 +48,7 @@ export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> 
   const [paused, setPaused] = useState(false);
   const [input, setInput] = useState('');
   const [wrong, setWrong] = useState(false);
+  const [plainKeys, setPlainKeys] = useState(() => readStore(PLAIN_KEYS_KEY) === '1');
   const inputRef = useRef<HTMLInputElement>(null);
   const game = useRef({
     queue: shuffle(words),
@@ -48,6 +56,7 @@ export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> 
     fx: [] as Fx[],
     sinceSpawn: Infinity,
     lives: LIVES,
+    speed: 1,
     score: 0,
     combo: 0,
     bestCombo: 0,
@@ -65,7 +74,7 @@ export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> 
     if (paused) return;
     return startLoop((dt, now) => {
       const s = game.current;
-      const speed = Math.min(1 + Math.floor(s.destroyed.length / 5) * 0.08, 1.8);
+      const speed = s.speed;
 
       s.sinceSpawn += dt;
       const canSpawn = s.enemies.length === 0 || (s.sinceSpawn >= config.spawn / speed && s.enemies.length < config.maxOnField);
@@ -85,6 +94,7 @@ export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> 
       if (landed.length) {
         s.enemies = s.enemies.filter((e) => e.y < 1);
         s.lives = Math.max(0, s.lives - landed.length);
+        s.speed = Math.max(1, s.speed - SPEED.down * landed.length);
         s.combo = 0;
         buzz(120);
         landed.forEach((e) => {
@@ -122,6 +132,15 @@ export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> 
     return () => document.removeEventListener('visibilitychange', onHide);
   }, []);
 
+  const togglePlainKeys = () => {
+    const next = !plainKeys;
+    setPlainKeys(next);
+    writeStore(PLAIN_KEYS_KEY, next ? '1' : '0');
+    // Re-focus so the phone reopens the keyboard for the new input type
+    inputRef.current?.blur();
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
   const resume = () => {
     setPaused(false);
     inputRef.current?.focus();
@@ -144,6 +163,8 @@ export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> 
     s.enemies = s.enemies.filter((e) => e !== target);
     s.combo += 1;
     s.bestCombo = Math.max(s.bestCombo, s.combo);
+    s.speed = Math.min(SPEED.max, s.speed + SPEED.up);
+    if (s.combo % HEAL_COMBO === 0) s.lives = Math.min(LIVES, s.lives + 1);
     s.score += 10 + Math.round((1 - target.y) * 10) + Math.min(s.combo, 10) * 2 + (listen ? 5 : 0);
     s.destroyed.push(target.word);
     s.fx.push({ uid: nextUid(), kind: 'hit', x: target.x, y: target.y, text: target.word.term, sub: listen ? target.word.meaning : undefined, at: performance.now() });
@@ -199,7 +220,8 @@ export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> 
       <form className="gm-answer" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <input
           ref={inputRef}
-          className={`form-input dc-input ${wrong ? 'vd-wrong' : ''}`}
+          type={plainKeys ? 'password' : 'text'}
+          className={`form-input dc-input ${wrong ? 'vd-wrong' : ''} ${plainKeys ? 'gm-plain-keys' : ''}`}
           placeholder={listen ? 'Gõ từ bạn nghe được...' : 'Gõ từ tiếng Anh...'}
           value={input}
           disabled={paused}
@@ -210,7 +232,19 @@ export const DefenseGame: React.FC<GameProps & { prompt: 'meaning' | 'audio' }> 
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
         />
+        <button
+          type="button"
+          className={`btn btn-secondary gm-kbd-toggle ${plainKeys ? 'active' : ''}`}
+          title={plainKeys ? 'Đang tắt gõ tiếng Việt — bấm để bật lại' : 'Tắt gõ tiếng Việt (Telex/VNI) của bàn phím'}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={togglePlainKeys}
+        >
+          <Keyboard size={16} /> EN
+        </button>
         <button type="submit" className="btn btn-primary" disabled={paused || !input.trim()} title="Bắn (Enter)"><SendHorizontal size={18} /></button>
       </form>
       <p className="gm-help">
