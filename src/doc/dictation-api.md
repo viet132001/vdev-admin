@@ -76,6 +76,7 @@ FE tự chấm ngay để phản hồi tức thì; BE **chấm lại** khi nhậ
    2. Rút gọn đại từ + trợ động từ: `i am` → `i'm`; `you/we/they are` → `'re`; `he/she/it/that/there/here/what/where/who/how/when/why is|has` → `'s`; `i/you/we/they have` → `'ve`; `i/you/he/she/it/we/they/that/there/who/what will` → `'ll`, `would|had` → `'d`; `let us` → `let's`. Không rút gọn `has/have/had/will/would` khi ngay sau là `not` (giữ `he hasn't`, `i won't`).
    3. Ghép lại `<trợ động từ> not` còn lại thành dạng `n't` (`do not` → `don't`, `will not` → `won't`).
    `'s` sau danh từ (sở hữu, `John's`) giữ nguyên. Diff trả về token ở dạng chuẩn này. `vocabularyKey` (game) dùng cùng quy tắc.
+6. Viết số bằng chữ: chữ số `0`–`999999` (không có số 0 ở đầu) và cụm từ chỉ số đều đổi về dạng chữ chuẩn — `7` = `seven`, `21` = `twenty one` = `twenty-one`, `105` = `one hundred and five` = `one hundred five`, `100` = `a hundred`, `7:30` = `seven thirty`. Hai số đứng cạnh nhau không ghép được thì giữ riêng (`seven seven`, `one two three`). Số có số 0 ở đầu (`0912`) hoặc ≥ 1 000 000 giữ nguyên. Diff hiện số bằng chữ (`seven`).
 
 **Đánh giá:**
 * `isCorrect` ⇔ hai dãy token giống hệt nhau.
@@ -83,7 +84,7 @@ FE tự chấm ngay để phản hồi tức thì; BE **chấm lại** khi nhậ
   * `MATCH` (đúng), `WRONG` (gõ sai từ, có `expected` + `actual`), `MISSING` (thiếu từ), `EXTRA` (thừa từ).
   * Một cụm `MISSING` + `EXTRA` liền nhau được ghép thành `WRONG` theo cặp.
 * `accuracy` = `số MATCH / số từ của đáp án` × 100, làm tròn 0 chữ số thập phân (đáp án rỗng ⇒ 0).
-* Không chấp nhận viết số thay chữ (`10` ≠ `ten`) ở phase 1.
+* Viết số bằng chữ số hay bằng chữ đều đúng (`10` = `ten`, xem bước 6).
 
 Ví dụ: đáp án `I don't think so.`, người dùng gõ `i dont think` ⇒
 ```json
