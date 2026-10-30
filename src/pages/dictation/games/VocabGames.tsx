@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../../services/api';
-import { BookOpen, Castle, Gamepad2, Headphones, Link2, Puzzle, RotateCcw, Trophy, Volume2, VolumeX, Zap } from 'lucide-react';
+import { BookOpen, Castle, Gamepad2, Ghost, Link2, Puzzle, RotateCcw, Trophy, Volume2, VolumeX, Zap } from 'lucide-react';
 import { GameStage } from './GameStage';
 import { DefenseGame } from './DefenseGame';
+import { MonsterGame } from './MonsterGame';
 import { QuizGame } from './QuizGame';
 import { MatchGame } from './MatchGame';
 import { ScrambleGame } from './ScrambleGame';
 import { DIFFICULTY_LABEL, type Difficulty, type GameProps, type GameResult, type GameWord, readStore, speakTerm, unlockSpeech, writeStore } from './common';
 
-type Mode = 'defense' | 'listen' | 'quiz' | 'match' | 'scramble';
+type Mode = 'defense' | 'monster' | 'quiz' | 'match' | 'scramble';
 
 interface ModeInfo {
   title: string;
@@ -28,16 +29,16 @@ const MODES: Record<Mode, ModeInfo> = {
     minWords: 1,
     typing: true,
     headline: ['Giữ thành thành công!', 'Thành đã thất thủ'],
-    render: (props) => <DefenseGame {...props} prompt="meaning" />
+    render: (props) => <DefenseGame {...props} />
   },
-  listen: {
-    title: 'Thủ thành nghe',
-    description: 'Không có chữ, chỉ có phát âm — nghe và gõ lại từ trước khi chạm thành.',
-    icon: Headphones,
+  monster: {
+    title: 'Đánh quái',
+    description: 'Mỗi màn 3–4 quái, mỗi con đọc một từ — nghe và gõ đúng để hạ hết quái rồi qua màn.',
+    icon: Ghost,
     minWords: 1,
     typing: true,
-    headline: ['Đôi tai tuyệt vời!', 'Thành đã thất thủ'],
-    render: (props) => <DefenseGame {...props} prompt="audio" />
+    headline: ['Đã dọn sạch quái!', 'Đã dọn sạch quái!'],
+    render: (props) => <MonsterGame {...props} />
   },
   quiz: {
     title: 'Trắc nghiệm tốc độ',
@@ -68,7 +69,7 @@ const MODES: Record<Mode, ModeInfo> = {
   }
 };
 
-const MODE_ORDER: Mode[] = ['defense', 'listen', 'quiz', 'match', 'scramble'];
+const MODE_ORDER: Mode[] = ['defense', 'monster', 'quiz', 'match', 'scramble'];
 const SOUND_KEY = 'dictation_game_sound';
 const DIFFICULTY_KEY = 'dictation_game_difficulty';
 
