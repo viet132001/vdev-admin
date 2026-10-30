@@ -61,7 +61,7 @@ export const TimerBar: React.FC<{ ratio: number }> = ({ ratio }) => (
 const PLAIN_KEYS_KEY = 'dictation_game_plain_keyboard';
 
 interface AnswerFormProps {
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   value: string;
   wrong: boolean;
   disabled?: boolean;

@@ -99,7 +99,7 @@ export const MonsterGame: React.FC<GameProps> = ({ words, difficulty, sound, onF
     if (!key) return;
     const s = stats.current;
     s.submits += 1;
-    const matches = monsters.map((m, i) => i).filter((i) => !monsters[i].dead && vocabularyKey(monsters[i].word.term) === key);
+    const matches = monsters.map((_, i) => i).filter((i) => !monsters[i].dead && vocabularyKey(monsters[i].word.term) === key);
     if (!matches.length) {
       s.combo = 0;
       setMonsters(monsters.map((m, i) => (i === focus ? { ...m, wrongs: m.wrongs + 1 } : m)));
@@ -127,7 +127,7 @@ export const MonsterGame: React.FC<GameProps> = ({ words, difficulty, sound, onF
     if (sound) speakTerm(target.word.term);
 
     // Move on to the next monster still standing, or clear the stage
-    const alive = next.map((m, i) => i).filter((i) => !next[i].dead);
+    const alive = next.map((_, i) => i).filter((i) => !next[i].dead);
     if (!alive.length) {
       setCleared(true);
       later(nextStage, NEXT_STAGE_MS);
