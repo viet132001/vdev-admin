@@ -482,6 +482,8 @@ Workspace = N repo, mỗi repo có CLAUDE.md trên origin/<nhánh gốc>  (thi�
 4. Review trên VDEV (diff, góp ý) hoặc GitHub
         ├─ Làm lại ─► cùng nhánh / worktree, commit mới, comment vào PR đang mở
         ├─ Merge (VDEV) ─► AgentRun(MERGE): gh pr merge từng repo ─► xoá nhánh + worktree ─► Done
+        ├─ Merge cả kế hoạch ─► AgentRun(MERGE, planId, không taskId): mỗi repo gộp mọi task còn PR mở
+        │     thành 1 commit trên vdev/plan-<8 ký tự id> ─► 1 PR / repo ─► merge 1 lần ─► đóng PR lẻ + xoá nhánh ─► Done
         ├─ Merge trên GitHub ─► heartbeat đồng bộ trạng thái PR ─► Done + dọn nhánh
         └─ Đóng PR & hủy ─► AgentRun(ROLLBACK): đóng PR, xoá nhánh (nhánh gốc không bị đụng)
 ```
@@ -520,6 +522,7 @@ Claude **không bao giờ** chạy git / gh (hook chặn `git commit/push/branch
 | PATCH | `/api/task-plans/:id/items/:itemId` | User | Thêm `repos` |
 | GET | `/api/tasks/:id/pull-requests` | User | Card / chi tiết task cũng có `pullRequests` (`repo` = tên) |
 | POST | `/api/tasks/:id/merge` | **Chỉ User** | Task `IN_REVIEW / TESTING` có PR `OPEN` ⇒ `AgentRun(MERGE)`. PR đã `CLOSED` ⇒ `409`; task cần trước (dependsOn) còn PR mở ⇒ `409 Merge first: "…"` |
+| POST | `/api/task-plans/:id/merge` | **Chỉ User** | Merge cả kế hoạch ⇒ `AgentRun(MERGE)` theo plan. Mọi task agent còn dở phải `IN_REVIEW / TESTING`, ≥ 1 task có PR `OPEN`, không PR nào `CLOSED`; đang có merge của plan ⇒ `409`. Trong lúc đó merge lẻ một task ⇒ `409` |
 | POST | `/api/tasks/:id/accept` | User | Còn PR `OPEN` ⇒ `409` (Done đi qua Merge) |
 
 Runner:
@@ -542,6 +545,7 @@ Runner:
 * **Claude:** `cwd` = repo đầu tiên của task, repo khác qua `additionalDirectories`; ghi được trong mọi repo của task, không bao giờ vào `.git` (thư mục hay file worktree).
 * **finish_task:** không có thay đổi ⇒ trả lỗi (gọi `report_blocked`). Context review sai ⇒ trả lỗi cho Claude sửa. Lệnh kiểm tra của **từng repo có thay đổi** (tên `repo:test` khi > 1 repo). BE nhận changeset ⇒ **sau đó** mới `git add` (cùng pathspec loại trừ) + `commit --no-verify` (`<tiêu đề>` + `VDEV-Task: <id> · revision N`) + `push -u` + `gh pr create` (body: summary, tiêu chí, kiểm tra, context, ghi chú). PR đã mở ⇒ comment "Revision N". Nhiều repo ⇒ mỗi PR có mục "PR liên quan". Lỗi push / gh ⇒ ghi `error` vào PR, review vẫn có; Merge / làm lại sẽ thử lại.
 * **MERGE:** từng PR theo thứ tự repo: chưa có PR ⇒ push + tạo trước; PR xếp chồng ⇒ PR gốc phải `MERGED` (`MERGE_ORDER` nếu chưa), squash / rebase ⇒ `git rebase --onto origin/<gốc> <head PR gốc>` + push `--force-with-lease` (`REBASE_CONFLICT` nếu lỗi), `gh pr edit --base <gốc>`; `gh pr merge --<method>`; GitHub chưa merge (chờ review / check bắt buộc) ⇒ run lỗi kèm lý do. Merge xong ⇒ xoá worktree, nhánh local + origin, ref `refs/vdev/<task>/*`, `IN_PLACE` đang ở nhánh gốc và sạch ⇒ `merge --ff-only`.
+* **MERGE cả kế hoạch** (run không có `taskId`): từng repo, worktree tạm `--detach` trên `origin/<gốc>` (`~/.vdev-agent/worktrees/<projectId>/plan-<planId>/<repo>`, thư mục người dùng không bị đụng) ⇒ `git merge --no-ff` nhánh từng task theo thứ tự mục (nhánh local trước, rồi origin; nhánh xếp chồng tự khớp) ⇒ xung đột ⇒ `MERGE_CONFLICT` kèm file, không push gì ⇒ `reset --soft origin/<gốc>` + **một commit** (`VDEV-Plan` + `VDEV-Task` từng task) ⇒ push `--force` `vdev/plan-<8 ký tự>` (bỏ qua nếu tree giống lần trước, để check PR không chạy lại) ⇒ PR gộp (dùng lại PR đang mở) ⇒ `gh pr merge --<method>` ⇒ PR lẻ của task: comment link PR gộp + đóng, dọn nhánh / worktree, báo `MERGED` ⇒ task Done. Diff rỗng (PR gộp đã được merge trên GitHub sau một lượt lỗi) ⇒ coi như đã merge. Một repo lỗi không ảnh hưởng repo đã merge xong; bấm lại chỉ làm phần còn lại.
 * **Đồng bộ GitHub:** `syncPullRequests` từ heartbeat chạy nền (`gh pr view`); `MERGED` ⇒ báo BE + dọn nhánh (đợi tới khi run của cùng project kết thúc). `CLOSED` không dọn (người dùng có thể mở lại).
 * **ROLLBACK:** task có PR / nhánh ⇒ đóng PR, xoá nhánh, `rollbackDone({ files: [] })`; task trước git flow ⇒ trả file như mục cũ.
 * **TEST:** chạy lại lệnh kiểm tra trên nhánh task (worktree hoặc switch tạm) cho từng repo trong `firstRepos`.

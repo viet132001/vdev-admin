@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
-import { Plus, Sparkles, Check, X, RotateCcw, Ban, Pencil, ChevronRight, CircleAlert, Terminal, Library, Undo2, Camera } from 'lucide-react';
+import { Plus, Sparkles, Check, X, RotateCcw, Ban, Pencil, ChevronRight, CircleAlert, Terminal, Library, Undo2, Camera, GitMerge } from 'lucide-react';
 import { PLAN_STATUS, RUN_STATUS, RUN_TYPE, agentSettingsOf, formatRelative, isActiveRun, runErrorText, useBusy } from './agent';
 import { PRIORITY_OPTIONS, RollbackDialog, StatusBadge, type ConfirmState } from './shared';
 import { AttachmentList, AttachmentPicker, ProjectDocsModal, imagesFromPaste, submitAttachments, type PendingAttachment } from './ProjectDocs';
@@ -239,6 +239,14 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
   // Tasks Claude already coded; the BE checks for real changesets
   const canRollback = plan && !isActiveRun(plan.latestRun) && ['APPROVED', 'DONE', 'CANCELLED'].includes(plan.status) &&
     children.some((c) => ['TESTING', 'IN_REVIEW', 'COMPLETED'].includes(c.status));
+  // Merge cả kế hoạch: mọi task còn dở đã review xong (Chờ review / Chờ test) và ≥ 1 task còn PR mở.
+  // Mỗi repo gộp thành 1 commit + 1 PR, merge 1 lần (CI trên nhánh gốc chạy 1 lần)
+  const openChildren = children.filter((c) => c.assignee === 'AGENT' && !['COMPLETED', 'CANCELLED'].includes(c.status));
+  const withOpenPr = openChildren.filter((c) => (c.pullRequests || []).some((pr: any) => pr.state === 'OPEN'));
+  const canMergePlan = plan && plan.status === 'APPROVED' && !isActiveRun(plan.latestRun) && withOpenPr.length > 0 &&
+    openChildren.every((c) => ['IN_REVIEW', 'TESTING'].includes(c.status));
+  const mergeRepos = [...new Set(withOpenPr.flatMap((c) => (c.pullRequests || []).filter((pr: any) => pr.state === 'OPEN').map((pr: any) => pr.repo?.name)).filter(Boolean))];
+  const mergingPlan = isActiveRun(plan?.latestRun) && plan?.latestRun.type === 'MERGE' && !plan?.latestRun.taskId;
   const itemNumber = (id: string) => (plan?.items?.findIndex((i: any) => i.id === id) ?? -1) + 1;
 
   return (
@@ -324,6 +332,23 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                     }
                   })}>
                     <Ban size={14} /> {busy === 'stop' ? 'Đang dừng...' : 'Dừng'}
+                  </button>
+                )}
+                {(canMergePlan || mergingPlan) && (
+                  <button
+                    className="btn btn-primary"
+                    disabled={busy !== null || mergingPlan}
+                    title="Mỗi repo gộp mọi task thành 1 commit, mở 1 PR và merge 1 lần — PR riêng của từng task được đóng"
+                    onClick={() => onConfirm({
+                      title: 'Merge cả kế hoạch',
+                      message: `Gộp ${withOpenPr.length} task thành 1 commit cho mỗi repo (${mergeRepos.join(', ')}), mở 1 PR / repo rồi merge một lần. PR riêng của từng task sẽ được đóng kèm link tới PR gộp.`,
+                      confirmLabel: 'Merge',
+                      action: async () => { await planAction('merge', 'merge', {}, 'Không xếp được lượt merge'); }
+                    })}
+                  >
+                    {mergingPlan || busy === 'merge'
+                      ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> {plan.latestRun?.status === 'QUEUED' ? 'Chờ máy chạy…' : 'Đang merge…'}</>
+                      : <><GitMerge size={14} /> Merge cả kế hoạch ({withOpenPr.length} task)</>}
                   </button>
                 )}
                 {canRollback && (

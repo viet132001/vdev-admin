@@ -1192,13 +1192,24 @@ a:hover {
 .tw-agent-working-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: tw-line-in 0.35s ease-out; }
 @keyframes tw-line-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Robot: bobs, blinks, antenna pulses */
-.tw-bot { display: inline-flex; flex-shrink: 0; color: var(--text-main); animation: tw-bot-bob 1.6s ease-in-out infinite; }
+/* Robot typing: hands tap in turn (left, right, left, left…), the key under each hand lights up,
+   head nods with the taps, eyes read along the line and blink, antenna pulses */
+.tw-bot { display: inline-flex; flex-shrink: 0; color: var(--text-main); }
 .tw-bot svg { overflow: visible; }
-.tw-bot-eyes { transform-origin: 12px 12px; animation: tw-bot-blink 3.4s infinite; }
-.tw-bot-antenna { animation: tw-bot-ping 1.6s ease-in-out infinite; transform-origin: 12px 2.5px; }
-@keyframes tw-bot-bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 25% { transform: translateY(-1.5px) rotate(-4deg); } 75% { transform: translateY(-1px) rotate(4deg); } }
-@keyframes tw-bot-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+.tw-bot-head { animation: tw-bot-nod 0.9s ease-in-out infinite; }
+.tw-bot-eyes { transform-box: fill-box; transform-origin: center; animation: tw-bot-read 2.7s ease-in-out infinite, tw-bot-blink 3.6s infinite; }
+.tw-bot-antenna { transform-box: fill-box; transform-origin: center; animation: tw-bot-ping 1.8s ease-in-out infinite; }
+.tw-bot-hand { animation: tw-bot-tap 0.45s ease-in-out infinite; }
+.tw-bot-hand-r { animation-delay: -0.225s; }
+.tw-bot-key { opacity: 0.35; animation: tw-bot-key 0.9s steps(1, end) infinite; }
+.tw-bot-key-1 { fill: var(--primary, currentColor); }
+.tw-bot-key-2 { animation-delay: -0.3s; }
+.tw-bot-key-3 { fill: var(--primary, currentColor); animation-delay: -0.6s; }
+@keyframes tw-bot-nod { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(0.6px); } }
+@keyframes tw-bot-tap { 0%, 100% { transform: translateY(-1.4px); } 45%, 60% { transform: translateY(0.3px); } }
+@keyframes tw-bot-key { 0%, 30% { opacity: 1; } 31%, 100% { opacity: 0.35; } }
+@keyframes tw-bot-read { 0%, 100% { transform: translateX(-0.8px); } 45% { transform: translateX(0.8px); } 55% { transform: translateX(0.8px); } 90% { transform: translateX(-0.8px); } }
+@keyframes tw-bot-blink { 0%, 93%, 100% { scale: 1 1; } 96% { scale: 1 0.1; } }
 @keyframes tw-bot-ping { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(1.35); } }
 .tw-column-bot { display: inline-flex; margin-left: 2px; }
 
@@ -1247,7 +1258,7 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tw-card.agent-working::before, .tw-bot, .tw-bot-eyes, .tw-bot-antenna, .tw-typing i, .tw-activity-pill::after,
+  .tw-card.agent-working::before, .tw-bot, .tw-bot-eyes, .tw-bot-antenna, .tw-bot-head, .tw-bot-hand, .tw-bot-key, .tw-typing i, .tw-activity-pill::after,
   .tw-agent-working-text, .tw-activity-log, .tw-card.celebrate, .tw-celebrate, .tw-celebrate i { animation: none !important; }
   .tw-card.agent-working::before { background: var(--text-muted); }
   .tw-celebrate i { display: none; }

@@ -52,18 +52,38 @@ const usePhrase = (lines: string[], seed: string, every = 2600) => {
   return lines[(offset + tick) % lines.length];
 };
 
-/** Small robot that bobs and blinks; pure CSS so it costs nothing while idle. */
+/**
+ * Small robot typing on a keyboard: hands tap in turn, keys light up under them, eyes read
+ * across the line, head nods with the rhythm. Pure CSS so it costs nothing while idle.
+ */
 export const AgentBot: React.FC<{ size?: number }> = ({ size = 18 }) => (
   <span className="tw-bot" style={{ width: size, height: size }} aria-hidden="true">
     <svg viewBox="0 0 24 24" width={size} height={size}>
-      <line x1="12" y1="2.5" x2="12" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <circle className="tw-bot-antenna" cx="12" cy="2.5" r="1.6" fill="currentColor" />
-      <rect x="3.5" y="6" width="17" height="13" rx="4" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <g className="tw-bot-eyes">
-        <circle cx="9" cy="12" r="1.5" fill="currentColor" />
-        <circle cx="15" cy="12" r="1.5" fill="currentColor" />
+      <g className="tw-bot-head">
+        <line x1="12" y1="1.6" x2="12" y2="3.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        <circle className="tw-bot-antenna" cx="12" cy="1.5" r="1.2" fill="currentColor" />
+        <rect x="6.5" y="3.6" width="11" height="8.2" rx="2.8" fill="none" stroke="currentColor" strokeWidth="1.4" />
+        {/* Eyes low in the face: looking down at the keys */}
+        <g className="tw-bot-eyes">
+          <circle cx="10" cy="8.4" r="1.15" fill="currentColor" />
+          <circle cx="14" cy="8.4" r="1.15" fill="currentColor" />
+        </g>
       </g>
-      <path className="tw-bot-mouth" d="M9.5 15.5 Q12 17 14.5 15.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <rect x="9.6" y="11.8" width="4.8" height="3.4" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      {/* Arms reach down to the keyboard; each hand taps in turn */}
+      <g className="tw-bot-hand tw-bot-hand-l">
+        <path d="M9.6 13 Q6.6 13.6 7 16.6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <circle cx="7" cy="17" r="1.05" fill="currentColor" />
+      </g>
+      <g className="tw-bot-hand tw-bot-hand-r">
+        <path d="M14.4 13 Q17.4 13.6 17 16.6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        <circle cx="17" cy="17" r="1.05" fill="currentColor" />
+      </g>
+      {/* Keyboard */}
+      <rect x="2.5" y="18" width="19" height="4.2" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <rect className="tw-bot-key tw-bot-key-1" x="5.4" y="19.5" width="2.6" height="1.2" rx="0.4" fill="currentColor" />
+      <rect className="tw-bot-key tw-bot-key-2" x="10.7" y="19.5" width="2.6" height="1.2" rx="0.4" fill="currentColor" />
+      <rect className="tw-bot-key tw-bot-key-3" x="16" y="19.5" width="2.6" height="1.2" rx="0.4" fill="currentColor" />
     </svg>
   </span>
 );
