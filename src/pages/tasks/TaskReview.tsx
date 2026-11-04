@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
-import { Check, RotateCcw, CircleCheck, CircleX, CircleAlert, MessageSquarePlus, ChevronDown, ChevronRight, FileCode2, FlaskConical, Undo2, X } from 'lucide-react';
-import { NOTE_STATUS, formatRelative, isNoteOpen, noteStatus, useBusy } from './agent';
+import { Check, RotateCcw, CircleCheck, CircleX, CircleAlert, MessageSquarePlus, ChevronDown, ChevronRight, FileCode2, FlaskConical, Undo2, X, GitMerge, BookOpenCheck } from 'lucide-react';
+import { NOTE_STATUS, REVIEW_DECISION, formatRelative, isNoteOpen, noteStatus, openPullRequests, useBusy } from './agent';
+import { PrChips } from './git';
 import { RollbackDialog, type ConfirmState } from './shared';
 import { Markdown } from './PlanPanel';
 import { getDocsRoot, isLocalDocsSupported, readDocument } from './localDocs';
@@ -198,6 +199,12 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
   // Chờ test can be reviewed too: the user may test by hand, then Done or send back
   const reviewable = inReview || testing;
   const untested: string | undefined = changeSets?.[0]?.selfReview?.untested;
+  // Git flow: the code is in pull requests, so Merge (here or on GitHub) replaces Done
+  const prs: any[] = task.pullRequests || [];
+  const openPrs = openPullRequests(task);
+  const gitFlow = prs.length > 0;
+  const prErrors = prs.filter((pr) => pr.error);
+  const changesRequested = prs.some((pr) => pr.reviewDecision === 'CHANGES_REQUESTED');
 
   const setDiffMode = (next: 'unified' | 'split') => {
     setMode(next);
@@ -238,6 +245,29 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
       message: `Task còn ${openNotes.length} góp ý đang mở. Đánh dấu Done sẽ đóng toàn bộ góp ý.`,
       confirmLabel: 'Vẫn Done',
       action: async () => { await doAccept(); }
+    });
+  };
+
+  const merge = () => {
+    const doMerge = () => run('merge', async () => {
+      try {
+        await api.post(`/api/tasks/${task.id}/merge`, {});
+        onChanged();
+      } catch (err) {
+        alert(getErrorMessage(err, 'Không xếp được lượt merge'));
+      }
+    });
+    onConfirm({
+      title: `Merge ${openPrs.length} pull request`,
+      message: (
+        <>
+          Máy chạy sẽ merge {openPrs.map((pr) => `${pr.repo}#${pr.number ?? '?'}`).join(', ')} vào nhánh gốc rồi xoá nhánh task. Task chuyển Done khi mọi PR đã merge.
+          {openNotes.length > 0 && <><br /><br />Task còn {openNotes.length} góp ý đang mở.</>}
+          {changesRequested && <><br /><br />Trên GitHub có người yêu cầu sửa PR này.</>}
+        </>
+      ),
+      confirmLabel: 'Merge',
+      action: async () => { await doMerge(); }
     });
   };
 
@@ -337,11 +367,23 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
             {testing && untested && <div className="flex gap-2" style={{ fontSize: '0.78rem', color: 'var(--warning)', alignItems: 'flex-start', whiteSpace: 'pre-wrap' }}><CircleAlert size={13} style={{ flexShrink: 0, marginTop: 2 }} /> {untested}</div>}
             {testing && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Bật lại môi trường (Docker / DB…) rồi bấm Chạy test lại. Task phụ thuộc task này sẽ chờ tới khi test qua.</div>}
             {reviewable && openNotes.length > 0 && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{openNotes.length} góp ý đang mở sẽ được gửi cho Claude khi yêu cầu làm lại</div>}
+            {gitFlow && (
+              <div className="flex align-center gap-2" style={{ flexWrap: 'wrap', marginTop: 6 }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{task.branchName ? <code>{task.branchName}</code> : 'Pull request'}:</span>
+                <PrChips prs={prs} />
+                {prs.map((pr) => pr.reviewDecision && pr.state === 'OPEN' ? <span key={`rd-${pr.id}`} className="badge" style={{ color: pr.reviewDecision === 'APPROVED' ? 'var(--success)' : 'var(--warning)' }}>{pr.repo}: {REVIEW_DECISION[pr.reviewDecision] || pr.reviewDecision}</span> : null)}
+              </div>
+            )}
+            {prErrors.map((pr) => (
+              <div key={`err-${pr.id}`} className="flex gap-2" style={{ fontSize: '0.78rem', color: 'var(--danger)', alignItems: 'flex-start', marginTop: 4 }}>
+                <CircleAlert size={13} style={{ flexShrink: 0, marginTop: 2 }} /> {pr.repo}: {pr.error}{reviewable ? ' — bấm Merge để runner thử đẩy lại, hoặc yêu cầu làm lại.' : ''}
+              </div>
+            ))}
           </div>
           <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
             {changeSets.length > 0 && task.status !== 'IN_PROGRESS' && (
-              <button className="btn btn-secondary" disabled={busy !== null} onClick={() => setRollbackOpen(true)} title="Trả các file task đã sửa về như trước khi Claude làm">
-                <Undo2 size={14} /> Rollback
+              <button className="btn btn-secondary" disabled={busy !== null} onClick={() => setRollbackOpen(true)} title={gitFlow ? 'Đóng PR và xoá nhánh của task — nhánh gốc không bị đụng tới' : 'Trả các file task đã sửa về như trước khi Claude làm'}>
+                <Undo2 size={14} /> {gitFlow ? 'Đóng PR & hủy' : 'Rollback'}
               </button>
             )}
             {testing && (
@@ -354,15 +396,21 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
                 <button className="btn btn-secondary" disabled={busy !== null} onClick={() => { setReworkNote(''); setReworkOpen(true); }}>
                   <RotateCcw size={14} /> Ghi chú & làm lại
                 </button>
-                <button className="btn btn-primary" disabled={busy !== null} onClick={accept} title={testing ? 'Bạn đã tự test và chấp nhận' : undefined}>
-                  <Check size={14} /> {busy === 'accept' ? 'Đang lưu...' : testing ? 'Done (đã tự test)' : 'Done'}
-                </button>
+                {gitFlow ? (
+                  <button className="btn btn-primary" disabled={busy !== null || openPrs.length === 0} onClick={merge} title={testing ? 'Bạn đã tự test và chấp nhận' : 'Merge PR vào nhánh gốc'}>
+                    <GitMerge size={14} /> {busy === 'merge' ? 'Đang gửi...' : `Merge${openPrs.length > 1 ? ` ${openPrs.length} PR` : ''}${testing ? ' (đã tự test)' : ''}`}
+                  </button>
+                ) : (
+                  <button className="btn btn-primary" disabled={busy !== null} onClick={accept} title={testing ? 'Bạn đã tự test và chấp nhận' : undefined}>
+                    <Check size={14} /> {busy === 'accept' ? 'Đang lưu...' : testing ? 'Done (đã tự test)' : 'Done'}
+                  </button>
+                )}
               </>
             )}
           </div>
         </div>
       )}
-      {rollbackOpen && <RollbackDialog scope="task" onClose={() => setRollbackOpen(false)} onSubmit={rollback} />}
+      {rollbackOpen && <RollbackDialog scope="task" gitFlow={gitFlow} onClose={() => setRollbackOpen(false)} onSubmit={rollback} />}
 
       {changeSets.length === 0 ? (
         <div className="empty-state" style={{ padding: 32 }}>
@@ -414,17 +462,34 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
             </div>
           )}
 
+          {Array.isArray(changeSet.contextReview) && changeSet.contextReview.length > 0 && (
+            <div className="tw-selfreview">
+              <div className="tw-label">File context của repo (CLAUDE.md)</div>
+              {changeSet.contextReview.map((c: any) => (
+                <div key={c.repo} className="flex gap-2" style={{ fontSize: '0.82rem', alignItems: 'flex-start' }}>
+                  <BookOpenCheck size={14} style={{ color: c.updated ? 'var(--success)' : 'var(--text-muted)', flexShrink: 0, marginTop: 2 }} />
+                  <span><b>{c.repo}</b>: {c.updated ? 'đã cập nhật' : 'không cần cập nhật'}{c.reason && <span style={{ color: 'var(--text-muted)' }}> — {c.reason}</span>}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {changeSet.selfReview?.screenshots?.length > 0 && <ScreenshotReport key={changeSet.id} shots={changeSet.selfReview.screenshots} />}
 
           <div className="tw-diff-shell">
             <div className="tw-diff-files">
-              {changeSet.files.map((f: any) => (
-                <button key={f.path} className={`tw-diff-file ${f.path === filePath ? 'active' : ''}`} onClick={() => setFilePath(f.path)} title={f.path}>
+              {changeSet.files.map((f: any, i: number) => (
+                <React.Fragment key={f.path}>
+                {f.repo && f.repo !== changeSet.files[i - 1]?.repo && new Set(changeSet.files.map((x: any) => x.repo)).size > 1 && (
+                  <div className="tw-diff-repo">{f.repo}</div>
+                )}
+                <button className={`tw-diff-file ${f.path === filePath ? 'active' : ''}`} onClick={() => setFilePath(f.path)} title={f.path}>
                   <span className={`tw-file-status s-${f.status}`}>{f.status}</span>
                   <span className="tw-diff-file-name">{f.path.split('/').pop()}</span>
                   <span className="tw-diff-file-dir">{f.path.split('/').slice(0, -1).join('/')}</span>
                   <span className="tw-diff-stat"><span className="plus">+{f.additions}</span> <span className="minus">−{f.deletions}</span></span>
                 </button>
+                </React.Fragment>
               ))}
             </div>
             <div className="tw-diff-view">

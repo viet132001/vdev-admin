@@ -19,13 +19,52 @@ export const RUN_STATUS: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: 'Đã hủy', color: 'var(--text-muted)' }
 };
 
-export const RUN_TYPE: Record<string, string> = { PLAN: 'Lập kế hoạch', EXECUTE: 'Thực hiện', REWORK: 'Làm lại', TEST: 'Chạy test lại', ROLLBACK: 'Rollback' };
+export const RUN_TYPE: Record<string, string> = { PLAN: 'Lập kế hoạch', EXECUTE: 'Thực hiện', REWORK: 'Làm lại', TEST: 'Chạy test lại', ROLLBACK: 'Rollback', MERGE: 'Merge PR' };
 
 export const RUN_ERROR: Record<string, string> = {
   RUNNER_LOST: 'Mất kết nối với máy chạy',
   RUNNER_STOPPED: 'Máy chạy bị tắt giữa chừng',
   PLAN_NOT_SUBMITTED: 'Claude kết thúc mà chưa gửi kế hoạch'
 };
+
+// ---------- Git flow (task-agent-mcp.md section 15) ----------
+
+export const PR_STATE: Record<string, { label: string; color: string }> = {
+  OPEN: { label: 'Đang mở', color: 'var(--warning)' },
+  MERGED: { label: 'Đã merge', color: 'var(--success)' },
+  CLOSED: { label: 'Đã đóng', color: 'var(--text-muted)' }
+};
+
+export const REVIEW_DECISION: Record<string, string> = {
+  APPROVED: 'GitHub: đã duyệt',
+  CHANGES_REQUESTED: 'GitHub: yêu cầu sửa',
+  REVIEW_REQUIRED: 'GitHub: chờ duyệt'
+};
+
+export const CHECKOUT_MODES = [
+  { value: 'WORKTREE', label: 'Worktree riêng', hint: 'Mỗi task một thư mục riêng ngoài repo — thư mục của bạn không bị đụng tới, nhiều task không lẫn nhau. Khuyên dùng.' },
+  { value: 'IN_PLACE', label: 'Ngay trong thư mục', hint: 'Đổi nhánh ngay trong thư mục repo (app / Docker đang chạy từ thư mục này thấy được thay đổi). Thư mục phải sạch khi Claude bắt đầu.' }
+];
+
+export const MERGE_METHODS = [
+  { value: 'squash', label: 'Squash (1 commit / task)' },
+  { value: 'merge', label: 'Merge commit' },
+  { value: 'rebase', label: 'Rebase' }
+];
+
+export const REPO_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,39}$/;
+
+/** Default repo name from its folder: /Users/me/code/Satori_ERP -> satori-erp */
+export const repoNameFromPath = (path: string) =>
+  (path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'repo')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd')
+    .toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'repo';
+
+/** OK only when the runner verified the repo AND its context file is on origin/<defaultBranch> */
+export const repoStatusOf = (repo: any): 'OK' | 'NO_CONTEXT' | 'INVALID' | 'UNKNOWN' =>
+  repo.status === 'OK' ? (repo.hasContext ? 'OK' : 'NO_CONTEXT') : repo.status === 'INVALID' ? 'INVALID' : 'UNKNOWN';
+
+export const openPullRequests = (task: any): any[] => (task?.pullRequests || []).filter((pr: any) => pr.state === 'OPEN');
 
 /** BE codes ("RUNNER_LOST") or runner errors in the form "CODE: message" (e.g. "USAGE_LIMIT: Claude hết hạn mức…") */
 export const runErrorText = (error: string | null | undefined) => {
@@ -62,7 +101,8 @@ export const AGENT_SETTINGS_DEFAULT = {
   previewUrl: null as string | null,
   previewLoginPath: null as string | null,
   previewUsername: null as string | null,
-  previewApplyCommand: null as string | null
+  previewApplyCommand: null as string | null,
+  mergeMethod: 'squash' as 'squash' | 'merge' | 'rebase'
 };
 
 export const agentSettingsOf = (project: any) => ({ ...AGENT_SETTINGS_DEFAULT, ...(project?.agentSettings || {}) });

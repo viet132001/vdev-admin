@@ -1,10 +1,14 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
 import { Plus, Ellipsis, Pencil, Trash2, ArrowLeft, ArrowRight, Calendar, ListChecks, MessageSquare, Network } from 'lucide-react';
 import {
   COLOR_PRESETS, STATUS_OPTIONS, Popover, PriorityBadge, TagChip, matchesFilters, formatDate, isOverdue,
   type ConfirmState, type TaskFilters
 } from './shared';
+import { AgentBot, AgentWorking, PrChips } from './git';
+
+/** Claude is on it right now: start_task moved it to Đang làm, and a run that ends returns leftovers to Cần làm */
+export const isAgentWorking = (task: any) => task.assignee === 'AGENT' && task.status === 'IN_PROGRESS';
 
 interface TaskBoardProps {
   projectId: string;
@@ -35,8 +39,10 @@ export const TaskCard: React.FC<{ task: any; onClick: () => void }> = ({ task, o
             rev {task.latestChangeSet.revision} · <span className="plus">+{task.latestChangeSet.stats?.additions ?? 0}</span> <span className="minus">−{task.latestChangeSet.stats?.deletions ?? 0}</span>
           </span>
         )}
+        <PrChips prs={task.pullRequests} compact showRepo={new Set((task.pullRequests || []).map((pr: any) => pr.repo)).size > 1} />
       </div>
     )}
+    {isAgentWorking(task) && <AgentWorking taskId={task.id} />}
     {(task.tags?.length > 0 || task.priority !== 'NONE') && (
       <div className="tw-card-meta">
         <PriorityBadge priority={task.priority} />
@@ -72,9 +78,23 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, filters, refres
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [deleteColumn, setDeleteColumn] = useState<{ column: any; moveTo: string } | null>(null);
 
+  // Cards Claude just finished get a short celebration (only for changes seen while the board is open)
+  const lastStatus = useRef<Map<string, string> | null>(null);
+  const [celebrate, setCelebrate] = useState<Set<string>>(new Set());
+
   const loadBoard = useCallback(async () => {
     try {
       const data = await api.get(`/api/task-projects/${projectId}/board`, { noCache: true });
+      const cards: any[] = [...(data?.columns || []).flatMap((c: any) => c.tasks || []), ...(data?.unassigned || [])];
+      const previous = lastStatus.current;
+      if (previous) {
+        const done = cards.filter((t) => t.assignee === 'AGENT' && ['IN_REVIEW', 'COMPLETED'].includes(t.status) && previous.has(t.id) && previous.get(t.id) !== t.status).map((t) => t.id);
+        if (done.length) {
+          setCelebrate((cur) => new Set([...cur, ...done]));
+          setTimeout(() => setCelebrate((cur) => new Set([...cur].filter((id) => !done.includes(id)))), 2600);
+        }
+      }
+      lastStatus.current = new Map(cards.map((t) => [t.id, t.status]));
       setBoard(data);
     } catch (err) {
       alert(getErrorMessage(err, 'Không tải được bảng'));
@@ -83,6 +103,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, filters, refres
 
   useEffect(() => {
     setBoard(null);
+    lastStatus.current = null;
   }, [projectId]);
 
   useEffect(() => {
@@ -238,13 +259,14 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, filters, refres
           <React.Fragment key={task.id}>
             {showLineAt === index && <div className="tw-drop-line" />}
             <div
-              className={`tw-card ${dragTaskId === task.id ? 'dragging' : ''}`}
+              className={`tw-card ${dragTaskId === task.id ? 'dragging' : ''} ${isAgentWorking(task) ? 'agent-working' : ''} ${celebrate.has(task.id) ? 'celebrate' : ''}`}
               draggable
               onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDragTaskId(task.id); }}
               onDragEnd={() => { setDragTaskId(null); setDropTarget(null); }}
               onDragOver={droppable ? (e) => handleCardDragOver(e, column.id, index) : undefined}
             >
               <TaskCard task={task} onClick={() => onOpenTask(task.id)} />
+              {celebrate.has(task.id) && <span className="tw-celebrate" aria-hidden="true">{task.status === 'COMPLETED' ? '🎉' : '✨'}<i /><i /><i /><i /><i /><i /></span>}
             </div>
           </React.Fragment>
         ))}
@@ -284,6 +306,7 @@ export const TaskBoard: React.FC<TaskBoardProps> = ({ projectId, filters, refres
               <span style={{ flexGrow: 1, cursor: 'text' }} onDoubleClick={() => setEditingColumn({ id: column.id, name: column.name })}>
                 {column.name}
                 <span style={{ color: 'var(--text-muted)', fontWeight: 500, marginLeft: '6px' }}>{column.tasks.length}</span>
+                {column.tasks.some(isAgentWorking) && <span className="tw-column-bot" title="Claude đang làm task trong cột này"><AgentBot size={14} /></span>}
               </span>
             )}
             <button className="icon-btn" title="Thêm công việc" onClick={() => { setQuickAddColumnId(column.id); setQuickAddTitle(''); }}><Plus size={14} /></button>

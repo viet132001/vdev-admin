@@ -123,6 +123,8 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
 
   const settings = agentSettingsOf(project);
   const workspaceReady = !!project.workspacePath && project.workspaceStatus === 'OK';
+  const repoNames: string[] = (project.repos || []).map((r: any) => r.name);
+  const multiRepo = repoNames.length > 1;
 
   const loadPlans = useCallback(async () => {
     try {
@@ -250,7 +252,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
           <div className="tw-warning">
             <CircleAlert size={14} style={{ flexShrink: 0, marginTop: 2 }} />
             <span>
-              {!settings.enabled ? 'Claude đang tắt cho project này. ' : 'Thư mục làm việc chưa được xác nhận. '}
+              {!settings.enabled ? 'Claude đang tắt cho project này. ' : `Workspace chưa sẵn sàng${project.workspaceMessage ? `: ${project.workspaceMessage}` : ''}. `}
               <button className="icon-btn" style={{ padding: 0, textDecoration: 'underline', fontSize: 'inherit' }} onClick={onOpenSettings}>Mở cài đặt</button>
             </span>
           </div>
@@ -349,6 +351,7 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
             {rollbackOpen && (
               <RollbackDialog
                 scope="plan"
+                gitFlow={repoNames.length > 0}
                 onClose={() => setRollbackOpen(false)}
                 onSubmit={async (then) => { await planAction('rollback', 'rollback', { then }, 'Không xếp được lượt rollback'); }}
               />
@@ -412,6 +415,25 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                                 <textarea className="form-input" rows={2} value={editingItem.description} onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })} />
                                 <label className="form-label">Tiêu chí hoàn thành (mỗi dòng một tiêu chí)</label>
                                 <textarea className="form-input" rows={3} value={editingItem.criteria} onChange={(e) => setEditingItem({ ...editingItem, criteria: e.target.value })} />
+                                {multiRepo && (
+                                  <div className="flex align-center gap-2" style={{ flexWrap: 'wrap', fontSize: '0.8rem' }}>
+                                    <span className="form-label" style={{ margin: 0 }}>Repo:</span>
+                                    {repoNames.map((name) => {
+                                      const on = editingItem.repos.includes(name);
+                                      return (
+                                        <button
+                                          key={name}
+                                          type="button"
+                                          className="badge"
+                                          style={{ cursor: 'pointer', fontFamily: 'var(--font-mono)', borderColor: on ? 'var(--text-main)' : undefined, color: on ? 'var(--text-main)' : 'var(--text-muted)' }}
+                                          onClick={() => setEditingItem({ ...editingItem, repos: on ? editingItem.repos.filter((x: string) => x !== name) : [...editingItem.repos, name] })}
+                                        >
+                                          {on ? '✓ ' : ''}{name}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                                 {index > 0 && (
                                   <div className="flex align-center gap-2" style={{ flexWrap: 'wrap', fontSize: '0.8rem' }}>
                                     <span className="form-label" style={{ margin: 0 }}>Cần xong trước:</span>
@@ -440,13 +462,14 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                                   <button className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Hủy</button>
                                   <button
                                     className="btn btn-primary btn-sm"
-                                    disabled={busy !== null || !editingItem.title.trim()}
+                                    disabled={busy !== null || !editingItem.title.trim() || (multiRepo && editingItem.repos.length === 0)}
                                     onClick={() => updateItem(item, {
                                       title: editingItem.title.trim(),
                                       description: editingItem.description,
                                       priority: editingItem.priority,
                                       acceptanceCriteria: editingItem.criteria.split('\n').map((c: string) => c.trim()).filter(Boolean),
-                                      dependsOn: editingItem.dependsOn
+                                      dependsOn: editingItem.dependsOn,
+                                      ...(multiRepo ? { repos: editingItem.repos } : {})
                                     })}
                                   >
                                     {busy === `item-${item.id}` ? 'Đang lưu...' : 'Lưu'}
@@ -458,8 +481,11 @@ export const PlanPanel: React.FC<PlanPanelProps> = ({ project, refreshKey, onOpe
                                 <div className="flex align-center gap-2" style={{ flexWrap: 'wrap' }}>
                                   <b style={{ fontSize: '0.875rem' }}>{item.title}</b>
                                   {task && <StatusBadge status={task.status} />}
+                                  {multiRepo && (item.repos?.length ? item.repos : repoNames).map((name: string) => (
+                                    <span key={name} className="tw-repo-chip" title={item.repos?.length ? 'Repo mục này sửa' : 'Mục không ghi repo ⇒ mọi repo'}>{name}</span>
+                                  ))}
                                   {editable && (
-                                    <button className="icon-btn" title="Sửa mục" onClick={() => setEditingItem({ id: item.id, title: item.title, description: item.description || '', priority: item.priority, criteria: (item.acceptanceCriteria || []).join('\n'), dependsOn: item.dependsOn || [] })}>
+                                    <button className="icon-btn" title="Sửa mục" onClick={() => setEditingItem({ id: item.id, title: item.title, description: item.description || '', priority: item.priority, criteria: (item.acceptanceCriteria || []).join('\n'), dependsOn: item.dependsOn || [], repos: item.repos || [] })}>
                                       <Pencil size={12} />
                                     </button>
                                   )}

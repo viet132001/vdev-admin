@@ -75,6 +75,7 @@ FE tự chấm ngay để phản hồi tức thì; BE **chấm lại** khi nhậ
    1. Tách `n't` thành `<trợ động từ> not` (`won't` → `will not`, `can't` / `cannot` → `can not`, `shan't` → `shall not`; `is are was were do does did has have had would should could must need might` + `n't`).
    2. Rút gọn đại từ + trợ động từ: `i am` → `i'm`; `you/we/they are` → `'re`; `he/she/it/that/there/here/what/where/who/how/when/why is|has` → `'s`; `i/you/we/they have` → `'ve`; `i/you/he/she/it/we/they/that/there/who/what will` → `'ll`, `would|had` → `'d`; `let us` → `let's`. Không rút gọn `has/have/had/will/would` khi ngay sau là `not` (giữ `he hasn't`, `i won't`).
    3. Ghép lại `<trợ động từ> not` còn lại thành dạng `n't` (`do not` → `don't`, `will not` → `won't`).
+   Trước bước 1, dạng gõ thiếu dấu nháy được nối lại: tách rời `i m`, `you re`, `it s`, `don t` (token `m re s ve ll d` sau một từ, `t` sau từ tận cùng bằng `n`) và viết liền không trùng từ thật (`im`, `youre`, `theyre`, `ive`, `youll`, `hes`, `shes`, `thats`, `whats`, `theres`, `whos`, `dont`, `cant`, `wont`, `isnt`…). `were`, `well`, `its`, `lets`, `ill`, `id`, `wed`, `hell`, `shed` giữ nguyên vì là từ thật.
    `'s` sau danh từ (sở hữu, `John's`) giữ nguyên. Diff trả về token ở dạng chuẩn này. `vocabularyKey` (game) dùng cùng quy tắc.
 6. Viết số bằng chữ: chữ số `0`–`999999` (không có số 0 ở đầu) và cụm từ chỉ số đều đổi về dạng chữ chuẩn — `7` = `seven`, `21` = `twenty one` = `twenty-one`, `105` = `one hundred and five` = `one hundred five`, `100` = `a hundred`, `7:30` = `seven thirty`. Hai số đứng cạnh nhau không ghép được thì giữ riêng (`seven seven`, `one two three`). Số có số 0 ở đầu (`0912`) hoặc ≥ 1 000 000 giữ nguyên. Diff hiện số bằng chữ (`seven`).
 
@@ -86,14 +87,14 @@ FE tự chấm ngay để phản hồi tức thì; BE **chấm lại** khi nhậ
 * `accuracy` = `số MATCH / số từ của đáp án` × 100, làm tròn 0 chữ số thập phân (đáp án rỗng ⇒ 0).
 * Viết số bằng chữ số hay bằng chữ đều đúng (`10` = `ten`, xem bước 6).
 
-Ví dụ: đáp án `I don't think so.`, người dùng gõ `i dont think` ⇒
+Ví dụ: đáp án `I don't think so.`, người dùng gõ `i didn't think` ⇒
 ```json
 {
   "isCorrect": false,
   "accuracy": 50,
   "diff": [
     { "type": "MATCH", "expected": "i", "actual": "i" },
-    { "type": "WRONG", "expected": "don't", "actual": "dont" },
+    { "type": "WRONG", "expected": "don't", "actual": "didn't" },
     { "type": "MATCH", "expected": "think", "actual": "think" },
     { "type": "MISSING", "expected": "so" }
   ]

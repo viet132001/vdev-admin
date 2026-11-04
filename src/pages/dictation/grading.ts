@@ -46,8 +46,30 @@ const PRONOUN_AUX: Record<string, { suffix: string; subjects: string[] }> = {
 };
 const KEEP_BEFORE_NOT = ['has', 'have', 'had', 'will', 'would'];
 
+// Contractions typed without the apostrophe: "i m" / "don t" (split) and "im" / "dont" (joined).
+// Only joined forms that aren't real words are mapped ("were", "well", "its", "lets" stay as they are).
+const SPLIT_SUFFIXES = ['m', 're', 's', 've', 'll', 'd'];
+const BARE_CONTRACTIONS: Record<string, string> = Object.fromEntries(
+  ["i'm", "you're", "they're", "i've", "you've", "we've", "they've", "you'll", "they'll", "you'd", "they'd", "he's", "she's",
+    "that's", "what's", "there's", "where's", "who's", "won't", "can't",
+    ...NEGATIVE_AUX.map((aux) => `${aux}n't`)].map((w) => [w.replace("'", ''), w])
+);
+
+const restoreApostrophes = (tokens: string[]): string[] => {
+  const out: string[] = [];
+  tokens.forEach((w) => {
+    const prev = out[out.length - 1];
+    if (prev && /^[a-z]+$/.test(prev) && (SPLIT_SUFFIXES.includes(w) || (w === 't' && prev.endsWith('n')))) {
+      out[out.length - 1] = w === 't' ? `${prev.slice(0, -1)}n't` : `${prev}'${w}`;
+    } else {
+      out.push(BARE_CONTRACTIONS[w] ?? w);
+    }
+  });
+  return out;
+};
+
 export const normalizeContractions = (tokens: string[]): string[] => {
-  const expanded = tokens.flatMap((w) => {
+  const expanded = restoreApostrophes(tokens).flatMap((w) => {
     if (NEGATIVE_EXPAND[w]) return NEGATIVE_EXPAND[w];
     const stem = w.endsWith("n't") ? w.slice(0, -3) : '';
     return NEGATIVE_AUX.includes(stem) ? [stem, 'not'] : [w];

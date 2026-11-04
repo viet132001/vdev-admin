@@ -136,9 +136,11 @@ export const ConfirmDialog: React.FC<{ state: ConfirmState | null; onClose: () =
  */
 export const RollbackDialog: React.FC<{
   scope: 'task' | 'plan';
+  /** Git flow: the code is on task branches / PRs, so rollback closes them instead of restoring files */
+  gitFlow?: boolean;
   onClose: () => void;
   onSubmit: (then: 'PENDING' | 'CANCELLED') => Promise<void>;
-}> = ({ scope, onClose, onSubmit }) => {
+}> = ({ scope, gitFlow = false, onClose, onSubmit }) => {
   const [then, setThen] = useState<'PENDING' | 'CANCELLED'>('PENDING');
   const [busy, setBusy] = useState(false);
   const what = scope === 'task' ? 'task này' : 'mọi task của kế hoạch';
@@ -148,14 +150,21 @@ export const RollbackDialog: React.FC<{
         <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
           <div className="flex align-center gap-2" style={{ color: 'var(--danger)' }}>
             <AlertCircle size={20} />
-            <h3 style={{ margin: 0 }}>{scope === 'task' ? 'Rollback code của task' : 'Rollback cả kế hoạch'}</h3>
+            <h3 style={{ margin: 0 }}>{gitFlow ? (scope === 'task' ? 'Đóng PR & hủy thay đổi của task' : 'Đóng PR & hủy cả kế hoạch') : scope === 'task' ? 'Rollback code của task' : 'Rollback cả kế hoạch'}</h3>
           </div>
         </div>
         <div className="modal-body flex flex-col gap-3" style={{ fontSize: '0.88rem', color: 'var(--text-muted)' }}>
-          <span>
-            Máy chạy sẽ trả mọi file {what} đã sửa về như trước khi Claude làm (kể cả phần bạn đã commit, nếu có — thay đổi nằm trong thư mục làm việc, bạn tự commit lại).
-            Nếu file nào đã bị sửa tiếp sau đó (task khác hoặc sửa tay) thì dừng, không đụng file nào và báo danh sách.
-          </span>
+          {gitFlow ? (
+            <span>
+              Máy chạy sẽ đóng pull request và xoá nhánh của {what} (trên máy và trên GitHub). Nhánh gốc không bị đụng tới — chưa merge thì code chưa vào đâu cả.
+              Task làm từ trước khi có git flow thì vẫn được trả file như cũ.
+            </span>
+          ) : (
+            <span>
+              Máy chạy sẽ trả mọi file {what} đã sửa về như trước khi Claude làm (kể cả phần bạn đã commit, nếu có — thay đổi nằm trong thư mục làm việc, bạn tự commit lại).
+              Nếu file nào đã bị sửa tiếp sau đó (task khác hoặc sửa tay) thì dừng, không đụng file nào và báo danh sách.
+            </span>
+          )}
           <div className="flex flex-col gap-2" style={{ color: 'var(--text-main)' }}>
             <label className="flex align-center gap-2"><input type="radio" checked={then === 'PENDING'} onChange={() => setThen('PENDING')} /> Sau đó đưa về <b>Cần làm</b> (làm lại sau)</label>
             <label className="flex align-center gap-2"><input type="radio" checked={then === 'CANCELLED'} onChange={() => setThen('CANCELLED')} /> Sau đó <b>Hủy</b>{scope === 'plan' ? ' cả kế hoạch' : ' task'}</label>

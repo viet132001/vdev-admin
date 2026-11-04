@@ -9,8 +9,8 @@ Tài liệu mở rộng `tasks-api.md`; quy ước chung (Base URL, định dạ
 ## 1. Phạm vi & giả định
 
 * VDEV Admin (trình duyệt), thư mục code của project và Claude **chạy trên cùng một máy**. BE có thể chạy ở máy đó hoặc ở server (hiện tại là server) — runner chỉ gọi **ra** BE nên không cần mở cổng.
-* Claude **không** commit / push / merge. Làm xong chỉ cập nhật trạng thái; thay đổi nằm nguyên trong thư mục làm việc để người dùng xem và tự commit.
-* Mỗi project có **một** thư mục làm việc; tại một thời điểm chỉ có **một** lượt chạy của Claude trên một thư mục.
+* Claude **không** chạy git. Từ mục 15 (git flow): **runner** đặt nhánh riêng cho mỗi task, commit + push và mở pull request; người dùng review rồi Merge (trên VDEV hoặc GitHub). Trước git flow, thay đổi nằm nguyên trong thư mục làm việc để người dùng tự commit.
+* Mỗi project (workspace) có **một hoặc nhiều repo** (mục 15); tại một thời điểm chỉ có **một** lượt chạy của Claude trên một project.
 * Người dùng là người duy nhất được: duyệt kế hoạch, chốt task **Done**, yêu cầu làm lại. Claude không có quyền làm các việc này.
 
 ---
@@ -463,3 +463,105 @@ FE  GET /api/agent/folder-picks/:id (poll 1s) ──► DONE + path → điền 
 
 * `path` phải là đường dẫn tuyệt đối, ≤ 1000 ký tự. `workspace` là kết quả runner tự kiểm tra (git repo, quyền ghi) để FE hiện luôn.
 * `PICKING` quá 2 phút không có kết quả ⇒ `EXPIRED`.
+
+---
+
+## 15. Git flow & workspace nhiều repo
+
+Thay cho "Claude không commit": mỗi task làm trên **nhánh riêng**, runner commit + push và mở **pull request** cho từng repo task sửa. Merge (trên VDEV hoặc GitHub) ⇒ task Done, nhánh / worktree được dọn. Một project (workspace) có **nhiều repo** (BE, FE, runner…) để một task phân tích và sửa xuyên repo.
+
+### 15.1 Luồng
+
+```
+Workspace = N repo, mỗi repo có CLAUDE.md trên origin/<nhánh gốc>  (thiếu ⇒ không lập kế hoạch được)
+1. Lập kế hoạch: Claude đọc CLAUDE.md của mọi repo, mỗi mục ghi `repos` (bắt buộc khi > 1 repo)
+2. Duyệt ⇒ mỗi task có branchName = vdev/<8 ký tự id>-<slug tiêu đề> (cùng tên ở mọi repo)
+3. Runner, từng task: fetch ─► nhánh task từ origin/<nhánh gốc> (hoặc nhánh PR của task nó phụ thuộc)
+        ─► Claude làm trong các thư mục repo ─► finish_task: context review + lệnh kiểm tra của từng repo
+        ─► BE nhận changeset ─► commit + push + PR mỗi repo (PR liên kết nhau) ─► Chờ review
+4. Review trên VDEV (diff, góp ý) hoặc GitHub
+        ├─ Làm lại ─► cùng nhánh / worktree, commit mới, comment vào PR đang mở
+        ├─ Merge (VDEV) ─► AgentRun(MERGE): gh pr merge từng repo ─► xoá nhánh + worktree ─► Done
+        ├─ Merge trên GitHub ─► heartbeat đồng bộ trạng thái PR ─► Done + dọn nhánh
+        └─ Đóng PR & hủy ─► AgentRun(ROLLBACK): đóng PR, xoá nhánh (nhánh gốc không bị đụng)
+```
+
+Claude **không bao giờ** chạy git / gh (hook chặn `git commit/push/branch/worktree…`, `gh`): runner làm mọi thao tác git. Token GitHub nằm trong `gh` trên máy chạy, server chỉ lưu số / URL / trạng thái PR.
+
+### 15.2 Dữ liệu
+
+| Bảng / trường | Ghi chú |
+|---|---|
+| `ProjectRepo` | `projectId`, `name` (slug `^[a-z0-9][a-z0-9._-]{0,39}$`, unique theo project), `path`, `defaultBranch` (`main`), `contextFile` (`CLAUDE.md`), `checkoutMode` (`WORKTREE` / `IN_PLACE`), `setupCommand?`, `testCommand?`, `lintCommand?`, `buildCommand?`, `position`, `status` (`UNKNOWN / OK / INVALID`), `message`, `hasContext`, `remoteUrl?`, `checkedAt?`, `verifyRequestedAt?` |
+| `TaskPullRequest` | `taskId`, `repoId` (unique cặp), `branch`, `baseBranch`, `number?`, `url?`, `state` (`OPEN / MERGED / CLOSED`), `headSha?`, `reviewDecision?`, `error?` (push / tạo PR / merge lỗi), `mergedAt?`, `syncedAt?` |
+| `Task.branchName` | Đặt khi duyệt plan |
+| `TaskPlanItem.repos` (`string[]`), `kind` (`TASK / CONTEXT`) | `repos` rỗng = mọi repo. `CONTEXT` = mục "tạo file context" (Claude được khám phá repo) |
+| `TaskChangeSet.repos` (JSON) | `[{ repo, baseTree, headTree, branch, baseBranch }]`; `baseTree/headTree` cũ = của repo đầu tiên |
+| `TaskChangeSet.contextReview` (JSON) | `[{ repo, needsUpdate, updated, reason }]` |
+| `TaskChangeFile.repo` | Workspace > 1 repo: `path` = `<repo>/<đường dẫn trong repo>` |
+| `AgentRunType.MERGE` | Run merge PR của một task |
+| `agentSettings.mergeMethod` | `squash` (mặc định) / `merge` / `rebase` |
+
+* **TaskProject** giữ `workspacePath / workspaceStatus / workspaceMessage` làm **trạng thái gộp**: `workspacePath` = repo đầu tiên; `OK` chỉ khi mọi repo `OK` **và** có file context. Lệnh test / lint / build chuyển xuống repo (project 1 repo vẫn dùng lệnh của project nếu repo chưa có).
+* **Migration** `20261104000100_add_git_workflow`: project cũ có `workspacePath` ⇒ một repo `IN_PLACE` (giữ cách app / Docker chạy từ thư mục đó), chép lệnh test / lint / build; mọi project về `UNKNOWN` để runner kiểm tra lại (thêm điều kiện remote, gh, file context). Task cũ không có PR vẫn Done / Rollback như trước.
+
+### 15.3 API
+
+| Method | Endpoint | Quyền | Ghi chú |
+|---|---|---|---|
+| GET | `/api/task-projects/:id/repos` | User | |
+| POST | `/api/task-projects/:id/repos` | User | `{ name, path, defaultBranch?, contextFile?, checkoutMode?, setupCommand?, testCommand?, lintCommand?, buildCommand? }`. Trùng tên ⇒ `409` |
+| PATCH | `/api/task-projects/:id/repos/:repoId` | User | Đổi `path / defaultBranch / contextFile` ⇒ `UNKNOWN`, kiểm tra lại. Đổi tên khi đã có plan / PR dùng ⇒ `409` |
+| DELETE | `/api/task-projects/:id/repos/:repoId` | User | Còn PR `OPEN` ⇒ `409` |
+| POST | `/api/task-projects/:id/repos/:repoId/init-context` | User | Repo `OK` mà thiếu file context ⇒ plan `APPROVED` một mục `CONTEXT` + `AgentRun(EXECUTE)`. Đã có / đang có task tạo ⇒ `409` |
+| POST | `/api/task-projects/:id/workspace/verify` | User | Kiểm tra **mọi repo** (đợi ≤ 10s) ⇒ trạng thái gộp + `repos` |
+| PATCH | `/api/task-projects/:id` | User | `workspacePath` (FE cũ) = repo đầu tiên: chưa có repo ⇒ tạo, 1 repo ⇒ đổi path, > 1 repo ⇒ `400` |
+| POST | `/api/task-plans` | User | Thêm `409 CONTEXT_MISSING: repo "x" has no CLAUDE.md on origin/main` |
+| PATCH | `/api/task-plans/:id/items/:itemId` | User | Thêm `repos` |
+| GET | `/api/tasks/:id/pull-requests` | User | Card / chi tiết task cũng có `pullRequests` (`repo` = tên) |
+| POST | `/api/tasks/:id/merge` | **Chỉ User** | Task `IN_REVIEW / TESTING` có PR `OPEN` ⇒ `AgentRun(MERGE)`. PR đã `CLOSED` ⇒ `409`; task cần trước (dependsOn) còn PR mở ⇒ `409 Merge first: "…"` |
+| POST | `/api/tasks/:id/accept` | User | Còn PR `OPEN` ⇒ `409` (Done đi qua Merge) |
+
+Runner:
+
+| Method | Endpoint | Ghi chú |
+|---|---|---|
+| POST | `/api/agent/runner/heartbeat` | Body thêm `repos: [{ repoId, path, status, message, hasContext, remoteUrl }]`. Phản hồi thêm `verifyRepos: [{ repoId, projectId, path, defaultBranch, contextFile }]`, `syncPullRequests: [{ id, url, branch, taskId, projectId, repo: { name, path, checkoutMode, defaultBranch } }]` (PR `OPEN`, mỗi PR tối đa 1 lần / phút, 20 / lần). `verifyWorkspaces` luôn rỗng |
+| POST | `/api/agent/runner/pull-requests` | `{ results: [{ id, state, mergedAt?, headSha?, reviewDecision? }] }` ⇒ PR `MERGED` hết ⇒ task Done (+ plan DONE), `CLOSED` ⇒ bình luận SYSTEM |
+| POST | `/api/agent/runner/claim` | `project.repos` (đủ trường của 15.2) |
+| GET | `/api/agent/run/context` | `project.repos`; mỗi task thêm `kind`, `repos`, `branchName`, `pullRequests` (kèm `basePullRequest` khi PR xếp chồng), `dependsOnPullRequests`, `firstRepos` |
+| POST | `/api/tasks/:id/changesets` | Thêm `repos`, `contextReview`, `files[].repo`. Thiếu context review cho repo trong `repos`, hoặc `needsUpdate && !updated` ⇒ `400` |
+| POST | `/api/agent/run/tasks/:taskId/pull-requests` | `{ pullRequests: [{ repo, branch, baseBranch, number?, url?, state?, headSha?, mergedAt?, error? }] }` (upsert theo repo). Run `MERGE`: mọi PR `MERGED` ⇒ task Done |
+
+### 15.4 Runner
+
+* **Kiểm tra repo:** git repo, có quyền ghi, có `origin`, `fetch origin <defaultBranch>` được, `gh auth status` OK, `git cat-file -e origin/<defaultBranch>:<contextFile>` (file có trên máy mà chưa push ⇒ báo rõ). `vdev-agent verify <thư-mục> [--branch] [--context]`, `vdev-agent doctor` kiểm tra thêm `gh`.
+* **Nhánh của task** ở mỗi repo: có sẵn (local / origin) ⇒ dùng tiếp (làm lại); chưa có ⇒ tạo từ `origin/<nhánh gốc>`, hoặc từ nhánh PR đang mở của task nó `dependsOn` (PR xếp chồng, base = nhánh đó).
+  * `WORKTREE` (mặc định): `~/.vdev-agent/worktrees/<projectId>/<taskId>/<repo>`, chạy `setupCommand` một lần (`{repo}` = thư mục gốc, vd `ln -s {repo}/node_modules node_modules`). Thư mục của người dùng không bị đụng; mẫu loại trừ dạng thư mục (`node_modules/`) loại cả symlink.
+  * `IN_PLACE`: thư mục phải sạch (`WORKSPACE_DIRTY` nếu không), `git switch` sang nhánh task, xong trả về nhánh cũ; việc dở được lưu thành commit WIP trên nhánh task. Dùng khi app / Docker chạy từ thư mục repo (ảnh chụp màn hình, test Odoo).
+* **Claude:** `cwd` = repo đầu tiên của task, repo khác qua `additionalDirectories`; ghi được trong mọi repo của task, không bao giờ vào `.git` (thư mục hay file worktree).
+* **finish_task:** không có thay đổi ⇒ trả lỗi (gọi `report_blocked`). Context review sai ⇒ trả lỗi cho Claude sửa. Lệnh kiểm tra của **từng repo có thay đổi** (tên `repo:test` khi > 1 repo). BE nhận changeset ⇒ **sau đó** mới `git add` (cùng pathspec loại trừ) + `commit --no-verify` (`<tiêu đề>` + `VDEV-Task: <id> · revision N`) + `push -u` + `gh pr create` (body: summary, tiêu chí, kiểm tra, context, ghi chú). PR đã mở ⇒ comment "Revision N". Nhiều repo ⇒ mỗi PR có mục "PR liên quan". Lỗi push / gh ⇒ ghi `error` vào PR, review vẫn có; Merge / làm lại sẽ thử lại.
+* **MERGE:** từng PR theo thứ tự repo: chưa có PR ⇒ push + tạo trước; PR xếp chồng ⇒ PR gốc phải `MERGED` (`MERGE_ORDER` nếu chưa), squash / rebase ⇒ `git rebase --onto origin/<gốc> <head PR gốc>` + push `--force-with-lease` (`REBASE_CONFLICT` nếu lỗi), `gh pr edit --base <gốc>`; `gh pr merge --<method>`; GitHub chưa merge (chờ review / check bắt buộc) ⇒ run lỗi kèm lý do. Merge xong ⇒ xoá worktree, nhánh local + origin, ref `refs/vdev/<task>/*`, `IN_PLACE` đang ở nhánh gốc và sạch ⇒ `merge --ff-only`.
+* **Đồng bộ GitHub:** `syncPullRequests` từ heartbeat chạy nền (`gh pr view`); `MERGED` ⇒ báo BE + dọn nhánh (đợi tới khi run của cùng project kết thúc). `CLOSED` không dọn (người dùng có thể mở lại).
+* **ROLLBACK:** task có PR / nhánh ⇒ đóng PR, xoá nhánh, `rollbackDone({ files: [] })`; task trước git flow ⇒ trả file như mục cũ.
+* **TEST:** chạy lại lệnh kiểm tra trên nhánh task (worktree hoặc switch tạm) cho từng repo trong `firstRepos`.
+
+### 15.5 File context bắt buộc & context review
+
+* Mọi repo phải có `contextFile` trên `origin/<defaultBranch>` (nơi mọi nhánh task bắt đầu). Thiếu ⇒ workspace `INVALID`, nút **Nhờ Claude tạo CLAUDE.md** (kế hoạch `CONTEXT`: Claude khám phá repo bằng model lập kế hoạch, viết ≤ ~150 dòng gồm mục đích & stack, bản đồ thư mục, lệnh, quy ước, liên kết repo khác, điều cần tránh ⇒ PR). Merge PR rồi Kiểm tra lại ⇒ OK.
+* Lập kế hoạch: prompt **bắt buộc** đọc file context của mọi repo trước khi mở code, phân tích luồng xuyên repo (contract API, kiểu dữ liệu) để các mục khớp nhau.
+* Làm task: trước `finish_task`, với mỗi repo đã sửa Claude mở file context và tự hỏi thay đổi có làm nó sai / thiếu không (module / endpoint / lệnh / quy ước / phụ thuộc mới). `contextReview` bắt buộc đủ repo; `needsUpdate` ⇒ phải sửa file trong cùng task (runner đối chiếu diff); `updated` mà file không đổi ⇒ lỗi. Kết quả hiện ở tab Thay đổi code và trong PR.
+
+### 15.6 VDEV Admin
+
+* **Workspace & Claude:** danh sách repo (trạng thái, nhánh gốc, chế độ checkout), thêm / sửa / bỏ repo (nút Chọn… qua runner, tên tự gợi ý từ thư mục), Kiểm tra, Nhờ Claude tạo CLAUDE.md, cách merge.
+* **Kế hoạch:** chip repo trên từng mục; sửa mục chọn repo (bắt buộc khi > 1 repo).
+* **Board:** chip PR (`repo #số`, màu theo trạng thái, link GitHub); task Claude đang làm có viền chạy quanh card, robot nhún nhảy + câu trạng thái vui; cột có task đang làm có robot nhỏ; task vừa Chờ review / Done ⇒ card bật nhẹ + pháo hoa ✨ / 🎉. Header có pill "Claude · <loại run>: <task>" + dòng log mới nhất. `prefers-reduced-motion` ⇒ tắt hết hiệu ứng.
+* **Chi tiết task:** nhánh + PR (trạng thái, GitHub review decision, lỗi push), **Merge** thay cho Done khi có PR, "Đóng PR & hủy" thay Rollback, file nhóm theo repo, mục "File context của repo".
+
+### 15.7 Giới hạn
+
+* Chỉ GitHub (qua `gh`). Remote khác cần thêm một `GitHost`.
+* Góp ý review trên GitHub chưa được kéo về VDEV (chỉ hiện review decision); góp ý trên VDEV không đăng lên GitHub.
+* Worktree không có app chạy ⇒ ảnh chụp "sau" chỉ đúng với repo `IN_PLACE`.
+* Dọn nhánh khi PR được merge trên GitHub chạy trong bộ nhớ runner: runner tắt giữa chừng ⇒ có thể sót worktree (xoá thư mục `~/.vdev-agent/worktrees/…` + `git worktree prune`).

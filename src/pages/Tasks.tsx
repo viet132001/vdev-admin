@@ -13,6 +13,7 @@ import { PlanPanel } from './tasks/PlanPanel';
 import { ReviewQueue } from './tasks/ReviewQueue';
 import { RunnersModal } from './tasks/RunnersModal';
 import { AgentSettingsModal, WorkspaceBadge } from './tasks/AgentSettingsModal';
+import { AgentActivityPill } from './tasks/git';
 import {
   COLOR_PRESETS, INBOX_VIEWS, PRIORITY_OPTIONS, VIEW_TYPES, ConfirmDialog, Popover, TagChip,
   type ConfirmState, type TaskFilters
@@ -135,9 +136,16 @@ export const Tasks: React.FC = () => {
 
   // Claude moves tasks in the background (Đang làm → Chờ test / Chờ review…). While a run of this
   // project is going, every view reloads silently; once more when it ends, plus the sidebar counts.
+  // The header pill shows the running run and its latest log line ("Claude đang …")
+  const [activeRun, setActiveRun] = useState<any | null>(null);
+  const [activeLog, setActiveLog] = useState<string | null>(null);
   useEffect(() => {
+    setActiveRun(null);
+    setActiveLog(null);
     if (scope === INBOX || scope === REVIEW) return;
     let wasRunning = false;
+    let logRun: string | null = null;
+    let afterSeq = 0;
     const tick = async () => {
       if (document.hidden) return;
       try {
@@ -146,6 +154,15 @@ export const Tasks: React.FC = () => {
         if (running || wasRunning) setRefreshKey((k) => k + 1);
         if (wasRunning && !running) handleChanged();
         wasRunning = running;
+        setActiveRun(running ? runs[0] : null);
+        if (!running) { setActiveLog(null); logRun = null; return; }
+        if (logRun !== runs[0].id) { logRun = runs[0].id; afterSeq = 0; setActiveLog(null); }
+        const { logs } = await api.get(`/api/agent/runs/${runs[0].id}/logs?afterSeq=${afterSeq}`, { noCache: true });
+        if (Array.isArray(logs) && logs.length) {
+          afterSeq = logs[logs.length - 1].seq;
+          const last = [...logs].reverse().find((l: any) => l.level !== 'ERROR') || logs[logs.length - 1];
+          setActiveLog(String(last.message).split('\n')[0].replace(/^vdev\./, '').slice(0, 140));
+        }
       } catch {
         // Next tick tries again; the views keep their data meanwhile
       }
@@ -532,6 +549,13 @@ export const Tasks: React.FC = () => {
             </p>
           </div>
           <div className="flex align-center gap-2" style={{ flexWrap: 'wrap' }}>
+            {activeRun && project?.id === scope && (
+              <AgentActivityPill
+                run={activeRun}
+                lastLog={activeLog}
+                onClick={() => (activeRun.task?.id ? openTask(activeRun.task.id) : updateParams({ view: PLANS_VIEW.id }))}
+              />
+            )}
             {project && scope !== INBOX && scope !== REVIEW && (
               <button className="btn btn-secondary" onClick={() => setAgentSettingsOpen(project)} title="Thư mục làm việc & cài đặt Claude">
                 <WorkspaceBadge project={project} />
@@ -678,8 +702,8 @@ export const Tasks: React.FC = () => {
                   <label className="form-label">Mô tả</label>
                   <textarea className="form-input" style={{ resize: 'none', height: 70 }} value={projectForm.description} onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Thư mục code (để Claude làm task — tùy chọn)</label>
+                {((projects.find((p: any) => p.id === projectForm.id)?.repos?.length ?? 0) <= 1) && <div className="form-group">
+                  <label className="form-label">Repo git đầu tiên (để Claude làm task — tùy chọn)</label>
                   <input
                     className="form-input"
                     style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}
@@ -688,8 +712,8 @@ export const Tasks: React.FC = () => {
                     onChange={(e) => setProjectForm({ ...projectForm, workspacePath: e.target.value })}
                     spellCheck={false}
                   />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lệnh test / lint và các cài đặt khác chỉnh trong “Thư mục & Claude” của project.</span>
-                </div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Thêm repo khác (BE, FE…), lệnh test / lint và các cài đặt khác trong “Workspace & Claude” của project.</span>
+                </div>}
                 <div className="form-group">
                   <label className="form-label">Màu</label>
                   <div className="flex" style={{ gap: '8px', flexWrap: 'wrap' }}>
