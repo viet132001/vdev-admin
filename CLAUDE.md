@@ -1,0 +1,83 @@
+# CLAUDE.md — vdev-admin
+
+Bản đồ code cho phiên Claude làm task trong repo này. Đọc trước khi sửa code.
+
+## 1. Mục đích & tech stack
+
+- **VDEV Admin Portal**: SPA quản trị cá nhân, gọi REST API của BE VDEV. Menu hiện chỉ có **Tasks** (quản lý công việc + Task Agent Claude) và **Dictation** (luyện chép chính tả tiếng Anh); Dashboard / Finance / Liabilities / Learning vẫn có route nhưng đã ẩn khỏi menu (`src/components/Layout.tsx`).
+- React `^19.2.7`, react-router-dom `^7.18.1`, TypeScript `~6.0.2`, Vite `^8.1.1` (`@vitejs/plugin-react`), icon `lucide-react`, lint bằng `oxlint ^1.71.0`. Không dùng thư viện UI / CSS framework, không có state manager (chỉ React state + Context).
+- Deploy lên GitHub Pages dưới đường dẫn `/vdev-admin/` (CI: Node 22, pnpm 10).
+- `expo` có trong `dependencies` (và thư mục `.expo/`) nhưng không được import ở `src/`.
+
+## 2. Bản đồ thư mục
+
+```
+index.html, src/main.tsx      entry: render <App/>, import src/index.css
+src/App.tsx                   router (basename "/vdev-admin"), ProtectedRoute / GuestRoute, "/" → "/tasks"
+src/context/AuthContext.tsx   AuthProvider + useAuth(): login / register / logout, tải /api/auth/profile
+src/services/api.ts           API client duy nhất: api.get/post/patch/delete, authFetch, getErrorMessage, cache, mock fallback
+src/services/*Mock.ts         mock localStorage khi BE không kết nối được:
+                                taskMock.ts (tasks, task-projects, task-tags) + taskAgentMock.ts (Task Agent),
+                                dictationMock.ts, liabilityMock.ts; auth/finance/learning mock nằm thẳng trong api.ts
+src/components/               Layout.tsx (sidebar + mobile header), MoneyInput.tsx
+src/pages/*.tsx               một file / trang: Tasks, Dictation, Finance, Liabilities, Learning, Dashboard, Login, Register
+src/pages/tasks/              màn Tasks: TaskBoard / TaskTable / TaskCalendar (view), TaskDetail, TaskReview (diff),
+                                PlanPanel (kế hoạch Claude), ReviewQueue, RunnersModal, AgentSettingsModal,
+                                ProjectDocs + localDocs.ts (thư mục tài liệu local qua File System Access API + IndexedDB),
+                                BlockEditor, git.tsx (PR / git flow), agent.ts (nhãn trạng thái plan/run/PR, useBusy),
+                                shared.tsx (STATUS/PRIORITY options, ConfirmDialog, Popover, TagChip, format ngày)
+src/pages/dictation/          Practice, SentenceManager, ImportSessions, grading.ts (chấm câu), media.ts (upload audio),
+                                games/ (VocabGames + các mini game, common.ts)
+src/doc/*.md                  đặc tả API của BE (contract): auth, tasks, task-agent-mcp, dictation, finance, learning, notes
+src/index.css                 design token (biến CSS sáng/tối) + toàn bộ class dùng chung; App.css gần như rỗng
+DesignGuideline.md            chuẩn UI/UX (màu, chữ, bo góc, responsive, modal, empty state)
+.github/workflows/main.yml    CI build + deploy GitHub Pages khi push main
+```
+
+## 3. Lệnh (từ `package.json` và CI)
+
+```bash
+pnpm install            # CI dùng: pnpm install --frozen-lockfile
+pnpm dev                # vite
+pnpm build              # tsc -b && vite build && cp dist/index.html dist/404.html
+pnpm lint               # oxlint (cấu hình .oxlintrc.json: plugin react/typescript/oxc)
+pnpm preview            # vite preview
+```
+
+- **Không có test** (không có script `test`, không có file test). Kiểm tra thay đổi bằng `pnpm build` (chạy cả `tsc -b`) và `pnpm lint`.
+- Biến môi trường: `VITE_API_URL` trong `.env` (mặc định trong code: `http://localhost:3000`).
+
+## 4. Quy ước code
+
+- **Component**: named export `export const Tên: React.FC<Props> = (...) => {...}` (vd `src/pages/Tasks.tsx`, `src/components/Layout.tsx`). Chỉ `App` dùng `export default`.
+- **Đặt tên**: file component PascalCase (`TaskDetail.tsx`), file helper camelCase (`agent.ts`, `localDocs.ts`); hằng số UPPER_SNAKE (`PLAN_STATUS`, `COLOR_PRESETS`).
+- **Text giao diện bằng tiếng Việt**; comment trong code bằng tiếng Anh, ngắn, giải thích "vì sao".
+- **Gọi API**: luôn qua `api` trong `src/services/api.ts` với path bắt đầu bằng `/api/...` — không tự `fetch` với BASE_URL. Upload `FormData` / tải file dùng `authFetch` (vd `src/pages/dictation/media.ts`, `ImportSessions.tsx`). `api.*` tự bóc `{ success, data }` và trả `data`.
+- **Cache**: `api.get` cache theo `url + token`; mọi post/patch/delete xoá toàn bộ cache. Dữ liệu polling / cần mới thì gọi `api.get(url, { noCache: true })`.
+- **Xử lý lỗi**: `try { ... } catch (err) { alert(getErrorMessage(err, 'Thông báo tiếng Việt')); }` (mẫu: `src/pages/Tasks.tsx`). `getErrorMessage` đọc body lỗi `{ success, message, errors }` của BE.
+- **Xác nhận xoá**: dùng `ConfirmDialog` + `ConfirmState` từ `src/pages/tasks/shared.tsx` (Dictation cũng import từ đây); chỉ vài chỗ còn `window.confirm` (`AgentSettingsModal.tsx`, `ProjectDocs.tsx`), code mới nên dùng `ConfirmDialog`.
+- **Nút đang chạy / chống double click**: `useBusy()` trong `src/pages/tasks/agent.ts`.
+- **State trên URL**: trang dùng `useSearchParams` cho lựa chọn hiện tại (`?project=&task=` ở Tasks, `?session=&lesson=&tab=` ở Dictation).
+- **Style**: class trong `src/index.css` + inline style dùng biến CSS (`var(--primary)`, `var(--text-muted)`, `var(--radius-sm)`…). Không hard-code màu cho trạng thái; theo `DesignGuideline.md` (bảng màu zinc trung tính, không gradient/blur/emoji trang trí, viền 1px).
+- **Mock**: mỗi module mock export hàm `mockXxx(method, url, body?) => { handled, data? }`, lỗi ném `Error(JSON.stringify({ success:false, message, errorCode, errors: [] }))` giống BE (mẫu `src/services/taskMock.ts`). Mock bám theo `src/doc/*.md`; thêm endpoint mới mà muốn chạy offline thì thêm vào mock tương ứng.
+- **TypeScript** (`tsconfig.app.json`): `noUnusedLocals`, `noUnusedParameters` ⇒ biến/import thừa làm `pnpm build` lỗi; `verbatimModuleSyntax` ⇒ import kiểu phải ghi `type` (`import { ConfirmDialog, type ConfirmState } ...`); `erasableSyntaxOnly` ⇒ không dùng `enum`, namespace, parameter property. Dữ liệu từ API phần lớn để `any`.
+
+## 5. Liên kết với repo khác
+
+- **BE VDEV** (repo riêng, không nằm ở đây): mọi endpoint `/api/auth`, `/api/tasks`, `/api/task-projects`, `/api/task-tags`, `/api/agent/...`, `/api/dictation`, `/api/finance`, `/api/learning`, `/api/storage`, `/api/notes`. Contract nằm ở `src/doc/*.md` — đọc file tương ứng trước khi sửa tích hợp API.
+- Auth: JWT Bearer lưu `localStorage` (`vdev_token`, `vdev_refresh_token`); 401 ⇒ `authFetch` gọi `/api/auth/refresh` một lần rồi thử lại, thất bại ⇒ phát event `vdev:session-expired` để `AuthContext` đăng xuất.
+- **vdev-agent** (runner chạy trên máy người dùng, Claude Agent SDK + VDEV MCP tools): FE không gọi trực tiếp, chỉ đọc/ghi trạng thái plan / run / changeset / PR qua BE. Mô tả đầy đủ ở `src/doc/task-agent-mcp.md` (mục 15: git flow, workspace nhiều repo, `CLAUDE.md` của từng repo).
+- **Chấm câu Dictation**: `src/pages/dictation/grading.ts` phải khớp 1:1 với `dictation-grading.util.ts` của BE và quy tắc ở `src/doc/dictation-api.md` mục 4 — sửa một bên thì phải sửa bên kia và cập nhật tài liệu.
+
+## 6. Điều cần tránh / bẫy
+
+- **Mock fallback âm thầm**: lỗi mạng (`TypeError` / "fetch" / "NetworkError") ở bất kỳ request nào sẽ bật `useMockFallback = true` cho đến khi tải lại trang ⇒ app chạy bằng dữ liệu localStorage giả (`mock_*`). Khi thấy dữ liệu "lạ", kiểm tra BE có chạy không trước khi sửa code.
+- `base: '/vdev-admin/'` (`vite.config.ts`) và `basename="/vdev-admin"` (`src/App.tsx`) phải đổi cùng nhau. Dev server phục vụ ở `/vdev-admin/`.
+- Bước `cp dist/index.html dist/404.html` trong build là để GitHub Pages trả SPA cho mọi route — đừng bỏ.
+- `.github/workflows/.github/workflows/deploy.yml` nằm sai chỗ nên GitHub không chạy; workflow thật là `.github/workflows/main.yml`.
+- Có cả `package-lock.json` và `pnpm-lock.yaml`; CI dùng pnpm với `--frozen-lockfile` ⇒ thêm/bỏ dependency thì phải cập nhật `pnpm-lock.yaml`.
+- `.env` được commit (chứa `VITE_API_URL` trỏ BE thật); đừng thêm secret vào đó. Một số chỗ đọc `import.meta.env.VITE_API_URL` trực tiếp (`src/pages/Learning.tsx`, `src/pages/tasks/RunnersModal.tsx`).
+- `Walkthrough.md` nhắc tới `src/pages/Notes.tsx` — file này không còn; `/notes` redirect sang `/tasks`.
+- `src/doc/update_v1.01.md` là bản bổ sung cũ dạng text thô; ưu tiên `tasks-api.md` / `notes-api.md` khi mâu thuẫn.
+- Trạng thái task `COMPLETED` (Done) chỉ người dùng đặt; luồng của Claude dừng ở `IN_REVIEW` (xem `src/doc/task-agent-mcp.md` mục 3.1). Nhãn/màu trạng thái lấy từ `STATUS_OPTIONS` (`shared.tsx`) và `PLAN_STATUS` / `RUN_STATUS` (`agent.ts`), đừng định nghĩa lại.
+- `localDocs.ts` dùng File System Access API — chỉ chạy trên Chrome / Edge; kiểm tra `isLocalDocsSupported()`.
