@@ -102,6 +102,8 @@ export interface ConfirmState {
 }
 
 export const ConfirmDialog: React.FC<{ state: ConfirmState | null; onClose: () => void }> = ({ state, onClose }) => {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { setBusy(false); }, [state]);
   if (!state) return null;
   return (
     <div className="modal-overlay" style={{ zIndex: 120 }}>
@@ -114,15 +116,27 @@ export const ConfirmDialog: React.FC<{ state: ConfirmState | null; onClose: () =
         </div>
         <div className="modal-body" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{state.message}</div>
         <div className="modal-footer" style={{ borderTop: 'none', backgroundColor: 'transparent' }}>
-          <button className="btn btn-secondary" onClick={onClose}>Hủy</button>
+          <button className="btn btn-secondary" onClick={onClose} disabled={busy}>Hủy</button>
           <button
             className="btn btn-danger"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            disabled={busy}
             onClick={async () => {
-              await state.action();
-              onClose();
+              if (busy) return;
+              setBusy(true);
+              try {
+                await state.action();
+                onClose();
+              } finally {
+                setBusy(false);
+              }
             }}
           >
-            {state.confirmLabel || 'Đồng ý'}
+            {busy ? (
+              <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Đang xử lý...</>
+            ) : (
+              state.confirmLabel || 'Đồng ý'
+            )}
           </button>
         </div>
       </div>
