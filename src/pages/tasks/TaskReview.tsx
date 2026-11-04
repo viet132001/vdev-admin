@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
 import { Check, RotateCcw, CircleCheck, CircleX, CircleAlert, MessageSquarePlus, ChevronDown, ChevronRight, FileCode2, FlaskConical, Undo2, X, GitMerge, BookOpenCheck } from 'lucide-react';
-import { NOTE_STATUS, REVIEW_DECISION, formatRelative, isNoteOpen, noteStatus, openPullRequests, useBusy } from './agent';
+import { NOTE_STATUS, REVIEW_DECISION, formatRelative, isActiveRun, isNoteOpen, noteStatus, openPullRequests, runErrorText, useBusy } from './agent';
 import { PrChips } from './git';
 import { RollbackDialog, type ConfirmState } from './shared';
 import { Markdown } from './PlanPanel';
@@ -59,6 +59,8 @@ const toSplitRows = (lines: DiffLine[]) => {
 const lineKey = (side: 'OLD' | 'NEW', line: number) => `${side}:${line}`;
 const anchorOf = (line: DiffLine): { side: 'OLD' | 'NEW'; line: number } | null =>
   line.kind === 'del' ? { side: 'OLD', line: line.oldNo! } : line.kind === 'hunk' ? null : { side: 'NEW', line: line.newNo! };
+
+const MERGE_POLL_MS = 2000;
 
 const FILE_STATUS: Record<string, string> = { A: 'Thêm', M: 'Sửa', D: 'Xóa', R: 'Đổi tên' };
 
@@ -139,7 +141,42 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
   const [reworkNote, setReworkNote] = useState('');
   const [showChecks, setShowChecks] = useState(false);
   const [rollbackOpen, setRollbackOpen] = useState(false);
+  const [mergeRun, setMergeRun] = useState<any | null>(null);
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged; // TaskDetail truyền một hàm inline mới mỗi lần render
   const { busy, run } = useBusy();
+
+  // Lượt MERGE mới nhất của task (runner xử lý bất đồng bộ sau khi POST /merge trả về)
+  const findMergeRun = useCallback(async () => {
+    if (!task.projectId) return null;
+    const runs = await api.get(`/api/agent/runs?projectId=${task.projectId}`, { noCache: true });
+    return (Array.isArray(runs) ? runs : []).find((r: any) => r.type === 'MERGE' && (r.taskId ?? r.task?.id) === task.id) || null;
+  }, [task.id, task.projectId]);
+
+  const hasPrs = (task.pullRequests || []).length > 0;
+  useEffect(() => {
+    if (!(hasPrs && (task.status === 'IN_REVIEW' || task.status === 'TESTING'))) return;
+    let cancelled = false;
+    findMergeRun().then((r) => { if (!cancelled && isActiveRun(r)) setMergeRun(r); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [findMergeRun, task.status, hasPrs]);
+
+  const merging = isActiveRun(mergeRun);
+  useEffect(() => {
+    if (!merging) return;
+    let stopped = false;
+    const timer = setInterval(async () => {
+      try {
+        const latest = await findMergeRun();
+        if (stopped) return;
+        if (latest && isActiveRun(latest)) { setMergeRun(latest); return; }
+        setMergeRun(null);
+        if (latest?.status === 'FAILED') alert(`Merge thất bại: ${runErrorText(latest.error) || 'không rõ lý do'}`);
+        onChangedRef.current();
+      } catch { /* lần sau thử lại */ }
+    }, MERGE_POLL_MS);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [merging, findMergeRun]);
 
   const loadChangeSets = useCallback(async () => {
     try {
@@ -252,6 +289,7 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
     const doMerge = () => run('merge', async () => {
       try {
         await api.post(`/api/tasks/${task.id}/merge`, {});
+        setMergeRun({ type: 'MERGE', taskId: task.id, status: 'QUEUED' });
         onChanged();
       } catch (err) {
         alert(getErrorMessage(err, 'Không xếp được lượt merge'));
@@ -362,8 +400,9 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
         <div className={`tw-review-bar ${reviewable ? 'ready' : ''}`}>
           <div style={{ flexGrow: 1, minWidth: 0 }}>
             <b style={{ fontSize: '0.875rem' }}>
-              {inReview ? 'Claude đã xong · chờ bạn review' : testing ? 'Code xong nhưng chưa test được · chờ test' : task.status === 'COMPLETED' ? 'Đã Done' : task.status === 'IN_PROGRESS' ? 'Claude đang làm task này' : task.status === 'CANCELLED' ? 'Đã hủy' : 'Đang chờ Claude làm'}
+              {merging ? <><span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} /> Đang merge pull request…</> : inReview ? 'Claude đã xong · chờ bạn review' : testing ? 'Code xong nhưng chưa test được · chờ test' : task.status === 'COMPLETED' ? 'Đã Done' : task.status === 'IN_PROGRESS' ? 'Claude đang làm task này' : task.status === 'CANCELLED' ? 'Đã hủy' : 'Đang chờ Claude làm'}
             </b>
+            {merging && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{mergeRun.status === 'RUNNING' ? 'Máy chạy đang merge PR và xoá nhánh task — task tự chuyển Done khi xong.' : 'Đang chờ máy chạy nhận lượt merge…'}</div>}
             {testing && untested && <div className="flex gap-2" style={{ fontSize: '0.78rem', color: 'var(--warning)', alignItems: 'flex-start', whiteSpace: 'pre-wrap' }}><CircleAlert size={13} style={{ flexShrink: 0, marginTop: 2 }} /> {untested}</div>}
             {testing && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Bật lại môi trường (Docker / DB…) rồi bấm Chạy test lại. Task phụ thuộc task này sẽ chờ tới khi test qua.</div>}
             {reviewable && openNotes.length > 0 && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{openNotes.length} góp ý đang mở sẽ được gửi cho Claude khi yêu cầu làm lại</div>}
@@ -376,13 +415,13 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
             )}
             {prErrors.map((pr) => (
               <div key={`err-${pr.id}`} className="flex gap-2" style={{ fontSize: '0.78rem', color: 'var(--danger)', alignItems: 'flex-start', marginTop: 4 }}>
-                <CircleAlert size={13} style={{ flexShrink: 0, marginTop: 2 }} /> {pr.repo}: {pr.error}{reviewable ? ' — bấm Merge để runner thử đẩy lại, hoặc yêu cầu làm lại.' : ''}
+                <CircleAlert size={13} style={{ flexShrink: 0, marginTop: 2 }} /> {pr.repo}: {pr.error}{reviewable && !merging ? ' — bấm Merge để runner thử đẩy lại, hoặc yêu cầu làm lại.' : ''}
               </div>
             ))}
           </div>
           <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
             {changeSets.length > 0 && task.status !== 'IN_PROGRESS' && (
-              <button className="btn btn-secondary" disabled={busy !== null} onClick={() => setRollbackOpen(true)} title={gitFlow ? 'Đóng PR và xoá nhánh của task — nhánh gốc không bị đụng tới' : 'Trả các file task đã sửa về như trước khi Claude làm'}>
+              <button className="btn btn-secondary" disabled={busy !== null || merging} onClick={() => setRollbackOpen(true)} title={gitFlow ? 'Đóng PR và xoá nhánh của task — nhánh gốc không bị đụng tới' : 'Trả các file task đã sửa về như trước khi Claude làm'}>
                 <Undo2 size={14} /> {gitFlow ? 'Đóng PR & hủy' : 'Rollback'}
               </button>
             )}
@@ -393,12 +432,12 @@ export const TaskReview: React.FC<TaskReviewProps> = ({ task, onChanged, onConfi
             )}
             {reviewable && (
               <>
-                <button className="btn btn-secondary" disabled={busy !== null} onClick={() => { setReworkNote(''); setReworkOpen(true); }}>
+                <button className="btn btn-secondary" disabled={busy !== null || merging} onClick={() => { setReworkNote(''); setReworkOpen(true); }}>
                   <RotateCcw size={14} /> Ghi chú & làm lại
                 </button>
                 {gitFlow ? (
-                  <button className="btn btn-primary" disabled={busy !== null || openPrs.length === 0} onClick={merge} title={testing ? 'Bạn đã tự test và chấp nhận' : 'Merge PR vào nhánh gốc'}>
-                    <GitMerge size={14} /> {busy === 'merge' ? 'Đang gửi...' : `Merge${openPrs.length > 1 ? ` ${openPrs.length} PR` : ''}${testing ? ' (đã tự test)' : ''}`}
+                  <button className="btn btn-primary" disabled={busy !== null || merging || openPrs.length === 0} onClick={merge} title={testing ? 'Bạn đã tự test và chấp nhận' : 'Merge PR vào nhánh gốc'}>
+                    <GitMerge size={14} /> {busy === 'merge' ? 'Đang gửi...' : merging ? <><span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} /> Đang merge...</> : `Merge${openPrs.length > 1 ? ` ${openPrs.length} PR` : ''}${testing ? ' (đã tự test)' : ''}`}
                   </button>
                 ) : (
                   <button className="btn btn-primary" disabled={busy !== null} onClick={accept} title={testing ? 'Bạn đã tự test và chấp nhận' : undefined}>
