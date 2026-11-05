@@ -147,7 +147,7 @@ Các API dưới đây yêu cầu role `ADMIN`, thiếu quyền trả **403**.
 
 ### `GET /api/users?search=&page=1&limit=20`
 
-`limit` tối đa 100; `search` tìm theo email hoặc họ tên, không phân biệt hoa thường.
+`limit` tối đa 100; `search` tìm theo email hoặc họ tên, không phân biệt hoa thường. `lastLoginAt` là lần đăng nhập gần nhất bằng mật khẩu hoặc Google (làm mới token không tính), `null` nếu chưa có.
 
 ```json
 {
@@ -158,6 +158,7 @@ Các API dưới đây yêu cầu role `ADMIN`, thiếu quyền trả **403**.
       "fullName": "Nguyen Van A",
       "avatarFileId": null,
       "status": "ACTIVE",
+      "lastLoginAt": "2026-07-21T08:00:00.000Z",
       "createdAt": "2026-07-20T14:20:00.000Z",
       "roles": ["USER"],
       "providers": ["GOOGLE"]

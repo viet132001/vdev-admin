@@ -10,6 +10,9 @@ const PAGE_SIZE = 20;
 const ROLE_LABELS: Record<string, string> = { ADMIN: 'Quản trị viên', USER: 'Người dùng' };
 const roleLabel = (role: { code: string; name: string }) => ROLE_LABELS[role.code] || role.name;
 
+const formatDateTime = (iso: string) =>
+  new Date(iso).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Hoạt động',
   INACTIVE: 'Chưa kích hoạt',
@@ -102,7 +105,7 @@ export const Users: React.FC = () => {
         <UsersIcon size={20} />
         <h1 style={{ fontSize: '1.4rem', margin: 0 }}>Người dùng</h1>
       </div>
-      <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: '0 0 16px' }}>Xem tài khoản và phân vai trò.</p>
+      <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: '0 0 16px' }}>Tài khoản được tạo tự động ở lần đăng nhập Google đầu tiên hoặc khi đăng ký.</p>
 
       <div style={{ position: 'relative', maxWidth: 360, marginBottom: 16 }}>
         <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -138,9 +141,11 @@ export const Users: React.FC = () => {
               <thead>
                 <tr>
                   <th>Người dùng</th>
-                  <th>Đăng nhập</th>
-                  <th>Trạng thái</th>
+                  <th>Phương thức</th>
                   <th>Vai trò</th>
+                  <th>Đăng nhập gần nhất</th>
+                  <th>Ngày tạo</th>
+                  <th>Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
@@ -153,13 +158,8 @@ export const Users: React.FC = () => {
                       </div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</div>
                     </td>
-                    <td data-label="Đăng nhập" style={{ fontSize: '0.85rem' }}>
+                    <td data-label="Phương thức" style={{ fontSize: '0.85rem' }}>
                       {u.providers.includes('GOOGLE') ? 'Google' : 'Mật khẩu'}
-                    </td>
-                    <td data-label="Trạng thái">
-                      <span className={`badge ${u.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
-                        {STATUS_LABELS[u.status] || u.status}
-                      </span>
                     </td>
                     <td data-label="Vai trò">
                       <div className="role-options">
@@ -175,6 +175,15 @@ export const Users: React.FC = () => {
                           </label>
                         ))}
                       </div>
+                    </td>
+                    <td data-label="Đăng nhập gần nhất" style={{ fontSize: '0.85rem', color: u.lastLoginAt ? undefined : 'var(--text-muted)' }}>
+                      {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Chưa ghi nhận'}
+                    </td>
+                    <td data-label="Ngày tạo" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formatDateTime(u.createdAt)}</td>
+                    <td data-label="Trạng thái">
+                      <span className={`badge ${u.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
+                        {STATUS_LABELS[u.status] || u.status}
+                      </span>
                     </td>
                   </tr>
                 ))}

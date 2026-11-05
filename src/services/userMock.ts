@@ -16,7 +16,8 @@ const fail = (message: string, errorCode = 'BADREQUEST'): never => {
 const load = (): any[] => {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) return JSON.parse(stored);
-  const base = { avatarFileId: null, status: 'ACTIVE', createdAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  const base = { avatarFileId: null, status: 'ACTIVE', lastLoginAt: now, createdAt: now };
   return [
     { ...base, id: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12', email: localStorage.getItem('vdev_user_email') || 'user@vdev.local', fullName: localStorage.getItem('vdev_user_name') || 'Nguyen Van A', roles: ['ADMIN', 'USER'], providers: [] },
     { ...base, id: 'mock-user-2', email: 'member@vdev.local', fullName: 'Tran Thi B', roles: ['USER'], providers: ['GOOGLE'] }
