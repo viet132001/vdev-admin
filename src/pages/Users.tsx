@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Search, Users as UsersIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api, getErrorMessage } from '../services/api';
 import { ConfirmDialog, type ConfirmState } from './tasks/shared';
 import { useBusy } from './tasks/agent';
+import { BlockList } from './users/BlockList';
+import { blockErrorMessage, createBlock, removeBlock, type BlockType } from './users/blocks';
 
 const PAGE_SIZE = 20;
 
@@ -15,13 +18,16 @@ const formatDateTime = (iso: string) =>
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: 'Hoạt động',
-  INACTIVE: 'Chưa kích hoạt',
-  SUSPENDED: 'Bị khoá',
+  INACTIVE: 'Ngừng hoạt động',
+  LOCKED: 'Bị khoá',
+  PENDING_VERIFICATION: 'Chờ xác minh',
 };
 
 export const Users: React.FC = () => {
   const { user: currentUser, refreshProfile } = useAuth();
   const { busy, run } = useBusy();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') === 'blocks' ? 'blocks' : 'accounts';
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -32,6 +38,40 @@ export const Users: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+
+  const askBlock = (type: BlockType, value: string) => {
+    setConfirm({
+      title: type === 'EMAIL' ? 'Chặn email này?' : 'Chặn IP này?',
+      message: type === 'EMAIL'
+        ? `${value} sẽ bị đăng xuất và không đăng nhập hay đăng ký lại được.`
+        : `Mọi truy cập từ ${value} đều bị chặn, kể cả người khác dùng chung mạng.`,
+      confirmLabel: 'Chặn',
+      action: async () => {
+        try {
+          await createBlock(type, value);
+          await load();
+        } catch (err) {
+          alert(blockErrorMessage(err, 'Không chặn được.'));
+        }
+      },
+    });
+  };
+
+  const askUnblock = (id: string, value: string) => {
+    setConfirm({
+      title: 'Bỏ chặn?',
+      message: `${value} sẽ truy cập lại được hệ thống.`,
+      confirmLabel: 'Bỏ chặn',
+      action: async () => {
+        try {
+          await removeBlock(id);
+          await load();
+        } catch (err) {
+          alert(blockErrorMessage(err, 'Không bỏ chặn được.'));
+        }
+      },
+    });
+  };
 
   // Wait for a pause in typing so each keystroke doesn't hit the API
   useEffect(() => {
@@ -107,6 +147,13 @@ export const Users: React.FC = () => {
       </div>
       <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: '0 0 16px' }}>Tài khoản được tạo tự động ở lần đăng nhập Google đầu tiên hoặc khi đăng ký.</p>
 
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className={`tab ${tab === 'accounts' ? 'active' : ''}`} onClick={() => setSearchParams({})}>Tài khoản</button>
+        <button className={`tab ${tab === 'blocks' ? 'active' : ''}`} onClick={() => setSearchParams({ tab: 'blocks' })}>Danh sách chặn</button>
+      </div>
+
+      {tab === 'blocks' ? <BlockList /> : <>
+
       <div style={{ position: 'relative', maxWidth: 360, marginBottom: 16 }}>
         <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
         <input
@@ -141,11 +188,11 @@ export const Users: React.FC = () => {
               <thead>
                 <tr>
                   <th>Người dùng</th>
-                  <th>Phương thức</th>
                   <th>Vai trò</th>
                   <th>Đăng nhập gần nhất</th>
                   <th>Ngày tạo</th>
                   <th>Trạng thái</th>
+                  <th>Chặn</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,9 +204,6 @@ export const Users: React.FC = () => {
                         {u.id === currentUser?.id && <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> (bạn)</span>}
                       </div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</div>
-                    </td>
-                    <td data-label="Phương thức" style={{ fontSize: '0.85rem' }}>
-                      {u.providers.includes('GOOGLE') ? 'Google' : 'Mật khẩu'}
                     </td>
                     <td data-label="Vai trò">
                       <div className="role-options">
@@ -178,12 +222,38 @@ export const Users: React.FC = () => {
                     </td>
                     <td data-label="Đăng nhập gần nhất" style={{ fontSize: '0.85rem', color: u.lastLoginAt ? undefined : 'var(--text-muted)' }}>
                       {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Chưa ghi nhận'}
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+                        {[u.providers.includes('GOOGLE') ? 'Google' : 'Mật khẩu', u.lastLoginIp].filter(Boolean).join(' · ')}
+                      </div>
                     </td>
                     <td data-label="Ngày tạo" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formatDateTime(u.createdAt)}</td>
                     <td data-label="Trạng thái">
-                      <span className={`badge ${u.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
-                        {STATUS_LABELS[u.status] || u.status}
-                      </span>
+                      {u.emailBlockId ? (
+                        <span className="badge badge-danger">Đã chặn</span>
+                      ) : (
+                        <span className={`badge ${u.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
+                          {STATUS_LABELS[u.status] || u.status}
+                        </span>
+                      )}
+                    </td>
+                    <td data-label="Chặn">
+                      {/* The backend refuses admins, so don't offer an action that can only fail */}
+                      {u.id === currentUser?.id || u.roles.includes('ADMIN') ? (
+                        <span style={{ color: 'var(--text-muted)' }}>-</span>
+                      ) : (
+                        <div className="block-actions">
+                          {u.emailBlockId ? (
+                            <button className="btn btn-secondary btn-sm" onClick={() => askUnblock(u.emailBlockId, u.email)}>Bỏ chặn email</button>
+                          ) : (
+                            <button className="btn btn-secondary btn-sm" onClick={() => askBlock('EMAIL', u.email)}>Chặn email</button>
+                          )}
+                          {u.lastLoginIp && (u.ipBlockId ? (
+                            <button className="btn btn-secondary btn-sm" onClick={() => askUnblock(u.ipBlockId, u.lastLoginIp)}>Bỏ chặn IP</button>
+                          ) : (
+                            <button className="btn btn-secondary btn-sm" onClick={() => askBlock('IP', u.lastLoginIp)}>Chặn IP</button>
+                          ))}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -205,6 +275,8 @@ export const Users: React.FC = () => {
           </div>
         </>
       )}
+
+      </>}
 
       <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>

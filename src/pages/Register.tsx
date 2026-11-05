@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
+import { blockErrorMessage } from './users/blocks';
 import { ShieldAlert } from 'lucide-react';
 
 export const Register: React.FC = () => {
@@ -25,7 +26,7 @@ export const Register: React.FC = () => {
       setSuccess('Đăng ký tài khoản thành công! Đang chuyển hướng...');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err: any) {
-      setError(err.message || 'Đăng ký thất bại. Email có thể đã tồn tại.');
+      setError(blockErrorMessage(err, 'Đăng ký thất bại. Email có thể đã tồn tại.'));
     } finally {
       setLoading(false);
     }

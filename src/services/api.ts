@@ -272,6 +272,8 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const userRes = mockUsers('POST', url, body);
+    if (userRes.handled) return userRes.data;
     const taskRes = mockTasks('POST', url, body);
     if (taskRes.handled) return taskRes.data;
     const dictationRes = mockDictation('POST', url, body);
@@ -531,6 +533,8 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const userRes = mockUsers('DELETE', url);
+    if (userRes.handled) return userRes.data;
     const taskRes = mockTasks('DELETE', url);
     if (taskRes.handled) return taskRes.data;
     const dictationRes = mockDictation('DELETE', url);

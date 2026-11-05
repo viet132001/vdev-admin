@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
+import { blockErrorMessage } from './users/blocks';
 import { ShieldAlert } from 'lucide-react';
 
 export const Login: React.FC = () => {
@@ -10,8 +11,11 @@ export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [searchParams] = useSearchParams();
+  const oauthError = searchParams.get('oauth_error');
   const [error, setError] = useState(
-    searchParams.get('oauth_error') ? 'Đăng nhập bằng Google không thành công. Vui lòng thử lại.' : ''
+    oauthError === 'blocked' ? 'Tài khoản này đã bị chặn.'
+      : oauthError ? 'Đăng nhập bằng Google không thành công. Vui lòng thử lại.'
+      : ''
   );
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +28,7 @@ export const Login: React.FC = () => {
       await login(email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
+      setError(blockErrorMessage(err, 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.'));
     } finally {
       setLoading(false);
     }

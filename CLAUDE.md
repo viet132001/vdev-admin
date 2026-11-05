@@ -26,6 +26,7 @@ src/pages/tasks/              màn Tasks: TaskBoard / TaskTable / TaskCalendar (
                                 ProjectDocs + localDocs.ts (thư mục tài liệu local qua File System Access API + IndexedDB),
                                 BlockEditor, git.tsx (PR / git flow), agent.ts (nhãn trạng thái plan/run/PR, useBusy),
                                 shared.tsx (STATUS/PRIORITY options, ConfirmDialog, Popover, TagChip, format ngày)
+src/pages/users/              BlockList (chặn email / IP), blocks.ts (API + thông báo lỗi tiếng Việt)
 src/pages/dictation/          Practice, SentenceManager, ImportSessions, grading.ts (chấm câu), media.ts (upload audio),
                                 games/ (VocabGames + các mini game, common.ts)
 src/doc/*.md                  đặc tả API của BE (contract): auth, tasks, task-agent-mcp, dictation, finance, learning, notes
