@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { ShieldAlert } from 'lucide-react';
 
 export const Login: React.FC = () => {
@@ -8,7 +9,10 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState(
+    searchParams.get('oauth_error') ? 'Đăng nhập bằng Google không thành công. Vui lòng thử lại.' : ''
+  );
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,6 +54,9 @@ export const Login: React.FC = () => {
               <span>{error}</span>
             </div>
           )}
+
+          <GoogleLoginButton />
+          <div className="auth-divider">hoặc</div>
 
           <form onSubmit={handleSubmit} className="flex flex-col">
             <div className="form-group">

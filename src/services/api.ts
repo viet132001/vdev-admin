@@ -2,6 +2,7 @@
 import { mockLiabilities } from './liabilityMock';
 import { mockTasks } from './taskMock';
 import { mockDictation } from './dictationMock';
+import { mockUsers } from './userMock';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -13,6 +14,10 @@ const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem(TOKEN_KEY);
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
+
+// Full-page navigation target, the backend redirects to Google from there
+export const getGoogleLoginUrl = (state: string) =>
+  `${BASE_URL}/api/auth/google?state=${encodeURIComponent(state)}`;
 
 export const setAuthTokens = (accessToken: string, refreshToken?: string) => {
   localStorage.setItem(TOKEN_KEY, accessToken);
@@ -175,9 +180,12 @@ export const api = {
         email: localStorage.getItem('vdev_user_email') || 'user@vdev.local',
         fullName: localStorage.getItem('vdev_user_name') || 'Nguyen Van A',
         avatarFileId: null,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
+        roles: ['ADMIN', 'USER']
       };
     }
+    const userRes = mockUsers('GET', url);
+    if (userRes.handled) return userRes.data;
     const taskRes = mockTasks('GET', url);
     if (taskRes.handled) return taskRes.data;
     const dictationRes = mockDictation('GET', url);
@@ -275,7 +283,7 @@ export const api = {
       localStorage.setItem('vdev_user_email', body.email);
       localStorage.setItem('vdev_user_name', body.email.split('@')[0].toUpperCase());
       return {
-        user: { id: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12', email: body.email, fullName: body.email.split('@')[0].toUpperCase(), avatarFileId: null },
+        user: { id: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12', email: body.email, fullName: body.email.split('@')[0].toUpperCase(), avatarFileId: null, roles: ['ADMIN', 'USER'] },
         accessToken: 'mock_jwt_token'
       };
     }
@@ -457,6 +465,8 @@ export const api = {
     }
 
     // MOCK IMPLEMENTATION
+    const userRes = mockUsers('PATCH', url, body);
+    if (userRes.handled) return userRes.data;
     const taskRes = mockTasks('PATCH', url, body);
     if (taskRes.handled) return taskRes.data;
     const dictationRes = mockDictation('PATCH', url, body);

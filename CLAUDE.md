@@ -4,7 +4,7 @@ Bản đồ code cho phiên Claude làm task trong repo này. Đọc trước kh
 
 ## 1. Mục đích & tech stack
 
-- **VDEV Admin Portal**: SPA quản trị cá nhân, gọi REST API của BE VDEV. Menu hiện chỉ có **Tasks** (quản lý công việc + Task Agent Claude) và **Dictation** (luyện chép chính tả tiếng Anh); Dashboard / Finance / Liabilities / Learning vẫn có route nhưng đã ẩn khỏi menu (`src/components/Layout.tsx`).
+- **VDEV Admin Portal**: SPA quản trị cá nhân, gọi REST API của BE VDEV. Menu hiện chỉ có **Tasks** (quản lý công việc + Task Agent Claude), **Dictation** (luyện chép chính tả tiếng Anh) và **Người dùng** (chỉ role `ADMIN`); Dashboard / Finance / Liabilities / Learning vẫn có route nhưng đã ẩn khỏi menu (`src/components/Layout.tsx`).
 - React `^19.2.7`, react-router-dom `^7.18.1`, TypeScript `~6.0.2`, Vite `^8.1.1` (`@vitejs/plugin-react`), icon `lucide-react`, lint bằng `oxlint ^1.71.0`. Không dùng thư viện UI / CSS framework, không có state manager (chỉ React state + Context).
 - Deploy lên GitHub Pages dưới đường dẫn `/vdev-admin/` (CI: Node 22, pnpm 10).
 - `expo` có trong `dependencies` (và thư mục `.expo/`) nhưng không được import ở `src/`.
@@ -14,13 +14,13 @@ Bản đồ code cho phiên Claude làm task trong repo này. Đọc trước kh
 ```
 index.html, src/main.tsx      entry: render <App/>, import src/index.css
 src/App.tsx                   router (basename "/vdev-admin"), ProtectedRoute / GuestRoute, "/" → "/tasks"
-src/context/AuthContext.tsx   AuthProvider + useAuth(): login / register / logout, tải /api/auth/profile
+src/context/AuthContext.tsx   AuthProvider + useAuth(): login / register / logout / Google login, tải /api/auth/profile; hasRole(user, ...roles)
 src/services/api.ts           API client duy nhất: api.get/post/patch/delete, authFetch, getErrorMessage, cache, mock fallback
 src/services/*Mock.ts         mock localStorage khi BE không kết nối được:
                                 taskMock.ts (tasks, task-projects, task-tags) + taskAgentMock.ts (Task Agent),
-                                dictationMock.ts, liabilityMock.ts; auth/finance/learning mock nằm thẳng trong api.ts
-src/components/               Layout.tsx (sidebar + mobile header), MoneyInput.tsx
-src/pages/*.tsx               một file / trang: Tasks, Dictation, Finance, Liabilities, Learning, Dashboard, Login, Register
+                                dictationMock.ts, liabilityMock.ts, userMock.ts; auth/finance/learning mock nằm thẳng trong api.ts
+src/components/               Layout.tsx (sidebar + mobile header), MoneyInput.tsx, GoogleLoginButton.tsx
+src/pages/*.tsx               một file / trang: Tasks, Dictation, Users, Finance, Liabilities, Learning, Dashboard, Login, Register, GoogleCallback
 src/pages/tasks/              màn Tasks: TaskBoard / TaskTable / TaskCalendar (view), TaskDetail, TaskReview (diff),
                                 PlanPanel (kế hoạch Claude), ReviewQueue, RunnersModal, AgentSettingsModal,
                                 ProjectDocs + localDocs.ts (thư mục tài liệu local qua File System Access API + IndexedDB),
@@ -57,6 +57,7 @@ pnpm preview            # vite preview
 - **Xử lý lỗi**: `try { ... } catch (err) { alert(getErrorMessage(err, 'Thông báo tiếng Việt')); }` (mẫu: `src/pages/Tasks.tsx`). `getErrorMessage` đọc body lỗi `{ success, message, errors }` của BE.
 - **Xác nhận xoá**: dùng `ConfirmDialog` + `ConfirmState` từ `src/pages/tasks/shared.tsx` (Dictation cũng import từ đây); chỉ vài chỗ còn `window.confirm` (`AgentSettingsModal.tsx`, `ProjectDocs.tsx`), code mới nên dùng `ConfirmDialog`.
 - **Nút đang chạy / chống double click**: `useBusy()` trong `src/pages/tasks/agent.ts`.
+- **Phân quyền**: route chỉ cho role nào thì `<ProtectedRoute roles={['ADMIN']}>`; ẩn/hiện UI bằng `hasRole(user, 'ADMIN')`. Đây chỉ là tiện ích giao diện, BE mới là nơi chặn quyền (`src/doc/auth-api.md` mục 6).
 - **State trên URL**: trang dùng `useSearchParams` cho lựa chọn hiện tại (`?project=&task=` ở Tasks, `?session=&lesson=&tab=` ở Dictation).
 - **Style**: class trong `src/index.css` + inline style dùng biến CSS (`var(--primary)`, `var(--text-muted)`, `var(--radius-sm)`…). Không hard-code màu cho trạng thái; theo `DesignGuideline.md` (bảng màu zinc trung tính, không gradient/blur/emoji trang trí, viền 1px).
 - **Mock**: mỗi module mock export hàm `mockXxx(method, url, body?) => { handled, data? }`, lỗi ném `Error(JSON.stringify({ success:false, message, errorCode, errors: [] }))` giống BE (mẫu `src/services/taskMock.ts`). Mock bám theo `src/doc/*.md`; thêm endpoint mới mà muốn chạy offline thì thêm vào mock tương ứng.
@@ -80,4 +81,5 @@ pnpm preview            # vite preview
 - `Walkthrough.md` nhắc tới `src/pages/Notes.tsx` — file này không còn; `/notes` redirect sang `/tasks`.
 - `src/doc/update_v1.01.md` là bản bổ sung cũ dạng text thô; ưu tiên `tasks-api.md` / `notes-api.md` khi mâu thuẫn.
 - Trạng thái task `COMPLETED` (Done) chỉ người dùng đặt; luồng của Claude dừng ở `IN_REVIEW` (xem `src/doc/task-agent-mcp.md` mục 3.1). Nhãn/màu trạng thái lấy từ `STATUS_OPTIONS` (`shared.tsx`) và `PLAN_STATUS` / `RUN_STATUS` (`agent.ts`), đừng định nghĩa lại.
+- Google login redirect về `FRONTEND_URL` của BE (`src/doc/auth-api.md` mục 5): chạy FE local trỏ vào BE thật sẽ bị đưa về site production sau khi đăng nhập.
 - `localDocs.ts` dùng File System Access API — chỉ chạy trên Chrome / Edge; kiểm tra `isLocalDocsSupported()`.

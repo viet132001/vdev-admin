@@ -781,6 +781,14 @@ a:hover {
 .auth-aside h1, .auth-aside p { color: inherit; }
 .auth-main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 24px; background-color: var(--bg-card); }
 .auth-form { width: 100%; max-width: 360px; }
+.role-options { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.role-option { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+@media (max-width: 768px) {
+  /* Card layout keeps the cell label on the left, so the options sit on the right */
+  .role-options { flex-direction: column; align-items: flex-end; }
+}
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; font-size: 0.75rem; color: var(--text-muted); }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-top: 1px solid var(--border-color); }
 @media (max-width: 768px) {
   .auth-aside { display: none; }
 }

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { hasRole, useAuth } from '../context/AuthContext';
 import { 
   LogOut, 
   User as UserIcon,
   Menu,
   X,
   CheckSquare,
-  Headphones
+  Headphones,
+  Users
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -29,6 +30,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     // Tổng quan, Tài chính, Khoản nợ, Khóa học are temporarily hidden
     { path: '/tasks', label: 'Công việc (Tasks)', icon: CheckSquare },
     { path: '/dictation', label: 'Luyện chính tả (EN)', icon: Headphones },
+    ...(hasRole(user, 'ADMIN') ? [{ path: '/users', label: 'Người dùng', icon: Users }] : []),
   ];
 
   return (
@@ -149,6 +151,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <div style={{ overflow: 'hidden' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{user.fullName}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{user.email}</div>
+                {hasRole(user, 'ADMIN') && <span className="badge badge-info" style={{ marginTop: 4 }}>Quản trị viên</span>}
               </div>
             </div>
             <button

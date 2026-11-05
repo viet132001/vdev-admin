@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { ShieldAlert } from 'lucide-react';
 
 export const Register: React.FC = () => {
@@ -60,6 +61,9 @@ export const Register: React.FC = () => {
               {success}
             </div>
           )}
+
+          <GoogleLoginButton />
+          <div className="auth-divider">hoặc</div>
 
           <form onSubmit={handleSubmit} className="flex flex-col">
             <div className="form-group">

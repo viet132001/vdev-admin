@@ -47,7 +47,8 @@ Tài liệu này cung cấp chi tiết đặc tả API của **Authentication Mo
     "id": "7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12",
     "email": "user@vdev.local",
     "fullName": "Nguyen Van A",
-    "avatarFileId": null
+    "avatarFileId": null,
+    "roles": ["USER"]
   },
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3YjJkNWEzZi0xZDg5LTRlNzgtYmEyZS0zZjg5MGFkNjdhMTIiLCJlbWFpbCI6InVzZXJAdmRldi5sb2NhbCIsImlhdCI6MTc4NTEyODAwMCwiZXhwIjoxNzg1MjE0NDAwfQ.xxxxxxx",
   "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxx"
@@ -97,7 +98,8 @@ Tài liệu này cung cấp chi tiết đặc tả API của **Authentication Mo
   "lastLoginAt": "2026-07-20T14:21:00.000Z",
   "createdAt": "2026-07-20T14:20:00.000Z",
   "updatedAt": "2026-07-20T14:21:00.000Z",
-  "deletedAt": null
+  "deletedAt": null,
+  "roles": ["USER"]
 }
 ```
 
@@ -114,3 +116,73 @@ Tất cả các API được bảo vệ bằng `JwtAuthGuard` (như Note, Learni
 ```http
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3YjJkNWEzZi0xZDg5LTR...
 ```
+
+---
+
+## 5. Đăng nhập bằng Google
+
+Luồng redirect toàn trang, BE không có session:
+
+1. FE sinh `state` ngẫu nhiên, lưu `sessionStorage`, chuyển trình duyệt tới `GET /api/auth/google?state=<state>`.
+2. BE redirect sang Google; Google gọi lại `GET /api/auth/google/callback`.
+3. BE redirect về FE:
+   * Thành công: `{FRONTEND_URL}/auth/google/callback#accessToken=...&refreshToken=...&state=<state>`
+   * Thất bại (từ chối, lỗi Google, email chưa xác minh): `{FRONTEND_URL}/login?oauth_error=google`
+4. FE đối chiếu `state` với giá trị đã lưu, không khớp thì từ chối. Khớp thì lưu token, xoá fragment khỏi URL và gọi `GET /api/auth/profile`.
+
+* Token nằm trong fragment để không bị gửi tới server nào; `state` chống login CSRF.
+* Tài khoản mới nhận role `USER`. Email đã tồn tại thì liên kết Google vào tài khoản đó.
+* Biến môi trường BE: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `FRONTEND_URL` (gồm base path, vd. `https://viet132001.github.io/vdev-admin`).
+
+---
+
+## 6. Vai trò (Role)
+
+* Hai role: `ADMIN`, `USER`. Mọi tài khoản có ít nhất `USER`; một user có thể có nhiều role.
+* `POST /api/auth/login` (`user.roles`) và `GET /api/auth/profile` (`roles`) trả mảng mã role, ví dụ `["USER"]`.
+* Role đọc từ DB ở mỗi request nên thu hồi có hiệu lực ngay, không cần đăng nhập lại.
+* **Admin đầu tiên:** đặt `ADMIN_EMAILS=a@x.dev,b@x.dev` ở BE; email trong danh sách nhận `ADMIN` khi đăng nhập bằng **Google** (đăng nhập bằng mật khẩu không được cấp vì email chưa xác minh).
+
+Các API dưới đây yêu cầu role `ADMIN`, thiếu quyền trả **403**.
+
+### `GET /api/users?search=&page=1&limit=20`
+
+`limit` tối đa 100; `search` tìm theo email hoặc họ tên, không phân biệt hoa thường.
+
+```json
+{
+  "data": [
+    {
+      "id": "7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12",
+      "email": "user@vdev.local",
+      "fullName": "Nguyen Van A",
+      "avatarFileId": null,
+      "status": "ACTIVE",
+      "createdAt": "2026-07-20T14:20:00.000Z",
+      "roles": ["USER"],
+      "providers": ["GOOGLE"]
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20,
+  "totalPages": 1
+}
+```
+
+### `GET /api/users/roles`
+
+```json
+[{ "code": "ADMIN", "name": "Administrator", "description": "..." }]
+```
+
+### `PATCH /api/users/:id/roles`
+
+Đặt lại **toàn bộ** role của user, trả về user như một phần tử của danh sách trên.
+
+```json
+{ "roles": ["USER", "ADMIN"] }
+```
+
+* **400:** `roles` rỗng, role không tồn tại, hoặc gỡ `ADMIN` của admin cuối cùng (`Cannot remove the last admin`).
+* **404:** không tìm thấy user.

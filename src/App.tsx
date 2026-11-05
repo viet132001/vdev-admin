@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, hasRole, useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -9,10 +9,12 @@ import { Liabilities } from './pages/Liabilities';
 import { Learning } from './pages/Learning';
 import { Tasks } from './pages/Tasks';
 import { Dictation } from './pages/Dictation';
+import { Users } from './pages/Users';
+import { GoogleCallback } from './pages/GoogleCallback';
 import './App.css';
 
 // Component to protect pages requiring authentications
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: string[] }> = ({ children, roles }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -32,6 +34,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (roles && !hasRole(user, ...roles)) {
+    return <Navigate to="/" replace />;
   }
 
   return <Layout>{children}</Layout>;
@@ -61,6 +67,9 @@ function App() {
           <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
           <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
 
+          {/* Not a guest route: it must finish even if a session already exists */}
+          <Route path="/auth/google/callback" element={<GoogleCallback />} />
+
           {/* Protected Main Admin Routes */}
           {/* Dashboard is hidden from the menu, so the home page opens Tasks */}
           <Route path="/" element={<Navigate to="/tasks" replace />} />
@@ -71,6 +80,8 @@ function App() {
           <Route path="/learning" element={<ProtectedRoute><Learning /></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
           <Route path="/dictation" element={<ProtectedRoute><Dictation /></ProtectedRoute>} />
+
+          <Route path="/users" element={<ProtectedRoute roles={['ADMIN']}><Users /></ProtectedRoute>} />
 
           {/* Catch-all Redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
