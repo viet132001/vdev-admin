@@ -1,18 +1,20 @@
 // Client for the local helper of vdev-video (`pnpm worker`): it asks Claude and renders video on this machine.
 // Not the VDEV BE, so it doesn't go through services/api: no token is ever sent here.
 export const WORKER_URL = 'http://localhost:4599';
-export const WORKER_COMMAND = 'cd vdev-video && pnpm worker';
+export const WORKER_COMMAND = 'cd vdev-video && pnpm worker:install';
 
 export type LessonJobStatus = 'PLANNING' | 'PLAN_READY' | 'WRITING' | 'LESSON_READY' | 'RENDERING' | 'DONE' | 'FAILED' | 'CANCELLED';
 
-export type FacebookStatus = 'UPLOADING' | 'PROCESSING' | 'DRAFT' | 'PUBLISHED' | 'SUBMITTED' | 'FAILED';
+export type FacebookStatus = 'UPLOADING' | 'PROCESSING' | 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'SUBMITTED' | 'FAILED';
 
 export interface FacebookPost {
   status: FacebookStatus;
-  state: 'DRAFT' | 'PUBLISHED';
+  state: 'DRAFT' | 'PUBLISHED' | 'SCHEDULED';
   videoId: string | null;
   permalink: string | null;
   error: string | null;
+  scheduledAt?: string | null;
+  postedAt?: string | null;
 }
 
 export type YouTubePrivacy = 'public' | 'unlisted' | 'private';
@@ -24,6 +26,17 @@ export interface YouTubePost {
   videoId: string | null;
   url: string | null;
   error: string | null;
+  publishAt?: string | null;
+  live?: boolean;
+  postedAt?: string | null;
+}
+
+export interface PagePost {
+  id: string;
+  text: string;
+  scheduledAt: string;
+  status: 'SCHEDULED' | 'PUBLISHED';
+  permalink: string | null;
 }
 
 export interface LessonJob {
@@ -61,4 +74,7 @@ export const getJob = (id: string): Promise<LessonJob> => call(`/jobs/${id}`);
 export const createJob = (request: unknown): Promise<LessonJob> => call('/jobs', 'POST', { request });
 export const jobAction = (id: string, action: 'feedback' | 'approve' | 'published' | 'meta' | 'retry' | 'cancel' | 'facebook' | 'youtube' | 'rerender', body: unknown = {}): Promise<LessonJob> =>
   call(`/jobs/${id}/${action}`, 'POST', body);
+export const listPosts = (): Promise<PagePost[]> => call('/posts');
+export const suggestPost = (idea: string): Promise<{ text: string }> => call('/posts/suggest', 'POST', { idea });
+export const createPost = (text: string, scheduledAt: string): Promise<PagePost> => call('/posts', 'POST', { text, scheduledAt });
 export const jobVideoUrl = (id: string) => `${WORKER_URL}/videos/${id}`;

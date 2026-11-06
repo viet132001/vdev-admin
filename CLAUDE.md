@@ -27,7 +27,7 @@ src/pages/tasks/              màn Tasks: TaskBoard / TaskTable / TaskCalendar (
                                 BlockEditor, git.tsx (PR / git flow), agent.ts (nhãn trạng thái plan/run/PR, useBusy),
                                 shared.tsx (STATUS/PRIORITY options, ConfirmDialog, Popover, TagChip, format ngày)
 src/pages/users/              BlockList (chặn email / IP), blocks.ts (API + thông báo lỗi tiếng Việt)
-src/pages/dictation/          LessonGenerator + VideoPublish + lessonWorker.ts (form tạo bài, đăng Facebook và YouTube, gắn link vào bài học, gọi worker local của vdev-video), VideoLesson + video.ts (link → player), Reading (ghép câu thành bài đọc), Practice, SentenceManager, ImportSessions, grading.ts (chấm câu), media.ts (upload audio),
+src/pages/dictation/          LessonGenerator + VideoPublish + PublishSchedule + schedule.ts + lessonWorker.ts (form tạo bài, đăng và hẹn giờ Facebook, YouTube, lịch đăng theo tuần, gắn link vào bài học, gọi worker local của vdev-video), VideoLesson + video.ts (link → player), Reading (ghép câu thành bài đọc), Practice, SentenceManager, ImportSessions, grading.ts (chấm câu), media.ts (upload audio),
                                 games/ (VocabGames: màn chờ + kết quả; DefenseGame: luật Thủ thành; defenseScene: đồ hoạ Canvas; defenseSound; common.ts)
 src/doc/*.md                  đặc tả API của BE (contract): auth, tasks, task-agent-mcp, dictation, finance, learning, notes
 src/index.css                 design token (biến CSS sáng/tối) + toàn bộ class dùng chung; App.css gần như rỗng

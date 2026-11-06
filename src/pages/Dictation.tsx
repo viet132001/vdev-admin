@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, getErrorMessage } from '../services/api';
-import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2, Video, BookOpen, Sparkles } from 'lucide-react';
+import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2, Video, BookOpen, Sparkles, CalendarDays } from 'lucide-react';
 import { Practice } from './dictation/Practice';
 import { LessonGenerator } from './dictation/LessonGenerator';
+import { PublishSchedule } from './dictation/PublishSchedule';
 import { hasRole, useAuth } from '../context/AuthContext';
 import { Reading } from './dictation/Reading';
 import { VideoLesson } from './dictation/VideoLesson';
@@ -59,6 +60,7 @@ export const Dictation: React.FC = () => {
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [generatorOpen, setGeneratorOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const { user } = useAuth();
   // Needs the helper running on the owner's own machine
   const canGenerate = hasRole(user, 'ADMIN');
@@ -230,6 +232,7 @@ export const Dictation: React.FC = () => {
             {sessions.length > 0 && (
               <div className="flex gap-2 dc-header-actions">
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
                 <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={16} /> Import</button>
                 <button className="btn btn-primary" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={16} /> Tạo khoá học</button>
               </div>
@@ -241,6 +244,7 @@ export const Dictation: React.FC = () => {
               <p>Chưa có khoá học nào.</p>
               <div className="flex gap-2 mt-4" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
                 <button className="btn btn-primary" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={16} /> Tạo khoá học</button>
                 <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={16} /> Import từ file</button>
               </div>
@@ -294,6 +298,7 @@ export const Dictation: React.FC = () => {
             <div className="flex gap-2 dc-header-actions">
               <button className="btn btn-secondary" onClick={() => setSessionForm({ id: session.id, title: session.title, description: session.description || '', level: session.level })}><Pencil size={14} /> Sửa</button>
               {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
               <button className="btn btn-secondary" disabled={session.sentenceCount === 0} onClick={() => go({ session: sessionId, tab: 'game' })}><Gamepad2 size={16} /> Game từ vựng</button>
               <button className="btn btn-primary" onClick={() => newLesson()}><Plus size={16} /> Thêm chủ đề</button>
             </div>
@@ -515,6 +520,7 @@ export const Dictation: React.FC = () => {
         </div>
       )}
 
+      {scheduleOpen && <PublishSchedule onClose={() => setScheduleOpen(false)} />}
       {generatorOpen && (
         <LessonGenerator
           sessions={sessions ?? []}

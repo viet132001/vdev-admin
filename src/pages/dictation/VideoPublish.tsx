@@ -3,7 +3,8 @@ import { CircleCheck, ExternalLink, Loader2, RotateCcw, Send } from 'lucide-reac
 import { api, getErrorMessage } from '../../services/api';
 import { useBusy } from '../tasks/agent';
 import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
-import { isFacebookBusy, isPublishing, jobAction, type LessonJob, type YouTubePrivacy } from './lessonWorker';
+import { isFacebookBusy, isPublishing, jobAction, listJobs, type LessonJob, type YouTubePrivacy } from './lessonWorker';
+import { formatWhen, fromLocalInput, nextFreeSlot, toLocalInput } from './schedule';
 
 const CAPTION_LIMIT = 2200;
 const TITLE_LIMIT = 100;
@@ -28,6 +29,8 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, facebookReady, 
   const [aiGenerated, setAiGenerated] = useState(true);
   const [privacy, setPrivacy] = useState<YouTubePrivacy>('unlisted');
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [timing, setTiming] = useState<'now' | 'later'>('now');
+  const [when, setWhen] = useState('');
   const [linkError, setLinkError] = useState<string | null>(null);
   const linking = useRef<string | null>(null);
 
@@ -45,8 +48,27 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, facebookReady, 
   });
 
   const shared = { title: title.trim(), description: caption.trim(), aiGenerated };
+  const scheduledAt = timing === 'later' && when ? fromLocalInput(when) : null;
   const sendFacebook = (state: 'DRAFT' | 'PUBLISHED') => act(`fb-${state}`, 'facebook', { ...shared, state });
   const sendYouTube = () => act('youtube', 'youtube', { ...shared, privacy });
+  const scheduleFacebook = () => act('fb-later', 'facebook', { ...shared, state: 'SCHEDULED', scheduledAt });
+  const scheduleYouTube = () => act('yt-later', 'youtube', { ...shared, privacy: 'public', scheduledAt });
+  const canScheduleFacebook = facebookReady && (!facebook || facebook.status === 'FAILED' || facebook.status === 'DRAFT');
+  const canScheduleYouTube = youtubeReady && (!youtube || youtube.status === 'FAILED');
+  const scheduleBoth = () => run('both-later', async () => {
+    try {
+      if (canScheduleFacebook) onChange(await jobAction(job.id, 'facebook', { ...shared, state: 'SCHEDULED', scheduledAt }));
+      if (canScheduleYouTube) onChange(await jobAction(job.id, 'youtube', { ...shared, privacy: 'public', scheduledAt }));
+    } catch (err) {
+      alert(err instanceof Error && err.message ? err.message : 'Không hẹn được');
+    }
+  });
+
+  // Offers the next free slot of this lesson's category in the weekly plan
+  const contentType = job.request?.contentType;
+  useEffect(() => {
+    listJobs().then((jobs) => setWhen((current) => current || toLocalInput(nextFreeSlot(contentType, jobs.filter((j) => j.id !== job.id))))).catch(() => undefined);
+  }, [contentType, job.id]);
 
   const askFacebook = () => setConfirm({
     title: 'Đăng công khai lên Facebook?',
@@ -88,7 +110,8 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, facebookReady, 
   }, [lessonId, job.id, onChange, onLinked]);
 
   // A private video can't be played by learners, so that link never goes on the lesson by itself
-  const youtubeUrl = youtube?.status === 'DONE' && youtube.privacy !== 'private' ? youtube.url : null;
+  // A scheduled one is private only until its time, so its link goes on now: nobody has to be at the machine then
+  const youtubeUrl = youtube?.status === 'DONE' && (youtube.privacy !== 'private' || youtube.publishAt) ? youtube.url : null;
   useEffect(() => {
     if (youtubeUrl && linkedUrl !== youtubeUrl) link(youtubeUrl);
   }, [youtubeUrl, linkedUrl, link]);
@@ -117,6 +140,23 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, facebookReady, 
         </>
       )}
 
+      {(canScheduleFacebook || canScheduleYouTube) && (
+        <div className="lg-publish-row">
+          <p className="lg-publish-name">Thời điểm đăng</p>
+          <div className="flex align-center gap-2" style={{ flexWrap: 'wrap', fontSize: '0.85rem' }}>
+            <label className="flex align-center gap-2" style={{ cursor: 'pointer' }}><input type="radio" checked={timing === 'now'} onChange={() => setTiming('now')} /> Đăng ngay</label>
+            <label className="flex align-center gap-2" style={{ cursor: 'pointer' }}><input type="radio" checked={timing === 'later'} onChange={() => setTiming('later')} /> Hẹn giờ</label>
+          </div>
+          {timing === 'later' && (
+            <>
+              <input type="datetime-local" className="form-input" style={{ marginTop: 8 }} value={when} onChange={(e) => setWhen(e.target.value)} />
+              <p className="lg-meta">Video được tải lên ngay. Đến giờ Facebook và YouTube tự đăng, máy tắt vẫn đăng được.</p>
+              {canScheduleFacebook && canScheduleYouTube && <div className="lg-facebook-actions"><button className="btn btn-primary btn-sm" disabled={!!busy || !scheduledAt} onClick={scheduleBoth}><Send size={14} /> Hẹn đăng cả hai</button></div>}
+            </>
+          )}
+        </div>
+      )}
+
       <div className="lg-publish-row">
         <p className="lg-publish-name">Facebook</p>
         {facebook?.error && <p className="lg-error">{facebook.error}</p>}
@@ -126,12 +166,14 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, facebookReady, 
         )}
         {facebook?.status === 'PUBLISHED' && <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--success)' }}><CircleCheck size={16} /> Đã đăng công khai trên page.</p>}
         {facebook?.status === 'SUBMITTED' && <p className="lg-meta" style={{ margin: 0 }}>Facebook đã nhận video nhưng chưa xử lý xong. Hãy kiểm tra trên page, video này sẽ không được gửi lại từ đây.</p>}
+        {facebook?.status === 'SCHEDULED' && <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--success)' }}><CircleCheck size={16} /> Đã hẹn đăng lúc {formatWhen(facebook.scheduledAt)}.</p>}
         {facebook?.status === 'DRAFT' && <p className="lg-meta" style={{ margin: 0 }}>Đã lưu bản nháp, xem trong Meta Business Suite.</p>}
         <div className="lg-facebook-actions">
           {facebook?.permalink && <a className="btn btn-secondary btn-sm" href={facebook.permalink} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Xem trên Facebook</a>}
           {facebook?.permalink && !youtubeUrl && linkedUrl !== facebook.permalink && lessonId && <button className="btn btn-secondary btn-sm" onClick={() => link(facebook.permalink!)}>Dùng link này cho bài học</button>}
-          {facebookReady && (!facebook || facebook.status === 'FAILED') && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => sendFacebook('DRAFT')}>Lưu nháp</button>}
-          {facebookReady && (!facebook || facebook.status === 'FAILED' || facebook.status === 'DRAFT') && <button className="btn btn-primary btn-sm" disabled={!!busy} onClick={askFacebook}><Send size={14} /> Đăng công khai</button>}
+          {facebookReady && (!facebook || facebook.status === 'FAILED') && timing === 'now' && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => sendFacebook('DRAFT')}>Lưu nháp</button>}
+          {canScheduleFacebook && timing === 'now' && <button className="btn btn-primary btn-sm" disabled={!!busy} onClick={askFacebook}><Send size={14} /> Đăng công khai</button>}
+          {canScheduleFacebook && timing === 'later' && <button className="btn btn-secondary btn-sm" disabled={!!busy || !scheduledAt} onClick={scheduleFacebook}>Hẹn Facebook</button>}
         </div>
       </div>
 
@@ -140,9 +182,10 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, facebookReady, 
         {youtube?.error && <p className="lg-error">{youtube.error}</p>}
         {!youtubeReady && !youtube && <p className="lg-meta" style={{ margin: 0 }}>Chưa đăng nhập. Điền <code>YOUTUBE_CLIENT_ID</code>, <code>YOUTUBE_CLIENT_SECRET</code> vào <code>~/.vdev-video/env</code>, chạy <code>pnpm youtube:login</code> rồi chạy lại worker.</p>}
         {youtube?.status === 'UPLOADING' && <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem' }}><Loader2 size={16} className="spin" /> Đang tải video lên...</p>}
-        {youtube?.status === 'DONE' && <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--success)' }}><CircleCheck size={16} /> Đã đăng ({youtube.privacy ? PRIVACY_LABEL[youtube.privacy] : ''}).</p>}
+        {youtube?.status === 'DONE' && youtube.live === false && <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--success)' }}><CircleCheck size={16} /> Đã hẹn công khai lúc {formatWhen(youtube.publishAt)}.</p>}
+        {youtube?.status === 'DONE' && youtube.live !== false && <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--success)' }}><CircleCheck size={16} /> Đã đăng ({youtube.privacy ? PRIVACY_LABEL[youtube.privacy] : ''}).</p>}
         {youtube?.status === 'DONE' && youtube.privacy !== youtube.requested && <p className="lg-error" style={{ marginTop: 8 }}>YouTube đặt video thành "{youtube.privacy ? PRIVACY_LABEL[youtube.privacy] : ''}", khác với lựa chọn của bạn. Vào YouTube Studio để kiểm tra.</p>}
-        {youtubeReady && (!youtube || youtube.status === 'FAILED') && (
+        {canScheduleYouTube && timing === 'now' && (
           <div className="form-group" style={{ marginTop: 8, marginBottom: 0 }}>
             <label className="form-label">Chế độ hiển thị</label>
             <select className="form-input" value={privacy} onChange={(e) => setPrivacy(e.target.value as YouTubePrivacy)}>
@@ -153,12 +196,14 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, facebookReady, 
         )}
         <div className="lg-facebook-actions">
           {youtube?.url && <a className="btn btn-secondary btn-sm" href={youtube.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Xem trên YouTube</a>}
-          {youtubeReady && (!youtube || youtube.status === 'FAILED') && <button className="btn btn-primary btn-sm" disabled={!!busy} onClick={askYouTube}><Send size={14} /> Đăng YouTube</button>}
+          {canScheduleYouTube && timing === 'now' && <button className="btn btn-primary btn-sm" disabled={!!busy} onClick={askYouTube}><Send size={14} /> Đăng YouTube</button>}
+          {canScheduleYouTube && timing === 'later' && <button className="btn btn-secondary btn-sm" disabled={!!busy || !scheduledAt} onClick={scheduleYouTube}>Hẹn YouTube</button>}
         </div>
       </div>
 
       <div className="lg-publish-row">
         <p className="lg-publish-name">Link video của bài học</p>
+        {linkedUrl && youtube?.live === false && <p className="lg-meta" style={{ marginTop: 0 }}>Học viên xem được từ {formatWhen(youtube.publishAt)}.</p>}
         {linkedUrl
           ? <p className="flex align-center gap-2 lg-meta" style={{ margin: 0, color: 'var(--success)' }}><CircleCheck size={16} /> {linkedUrl}</p>
           : <p className="lg-meta" style={{ margin: 0 }}>{lessonId ? 'Link sẽ tự cập nhật sau khi đăng YouTube.' : 'Bài này chưa lưu lên khoá học.'}</p>}

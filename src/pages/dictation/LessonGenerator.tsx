@@ -3,6 +3,7 @@ import { CircleCheck, CircleX, Loader2, RotateCcw, Sparkles, Video, X } from 'lu
 import { api, getErrorMessage } from '../../services/api';
 import { useBusy } from '../tasks/agent';
 import { Markdown } from '../tasks/PlanPanel';
+import { CONTENT_TYPES, type ContentType } from './schedule';
 import { VideoPublish } from './VideoPublish';
 import { WORKER_COMMAND, createJob, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, workerHealth, type LessonJob } from './lessonWorker';
 
@@ -53,6 +54,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     courseTitle: '',
     topic: '',
     level: initial?.level ?? 'A2',
+    contentType: 'conversation' as ContentType,
     format: 'dialogue' as 'dialogue' | 'reading',
     words: 100,
     vocabulary: 10,
@@ -143,7 +145,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
           : sessions.find((s) => s.id === form.courseId);
         if (isNew) onCreated();
         const created = await createJob({
-          topic: form.topic.trim(), courseTitle: course.title, level: form.level, format: form.format,
+          topic: form.topic.trim(), courseTitle: course.title, level: form.level, contentType: form.contentType, format: form.format,
           words: form.words, vocabulary: form.vocabulary, video: form.video, aspect: form.aspect, note: form.note.trim()
         });
         setJob(await jobAction(created.id, 'meta', { meta: { courseId: course.id } }));
@@ -222,9 +224,9 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
   if (workerState === 'offline') {
     return shell(
       <>
-        <p>Chưa kết nối được công cụ tạo bài trên máy này. Mở Terminal và chạy:</p>
+        <p>Chưa kết nối được công cụ tạo bài trên máy này. Nếu chưa cài, mở Terminal và chạy:</p>
         <pre className="lg-command">{WORKER_COMMAND}</pre>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 12 }}>Giữ cửa sổ Terminal mở trong lúc tạo bài. Nên dùng Chrome hoặc Edge, vì Safari chặn trang web gọi vào máy.</p>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 12 }}>Chỉ cần chạy một lần: từ đó công cụ tự bật khi cần và tự tắt khi rảnh. Nên dùng Chrome hoặc Edge, vì Safari chặn trang web gọi vào máy.</p>
       </>,
       <button className="btn btn-primary" onClick={connect}><RotateCcw size={16} /> Kết nối lại</button>
     );
@@ -237,7 +239,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
       { label: 'Đưa bài lên khoá học', done: !!job.meta?.lessonId && job.status !== 'LESSON_READY', active: job.status === 'LESSON_READY' },
       ...(job.request.video ? [
         { label: 'Tạo video trên máy', done: !!job.videoPath && job.status !== 'RENDERING', active: job.status === 'RENDERING' },
-        { label: 'Đăng lên Facebook', done: ['DRAFT', 'PUBLISHED', 'SUBMITTED'].includes(job.facebook?.status ?? ''), active: job.facebook?.status === 'UPLOADING' || job.facebook?.status === 'PROCESSING' },
+        { label: 'Đăng lên Facebook', done: ['DRAFT', 'SCHEDULED', 'PUBLISHED', 'SUBMITTED'].includes(job.facebook?.status ?? ''), active: job.facebook?.status === 'UPLOADING' || job.facebook?.status === 'PROCESSING' },
         { label: 'Đăng lên YouTube', done: job.youtube?.status === 'DONE', active: job.youtube?.status === 'UPLOADING' },
         { label: 'Cập nhật link video vào bài học', done: !!job.meta?.videoLinkUrl, active: false }
       ] : [])
@@ -318,7 +320,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
                       <Video size={14} />
                       <span>{item.lesson?.title ?? item.request.topic}</span>
                       <span className="lg-meta" style={{ margin: 0 }}>
-                        {[item.facebook?.status === 'PUBLISHED' ? 'Facebook' : item.facebook?.status === 'DRAFT' ? 'Nháp Facebook' : null, item.youtube?.status === 'DONE' ? 'YouTube' : null].filter(Boolean).join(' · ') || 'Chưa đăng'}
+                        {[item.facebook?.status === 'PUBLISHED' ? 'Facebook' : item.facebook?.status === 'SCHEDULED' ? 'Hẹn Facebook' : item.facebook?.status === 'DRAFT' ? 'Nháp Facebook' : null, item.youtube?.status === 'DONE' ? (item.youtube.live === false ? 'Hẹn YouTube' : 'YouTube') : null].filter(Boolean).join(' · ') || 'Chưa đăng'}
                       </span>
                     </button>
                   ))}
@@ -328,6 +330,15 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
             <div className="form-group">
               <label className="form-label">Chủ đề <span className="form-required">*</span></label>
               <input autoFocus required maxLength={150} className="form-input" placeholder="VD: Hai người bạn bàn kế hoạch cuối tuần" value={form.topic} onChange={(e) => update({ topic: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Chuyên mục</label>
+              <select className="form-input" value={form.contentType} onChange={(e) => {
+                const contentType = e.target.value as ContentType;
+                update({ contentType, format: CONTENT_TYPES[contentType].format });
+              }}>
+                {(Object.keys(CONTENT_TYPES) as ContentType[]).map((key) => <option key={key} value={key}>{CONTENT_TYPES[key].label}</option>)}
+              </select>
             </div>
             <div className="form-group">
               <label className="form-label">Khoá học</label>
