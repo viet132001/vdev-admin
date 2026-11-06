@@ -60,6 +60,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     vocabulary: 10,
     video: true,
     aspect: '9:16' as '9:16' | '16:9',
+    videoStyle: 'scene' as 'scene' | 'notebook' | 'scroll',
     note: ''
   });
   const update = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
@@ -146,7 +147,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
         if (isNew) onCreated();
         const created = await createJob({
           topic: form.topic.trim(), courseTitle: course.title, level: form.level, contentType: form.contentType, format: form.format,
-          words: form.words, vocabulary: form.vocabulary, video: form.video, aspect: form.aspect, note: form.note.trim()
+          words: form.words, vocabulary: form.vocabulary, video: form.video, aspect: form.videoStyle === 'scroll' ? form.aspect : '9:16', videoStyle: form.videoStyle, note: form.note.trim()
         });
         setJob(await jobAction(created.id, 'meta', { meta: { courseId: course.id } }));
       } catch (err) {
@@ -386,6 +387,16 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               Tạo video, lưu trên máy này (giọng đọc: {voices})
             </label>
             {form.video && (
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label">Kiểu video</label>
+                <select className="form-input" value={form.videoStyle} onChange={(e) => update({ videoStyle: e.target.value as 'scene' | 'notebook' | 'scroll' })}>
+                  <option value="scene">Nền động + phụ đề</option>
+                  <option value="notebook">Viết tay + bút chỉ theo giọng</option>
+                  <option value="scroll">Chạy chữ + nhạc nhẹ</option>
+                </select>
+              </div>
+            )}
+            {form.video && form.videoStyle === 'scroll' && (
               <div className="form-group" style={{ marginTop: 12 }}>
                 <label className="form-label">Khung hình video</label>
                 <select className="form-input" value={form.aspect} onChange={(e) => update({ aspect: e.target.value as '9:16' | '16:9' })}>
