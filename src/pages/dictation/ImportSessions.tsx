@@ -57,6 +57,7 @@ const TEMPLATE_JSON = {
       lessons: [
         {
           title: 'At the coffee shop',
+          videoUrl: null,
           sentences: [
             {
               text: 'Could I get a large latte, please?',
@@ -159,13 +160,13 @@ export const ImportSessions: React.FC<ImportSessionsProps> = ({ onClose, onImpor
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '640px' }}>
         <div className="modal-header">
-          <h3 style={{ margin: 0 }}>Import session</h3>
+          <h3 style={{ margin: 0 }}>Import khoá học</h3>
           <button className="hamburger-btn" onClick={onClose}><X size={18} /></button>
         </div>
 
         <div className="modal-body flex flex-col gap-4">
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Tạo nhiều session, bài và câu một lần từ file <b>.xlsx</b> hoặc <b>.json</b> (tối đa 5MB, 50 session, 5000 câu).
+            Tạo nhiều khoá học, chủ đề và câu một lần từ file <b>.xlsx</b> hoặc <b>.json</b> (tối đa 5MB, 50 khoá học, 5000 câu). Mỗi chủ đề có thể kèm link video (cột <b>Video</b> hoặc trường <b>videoUrl</b>).
             File được kiểm tra toàn bộ trước khi tạo — có lỗi ở bất kỳ đâu thì không tạo gì.
           </p>
 
@@ -218,7 +219,7 @@ export const ImportSessions: React.FC<ImportSessionsProps> = ({ onClose, onImpor
           {preview && summary && (
             <div className="flex flex-col gap-2">
               <div className="grid grid-cols-4 gap-2">
-                {[['Session', summary.sessions], ['Bài', summary.lessons], ['Câu', summary.sentences], ['Từ vựng', summary.vocabularies ?? 0]].map(([label, value]) => (
+                {[['Khoá học', summary.sessions], ['Chủ đề', summary.lessons], ['Câu', summary.sentences], ['Từ vựng', summary.vocabularies ?? 0]].map(([label, value]) => (
                   <div key={label} style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{label}</div>
                     <div style={{ fontSize: '1.3rem', fontWeight: 600 }}>{value}</div>
@@ -232,12 +233,12 @@ export const ImportSessions: React.FC<ImportSessionsProps> = ({ onClose, onImpor
                       {expanded[i] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       <b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</b>
                       <span className="badge">{s.level}</span>
-                      <span className="tw-count" style={{ display: 'inline' }}>{s.lessonCount} bài · {s.sentenceCount} câu</span>
+                      <span className="tw-count" style={{ display: 'inline' }}>{s.lessonCount} chủ đề · {s.sentenceCount} câu</span>
                     </button>
                     {expanded[i] && (
                       <div style={{ padding: '0 10px 8px 34px', fontSize: '0.8rem' }}>
                         {s.description && <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{s.description}</div>}
-                        {(s.lessons || []).length === 0 && <div style={{ color: 'var(--text-muted)' }}>Chưa có bài</div>}
+                        {(s.lessons || []).length === 0 && <div style={{ color: 'var(--text-muted)' }}>Chưa có chủ đề</div>}
                         {(s.lessons || []).map((l: any, j: number) => (
                           <div key={j} className="flex justify-between" style={{ padding: '2px 0' }}>
                             <span>{j + 1}. {l.title}</span>
@@ -256,7 +257,7 @@ export const ImportSessions: React.FC<ImportSessionsProps> = ({ onClose, onImpor
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>Hủy</button>
           <button className="btn btn-primary" disabled={!preview || busy !== null} onClick={confirmImport}>
-            {busy === 'import' ? 'Đang import...' : preview ? `Import ${summary?.sessions ?? 0} session` : 'Import'}
+            {busy === 'import' ? 'Đang import...' : preview ? `Import ${summary?.sessions ?? 0} khoá học` : 'Import'}
           </button>
         </div>
       </div>

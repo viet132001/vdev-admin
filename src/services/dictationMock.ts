@@ -226,7 +226,7 @@ const parseImport = (body: any) => {
         return { text, translation: str(obj.translation) || null, note: str(obj.note) || null, vocabularies };
       });
       sentenceTotal += sentences.length;
-      return { title: lTitle, description: str(l?.description) || null, sentences };
+      return { title: lTitle, description: str(l?.description) || null, videoUrl: str(l?.videoUrl) || null, sentences };
     });
     return { title, description: str(s?.description) || null, level, lessons };
   });
@@ -264,7 +264,7 @@ const importSessions = (db: DB, body: any, dryRun: boolean) => {
     sessionPos += GAP;
     db.sessions.push(session);
     s.lessons.forEach((l: any, j: number) => {
-      const lesson = { id: genId(), sessionId: session.id, title: l.title, description: l.description, position: (j + 1) * GAP, createdAt: ts, updatedAt: ts, deletedAt: null };
+      const lesson = { id: genId(), sessionId: session.id, title: l.title, description: l.description, videoUrl: l.videoUrl, position: (j + 1) * GAP, createdAt: ts, updatedAt: ts, deletedAt: null };
       db.lessons.push(lesson);
       l.sentences.forEach((item: any, k: number) => db.sentences.push(newSentence(lesson.id, item, (k + 1) * GAP)));
     });
@@ -315,7 +315,7 @@ const route = (method: string, url: string, body?: any): any => {
         if (!body?.title?.trim()) fail('title is required');
         const ts = nowIso();
         const l = {
-          id: genId(), sessionId: id, title: body.title.trim(), description: body.description || null,
+          id: genId(), sessionId: id, title: body.title.trim(), description: body.description || null, videoUrl: body.videoUrl || null,
           position: nextPosition(sessionLessons(db, id)), createdAt: ts, updatedAt: ts, deletedAt: null
         };
         db.lessons.push(l);
@@ -340,7 +340,7 @@ const route = (method: string, url: string, body?: any): any => {
       };
     };
     if (!sub && method === 'GET') result = detail();
-    else if (!sub && method === 'PATCH') { pick(lesson, body, ['title', 'description']); result = lessonSummary(db, lesson); }
+    else if (!sub && method === 'PATCH') { pick(lesson, body, ['title', 'description', 'videoUrl']); result = lessonSummary(db, lesson); }
     else if (!sub && method === 'DELETE') {
       const ts = nowIso();
       lesson.deletedAt = ts;

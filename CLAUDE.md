@@ -4,7 +4,7 @@ Bản đồ code cho phiên Claude làm task trong repo này. Đọc trước kh
 
 ## 1. Mục đích & tech stack
 
-- **VDEV Admin Portal**: SPA quản trị cá nhân, gọi REST API của BE VDEV. Menu hiện chỉ có **Tasks** (quản lý công việc + Task Agent Claude), **Dictation** (luyện chép chính tả tiếng Anh) và **Người dùng** (chỉ role `ADMIN`); Dashboard / Finance / Liabilities / Learning vẫn có route nhưng đã ẩn khỏi menu (`src/components/Layout.tsx`).
+- **VDEV Admin Portal**: SPA quản trị cá nhân, gọi REST API của BE VDEV. Menu hiện chỉ có **Tasks** (quản lý công việc + Task Agent Claude), **Học tiếng Anh** (route `/dictation`: khoá học → chủ đề, mỗi chủ đề có video, bài đọc, chính tả, game) và **Người dùng** (chỉ role `ADMIN`); Dashboard / Finance / Liabilities / Learning vẫn có route nhưng đã ẩn khỏi menu (`src/components/Layout.tsx`).
 - React `^19.2.7`, react-router-dom `^7.18.1`, TypeScript `~6.0.2`, Vite `^8.1.1` (`@vitejs/plugin-react`), icon `lucide-react`, lint bằng `oxlint ^1.71.0`. Không dùng thư viện UI / CSS framework, không có state manager (chỉ React state + Context).
 - Deploy lên GitHub Pages dưới đường dẫn `/vdev-admin/` (CI: Node 22, pnpm 10).
 - `expo` có trong `dependencies` (và thư mục `.expo/`) nhưng không được import ở `src/`.
@@ -27,8 +27,8 @@ src/pages/tasks/              màn Tasks: TaskBoard / TaskTable / TaskCalendar (
                                 BlockEditor, git.tsx (PR / git flow), agent.ts (nhãn trạng thái plan/run/PR, useBusy),
                                 shared.tsx (STATUS/PRIORITY options, ConfirmDialog, Popover, TagChip, format ngày)
 src/pages/users/              BlockList (chặn email / IP), blocks.ts (API + thông báo lỗi tiếng Việt)
-src/pages/dictation/          Practice, SentenceManager, ImportSessions, grading.ts (chấm câu), media.ts (upload audio),
-                                games/ (VocabGames + các mini game, common.ts)
+src/pages/dictation/          LessonGenerator + lessonWorker.ts (form tạo bài, gọi worker local của vdev-video), VideoLesson + video.ts (link → player), Reading (ghép câu thành bài đọc), Practice, SentenceManager, ImportSessions, grading.ts (chấm câu), media.ts (upload audio),
+                                games/ (VocabGames: màn chờ + kết quả; DefenseGame: luật Thủ thành; defenseScene: đồ hoạ Canvas; defenseSound; common.ts)
 src/doc/*.md                  đặc tả API của BE (contract): auth, tasks, task-agent-mcp, dictation, finance, learning, notes
 src/index.css                 design token (biến CSS sáng/tối) + toàn bộ class dùng chung; App.css gần như rỗng
 DesignGuideline.md            chuẩn UI/UX (màu, chữ, bo góc, responsive, modal, empty state)
@@ -69,6 +69,7 @@ pnpm preview            # vite preview
 - **BE VDEV** (repo riêng, không nằm ở đây): mọi endpoint `/api/auth`, `/api/tasks`, `/api/task-projects`, `/api/task-tags`, `/api/agent/...`, `/api/dictation`, `/api/finance`, `/api/learning`, `/api/storage`, `/api/notes`. Contract nằm ở `src/doc/*.md` — đọc file tương ứng trước khi sửa tích hợp API.
 - Auth: JWT Bearer lưu `localStorage` (`vdev_token`, `vdev_refresh_token`); 401 ⇒ `authFetch` gọi `/api/auth/refresh` một lần rồi thử lại, thất bại ⇒ phát event `vdev:session-expired` để `AuthContext` đăng xuất.
 - **vdev-agent** (runner chạy trên máy người dùng, Claude Agent SDK + VDEV MCP tools): FE không gọi trực tiếp, chỉ đọc/ghi trạng thái plan / run / changeset / PR qua BE. Mô tả đầy đủ ở `src/doc/task-agent-mcp.md` (mục 15: git flow, workspace nhiều repo, `CLAUDE.md` của từng repo).
+- **vdev-video** (thư mục cạnh repo này, Remotion, chạy trên máy cá nhân): tạo video bài học từ các câu rồi gắn vào `videoUrl` của lesson. Form "Tạo bài bằng Claude" gọi `pnpm worker` tại `http://localhost:4599` để lập kế hoạch, soạn bài, render; bài và task được trang lưu lên BE bằng phiên đăng nhập, video chỉ nằm trên máy.
 - **Chấm câu Dictation**: `src/pages/dictation/grading.ts` phải khớp 1:1 với `dictation-grading.util.ts` của BE và quy tắc ở `src/doc/dictation-api.md` mục 4 — sửa một bên thì phải sửa bên kia và cập nhật tài liệu.
 
 ## 6. Điều cần tránh / bẫy

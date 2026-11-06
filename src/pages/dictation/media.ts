@@ -71,7 +71,7 @@ export const unlockSpeech = () => {
   window.speechSynthesis.speak(utterance);
 };
 
-const speak = (text: string, rate: number, voiceURI: string) =>
+const speak = (text: string, rate: number, voiceURI: string, pitch = 1) =>
   new Promise<void>((resolve) => {
     if (!('speechSynthesis' in window)) {
       resolve();
@@ -103,6 +103,7 @@ const speak = (text: string, rate: number, voiceURI: string) =>
       utterance.voice = voice;
       utterance.lang = voice?.lang || 'en-US';
       utterance.rate = rate;
+      utterance.pitch = pitch;
       let started = false;
       utterance.onstart = () => { started = true; };
       utterance.onend = finish;
@@ -138,6 +139,12 @@ const speak = (text: string, rate: number, voiceURI: string) =>
     if (performance.now() - interruptedAt < RESTART_DELAY_MS) window.setTimeout(attempt, RESTART_DELAY_MS);
     else attempt();
   });
+
+// Speaks with a given voice and pitch instead of the learner's voice setting
+export const speakAs = (text: string, rate: number, voiceURI: string, pitch: number) => {
+  stopPlayback();
+  return speak(text, rate, voiceURI, pitch);
+};
 
 // Plays the sentence's uploaded audio when it has one, otherwise (or if the file fails) the browser's English voice
 export const playSentence = async (sentence: { text: string; audioUrl?: string | null }, rate: number, voiceURI: string) => {

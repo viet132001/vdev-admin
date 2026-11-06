@@ -41,6 +41,7 @@ Hệ thống dùng bảng màu **trung tính (đen – trắng – xám, thang z
 * Không dùng gradient, hiệu ứng blur/glass, bóng đổ đậm hay hiệu ứng nhấc thẻ khi hover; phân tách bằng viền 1px.
 * Bo góc nhỏ: `4px` (badge), `6px` (nút, input), `8px` (thẻ, modal).
 * Badge dạng viền mảnh, chữ màu theo ý nghĩa; không tô nền màu.
+* Ngoại lệ: sân chơi của game Thủ thành là cảnh game có đồ hoạ riêng (màu, gradient, hiệu ứng), không theo token và không đổi theo Sáng / Tối. Phần giao diện quanh sân chơi vẫn theo chuẩn này.
 * Không dùng emoji làm trang trí giao diện (emoji chỉ xuất hiện khi người dùng tự đặt làm icon).
 * Trạng thái / ưu tiên dùng token CSS (không hard-code mã màu) để tự đổi theo Sáng / Tối.
 

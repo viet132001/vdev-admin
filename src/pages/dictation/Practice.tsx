@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
 import {
-  Volume2, Snail, Lightbulb, Eye, SkipForward, RotateCcw, ArrowRight, CircleCheck, CircleX, Settings2, Repeat, X
+  Volume2, Snail, Lightbulb, Eye, SkipForward, RotateCcw, ArrowRight, CircleCheck, CircleX, Settings2, Repeat, X, Gamepad2
 } from 'lucide-react';
 import { grade, type DiffOp, type GradeResult } from './grading';
 import { englishVoices, loadSettings, playSentence, saveSettings, stopPlayback, type PracticeSettings } from './media';
@@ -11,6 +11,7 @@ interface PracticeProps {
   nextLesson: any | null;
   onOpenLesson: (id: string) => void;
   onManage: () => void;
+  onGame: () => void;
   onProgressChanged: () => void;
 }
 
@@ -48,7 +49,7 @@ const maskSentence = (text: string, revealedWords: number) =>
     .map((word, i) => (i < revealedWords ? word : word.replace(/[A-Za-z0-9]/g, '_')))
     .join(' ');
 
-export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpenLesson, onManage, onProgressChanged }) => {
+export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpenLesson, onManage, onGame, onProgressChanged }) => {
   const [lesson, setLesson] = useState<any | null>(null);
   const [queue, setQueue] = useState<string[]>([]);
   const [pos, setPos] = useState(0);
@@ -91,7 +92,7 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
       setLesson(data);
       return data;
     } catch (err) {
-      alert(getErrorMessage(err, 'Không tải được bài'));
+      alert(getErrorMessage(err, 'Không tải được chủ đề'));
       return null;
     }
   }, [lessonId]);
@@ -228,7 +229,7 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
       startQueue(data, false);
       onProgressChanged();
     } catch (err) {
-      alert(getErrorMessage(err, 'Làm lại bài thất bại'));
+      alert(getErrorMessage(err, 'Làm lại thất bại'));
     }
   };
 
@@ -250,14 +251,14 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
   // ---------- render ----------
 
   if (!lesson) {
-    return <div className="loading-container"><span className="spinner"></span><span>Đang tải bài...</span></div>;
+    return <div className="loading-container"><span className="spinner"></span><span>Đang tải...</span></div>;
   }
 
   if (lesson.sentences.length === 0) {
     return (
       <div className="empty-state">
         <Volume2 className="empty-state-icon" size={32} />
-        <p>Bài này chưa có câu nào.</p>
+        <p>Chủ đề này chưa có câu nào.</p>
         <button className="btn btn-primary mt-4" onClick={onManage}>Thêm câu</button>
       </div>
     );
@@ -283,7 +284,7 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
     return (
       <div className="card dc-practice">
         <div>
-          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Kết quả bài “{lesson.title}”</h2>
+          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Kết quả chính tả “{lesson.title}”</h2>
           <div className="grid grid-cols-3 gap-4" style={{ marginTop: 16 }}>
             {[
               ['Câu đúng', `${p.completed}/${p.total}`],
@@ -323,9 +324,10 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
           {unfinished > 0 && (
             <button className="btn btn-primary" onClick={() => startQueue(lesson, true)}><Repeat size={16} /> Luyện lại {unfinished} câu chưa đúng</button>
           )}
-          <button className="btn btn-secondary" onClick={restartLesson}><RotateCcw size={16} /> Làm lại cả bài</button>
+          <button className="btn btn-secondary" onClick={restartLesson}><RotateCcw size={16} /> Làm lại từ đầu</button>
+          <button className="btn btn-secondary" onClick={onGame}><Gamepad2 size={16} /> Chơi game từ vựng</button>
           {nextLesson && (
-            <button className="btn btn-secondary" onClick={() => onOpenLesson(nextLesson.id)}>Bài tiếp: {nextLesson.title} <ArrowRight size={16} /></button>
+            <button className="btn btn-secondary" onClick={() => onOpenLesson(nextLesson.id)}>Chủ đề tiếp: {nextLesson.title} <ArrowRight size={16} /></button>
           )}
         </div>
       </div>

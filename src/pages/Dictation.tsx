@@ -1,14 +1,28 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, getErrorMessage } from '../services/api';
-import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2 } from 'lucide-react';
+import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2, Video, BookOpen, Sparkles } from 'lucide-react';
 import { Practice } from './dictation/Practice';
+import { LessonGenerator } from './dictation/LessonGenerator';
+import { hasRole, useAuth } from '../context/AuthContext';
+import { Reading } from './dictation/Reading';
+import { VideoLesson } from './dictation/VideoLesson';
+import { parseVideo } from './dictation/video';
 import { SentenceManager } from './dictation/SentenceManager';
 import { ImportSessions } from './dictation/ImportSessions';
 import { VocabGames } from './dictation/games/VocabGames';
 import { ConfirmDialog, Popover, type ConfirmState } from './tasks/shared';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+// The learning path of a topic, in the order a learner goes through it
+const TOPIC_TABS = [
+  { key: 'video', label: 'Video', icon: Video },
+  { key: 'reading', label: 'Bài đọc', icon: BookOpen },
+  { key: 'practice', label: 'Chính tả', icon: Headphones },
+  { key: 'game', label: 'Game', icon: Gamepad2 },
+  { key: 'manage', label: 'Nội dung', icon: ListChecks }
+] as const;
 
 interface SessionForm {
   id?: string;
@@ -21,6 +35,7 @@ interface LessonForm {
   id?: string;
   title: string;
   description: string;
+  videoUrl: string;
 }
 
 const ProgressBar: React.FC<{ completed: number; total: number }> = ({ completed, total }) => (
@@ -33,8 +48,7 @@ export const Dictation: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const sessionId = searchParams.get('session');
   const lessonId = searchParams.get('lesson');
-  const tabParam = searchParams.get('tab');
-  const tab = tabParam === 'manage' || tabParam === 'game' ? tabParam : 'practice';
+  const tabParam = TOPIC_TABS.find((t) => t.key === searchParams.get('tab'))?.key ?? null;
 
   const [sessions, setSessions] = useState<any[] | null>(null);
   const [session, setSession] = useState<any | null>(null);
@@ -44,6 +58,10 @@ export const Dictation: React.FC = () => {
   const [lessonForm, setLessonForm] = useState<LessonForm | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
+  const { user } = useAuth();
+  // Needs the helper running on the owner's own machine
+  const canGenerate = hasRole(user, 'ADMIN');
 
   const go = useCallback((params: Record<string, string>) => setSearchParams(params), [setSearchParams]);
 
@@ -52,7 +70,7 @@ export const Dictation: React.FC = () => {
       const list = await api.get('/api/dictation/sessions', { noCache: true });
       setSessions(Array.isArray(list) ? list : []);
     } catch (err) {
-      alert(getErrorMessage(err, 'Không tải được danh sách session'));
+      alert(getErrorMessage(err, 'Không tải được danh sách khoá học'));
       setSessions([]);
     }
   }, []);
@@ -67,7 +85,7 @@ export const Dictation: React.FC = () => {
       setSession(detail);
       setExpanded((prev) => ({ ...prev, [sessionId]: true }));
     } catch (err) {
-      alert(getErrorMessage(err, 'Không tải được session'));
+      alert(getErrorMessage(err, 'Không tải được khoá học'));
       go({});
     }
   }, [sessionId, go]);
@@ -100,7 +118,7 @@ export const Dictation: React.FC = () => {
       }
       setSessionForm(null);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lưu session thất bại'));
+      alert(getErrorMessage(err, 'Lưu khoá học thất bại'));
     }
   };
 
@@ -119,13 +137,13 @@ export const Dictation: React.FC = () => {
   };
 
   const deleteSession = (s: any) =>
-    showConfirm('Xóa session', `Xóa “${s.title}” cùng ${s.lessonCount} bài và ${s.sentenceCount} câu?`, async () => {
+    showConfirm('Xóa khoá học', `Xóa “${s.title}” cùng ${s.lessonCount} chủ đề và ${s.sentenceCount} câu?`, async () => {
       try {
         await api.delete(`/api/dictation/sessions/${s.id}`);
         if (s.id === sessionId) go({});
         await loadSessions();
       } catch (err) {
-        alert(getErrorMessage(err, 'Xóa session thất bại'));
+        alert(getErrorMessage(err, 'Xóa khoá học thất bại'));
       }
     });
 
@@ -134,7 +152,12 @@ export const Dictation: React.FC = () => {
   const saveLesson = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lessonForm?.title.trim() || !sessionId) return;
-    const payload = { title: lessonForm.title.trim(), description: lessonForm.description.trim() || null };
+    const videoUrl = lessonForm.videoUrl.trim();
+    if (videoUrl && !parseVideo(videoUrl)) {
+      alert('Link video phải bắt đầu bằng http:// hoặc https://');
+      return;
+    }
+    const payload = { title: lessonForm.title.trim(), description: lessonForm.description.trim() || null, videoUrl: videoUrl || null };
     try {
       if (lessonForm.id) {
         await api.patch(`/api/dictation/lessons/${lessonForm.id}`, payload);
@@ -146,7 +169,7 @@ export const Dictation: React.FC = () => {
       }
       setLessonForm(null);
     } catch (err) {
-      alert(getErrorMessage(err, 'Lưu bài thất bại'));
+      alert(getErrorMessage(err, 'Lưu chủ đề thất bại'));
     }
   };
 
@@ -164,13 +187,13 @@ export const Dictation: React.FC = () => {
   };
 
   const deleteLesson = (l: any) =>
-    showConfirm('Xóa bài', `Xóa bài “${l.title}” cùng ${l.sentenceCount} câu?`, async () => {
+    showConfirm('Xóa chủ đề', `Xóa chủ đề “${l.title}” cùng ${l.sentenceCount} câu?`, async () => {
       try {
         await api.delete(`/api/dictation/lessons/${l.id}`);
         if (l.id === lessonId && sessionId) go({ session: sessionId });
         refresh();
       } catch (err) {
-        alert(getErrorMessage(err, 'Xóa bài thất bại'));
+        alert(getErrorMessage(err, 'Xóa chủ đề thất bại'));
       }
     });
 
@@ -181,12 +204,15 @@ export const Dictation: React.FC = () => {
   const lesson = lessonIndex >= 0 ? lessons[lessonIndex] : null;
   const nextLesson = lessonIndex >= 0 ? lessons[lessonIndex + 1] || null : null;
 
+  const editLesson = (l: any) => setLessonForm({ id: l.id, title: l.title, description: l.description || '', videoUrl: l.videoUrl || '' });
+  const newLesson = () => setLessonForm({ title: '', description: '', videoUrl: '' });
+
   const lessonMenu = (l: any, index: number) => (
     <Popover onClose={() => setMenuId(null)} style={{ top: '100%', right: 0 }}>
-      <button className="tw-popover-item" onClick={() => { setMenuId(null); setLessonForm({ id: l.id, title: l.title, description: l.description || '' }); }}><Pencil size={14} /> Sửa bài</button>
+      <button className="tw-popover-item" onClick={() => { setMenuId(null); editLesson(l); }}><Pencil size={14} /> Sửa chủ đề</button>
       <button className="tw-popover-item" disabled={index === 0} onClick={() => { setMenuId(null); moveLesson(index, -1); }}><ArrowUp size={14} /> Lên trên</button>
       <button className="tw-popover-item" disabled={index === lessons.length - 1} onClick={() => { setMenuId(null); moveLesson(index, 1); }}><ArrowDown size={14} /> Xuống dưới</button>
-      <button className="tw-popover-item danger" onClick={() => { setMenuId(null); deleteLesson(l); }}><Trash2 size={14} /> Xóa bài</button>
+      <button className="tw-popover-item danger" onClick={() => { setMenuId(null); deleteLesson(l); }}><Trash2 size={14} /> Xóa chủ đề</button>
     </Popover>
   );
 
@@ -198,22 +224,24 @@ export const Dictation: React.FC = () => {
         <div className="flex flex-col gap-4">
           <header className="flex justify-between align-center" style={{ gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <h1 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 600 }}>Luyện chính tả tiếng Anh</h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Nghe câu tiếng Anh, gõ lại, xem chỗ sai và nghĩa của câu.</p>
+              <h1 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 600 }}>Học tiếng Anh</h1>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Mỗi chủ đề gồm video bài học, bài đọc, luyện chính tả và game từ vựng.</p>
             </div>
             {sessions.length > 0 && (
               <div className="flex gap-2 dc-header-actions">
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
                 <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={16} /> Import</button>
-                <button className="btn btn-primary" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={16} /> Tạo session</button>
+                <button className="btn btn-primary" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={16} /> Tạo khoá học</button>
               </div>
             )}
           </header>
           {sessions.length === 0 ? (
             <div className="empty-state">
               <Headphones className="empty-state-icon" size={32} />
-              <p>Chưa có session nào.</p>
-              <div className="flex gap-2 mt-4">
-                <button className="btn btn-primary" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={16} /> Tạo session</button>
+              <p>Chưa có khoá học nào.</p>
+              <div className="flex gap-2 mt-4" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                <button className="btn btn-primary" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={16} /> Tạo khoá học</button>
                 <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={16} /> Import từ file</button>
               </div>
             </div>
@@ -227,7 +255,7 @@ export const Dictation: React.FC = () => {
                   </div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minHeight: 20 }}>{s.description}</p>
                   <ProgressBar completed={s.progress.completed} total={s.progress.total} />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.lessonCount} bài · {s.progress.completed}/{s.progress.total} câu đúng</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.lessonCount} chủ đề · {s.progress.completed}/{s.progress.total} câu đúng</span>
                 </div>
               ))}
             </div>
@@ -238,14 +266,14 @@ export const Dictation: React.FC = () => {
 
     if (!session || session.id !== sessionId) return <div className="loading-container"><span className="spinner"></span><span>Đang tải...</span></div>;
 
-    if (!lessonId && tab === 'game') {
+    if (!lessonId && tabParam === 'game') {
       return (
         <div className="flex flex-col gap-4">
           <header>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => go({ session: sessionId })}>
               {session.title} <ChevronRight size={12} style={{ verticalAlign: 'middle' }} />
             </div>
-            <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 600 }}>Game từ vựng — cả session</h1>
+            <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 600 }}>Game từ vựng — cả khoá học</h1>
           </header>
           <VocabGames key={sessionId} scope="session" id={sessionId} />
         </div>
@@ -257,20 +285,21 @@ export const Dictation: React.FC = () => {
         <div className="flex flex-col gap-4">
           <header className="flex justify-between align-center" style={{ gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <button className="dc-crumb" onClick={() => go({})}>Tất cả session <ChevronRight size={12} /></button>
+              <button className="dc-crumb" onClick={() => go({})}>Tất cả khoá học <ChevronRight size={12} /></button>
               <h1 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 600 }}>
                 {session.title} <span className="badge" style={{ verticalAlign: 'middle' }}>{session.level}</span>
               </h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{session.description || `${session.lessonCount} bài · ${session.sentenceCount} câu`}</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{session.description || `${session.lessonCount} chủ đề · ${session.sentenceCount} câu`}</p>
             </div>
             <div className="flex gap-2 dc-header-actions">
               <button className="btn btn-secondary" onClick={() => setSessionForm({ id: session.id, title: session.title, description: session.description || '', level: session.level })}><Pencil size={14} /> Sửa</button>
+              {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
               <button className="btn btn-secondary" disabled={session.sentenceCount === 0} onClick={() => go({ session: sessionId, tab: 'game' })}><Gamepad2 size={16} /> Game từ vựng</button>
-              <button className="btn btn-primary" onClick={() => setLessonForm({ title: '', description: '' })}><Plus size={16} /> Thêm bài</button>
+              <button className="btn btn-primary" onClick={() => newLesson()}><Plus size={16} /> Thêm chủ đề</button>
             </div>
           </header>
           {lessons.length === 0 ? (
-            <div className="empty-state"><p>Session chưa có bài nào.</p></div>
+            <div className="empty-state"><p>Khoá học chưa có chủ đề nào.</p></div>
           ) : (
             <div className="flex flex-col gap-2">
               {lessons.map((l, i) => (
@@ -281,12 +310,12 @@ export const Dictation: React.FC = () => {
                     <div className="flex align-center gap-2" style={{ marginTop: 8 }}>
                       <div style={{ width: 160 }}><ProgressBar completed={l.progress.completed} total={l.progress.total} /></div>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        {l.progress.completed}/{l.progress.total} câu{l.progress.averageAccuracy !== null && ` · ${l.progress.averageAccuracy}%`}
+                        {l.videoUrl && 'Có video · '}{l.progress.completed}/{l.progress.total} câu chính tả{l.progress.averageAccuracy !== null && ` · ${l.progress.averageAccuracy}%`}
                       </span>
                     </div>
                   </div>
-                  <button className="btn btn-secondary btn-sm" onClick={() => go({ session: sessionId, lesson: l.id, tab: 'manage' })}><ListChecks size={14} /> Câu</button>
-                  <button className="btn btn-primary btn-sm" disabled={l.sentenceCount === 0} onClick={() => go({ session: sessionId, lesson: l.id })}><PlayCircle size={14} /> Luyện</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => go({ session: sessionId, lesson: l.id, tab: 'manage' })}><ListChecks size={14} /> Nội dung</button>
+                  <button className="btn btn-primary btn-sm" disabled={l.sentenceCount === 0 && !l.videoUrl} onClick={() => go({ session: sessionId, lesson: l.id })}><PlayCircle size={14} /> Học</button>
                   <div style={{ position: 'relative' }}>
                     <button className="icon-btn" onClick={() => setMenuId(menuId === l.id ? null : l.id)}><Ellipsis size={16} /></button>
                     {menuId === l.id && lessonMenu(l, i)}
@@ -299,7 +328,11 @@ export const Dictation: React.FC = () => {
       );
     }
 
-    if (!lesson) return <div className="empty-state"><p>Không tìm thấy bài.</p></div>;
+    if (!lesson) return <div className="empty-state"><p>Không tìm thấy chủ đề.</p></div>;
+
+    const openTab = (key: string) => go({ session: sessionId, lesson: lesson.id, tab: key });
+    // Without an explicit tab, start at the first step of the path that has content
+    const tab = tabParam ?? (lesson.videoUrl ? 'video' : lesson.sentenceCount > 0 ? 'reading' : 'manage');
 
     return (
       <div className="flex flex-col gap-4">
@@ -316,24 +349,45 @@ export const Dictation: React.FC = () => {
           </div>
         </header>
         <div className="tabs">
-          <button className={`tab ${tab === 'practice' ? 'active' : ''}`} onClick={() => go({ session: sessionId, lesson: lesson.id })}>Luyện tập</button>
-          <button className={`tab ${tab === 'game' ? 'active' : ''}`} onClick={() => go({ session: sessionId, lesson: lesson.id, tab: 'game' })}>Game từ vựng</button>
-          <button className={`tab ${tab === 'manage' ? 'active' : ''}`} onClick={() => go({ session: sessionId, lesson: lesson.id, tab: 'manage' })}>Quản lý câu ({lesson.sentenceCount})</button>
+          {TOPIC_TABS.map(({ key, label, icon: Icon }) => (
+            <button key={key} className={`tab dc-tab ${tab === key ? 'active' : ''}`} onClick={() => openTab(key)}>
+              <Icon size={14} /> {key === 'manage' ? `${label} (${lesson.sentenceCount})` : label}
+            </button>
+          ))}
         </div>
-        {tab === 'game' ? (
-          <VocabGames key={lesson.id} scope="lesson" id={lesson.id} onManage={() => go({ session: sessionId, lesson: lesson.id, tab: 'manage' })} />
-        ) : tab === 'practice' ? (
+        {tab === 'video' && (
+          <VideoLesson
+            key={lesson.id}
+            lessonId={lesson.id}
+            title={lesson.title}
+            videoUrl={lesson.videoUrl}
+            hasSentences={lesson.sentenceCount > 0}
+            onEdit={() => editLesson(lesson)}
+            onReading={() => openTab('reading')}
+          />
+        )}
+        {tab === 'reading' && (
+          <Reading
+            key={lesson.id}
+            lessonId={lesson.id}
+            onManage={() => openTab('manage')}
+            onPractice={() => openTab('practice')}
+            onGame={() => openTab('game')}
+          />
+        )}
+        {tab === 'practice' && (
           <Practice
             key={lesson.id}
             lessonId={lesson.id}
             nextLesson={nextLesson}
             onOpenLesson={(id) => go({ session: sessionId, lesson: id })}
-            onManage={() => go({ session: sessionId, lesson: lesson.id, tab: 'manage' })}
+            onManage={() => openTab('manage')}
+            onGame={() => openTab('game')}
             onProgressChanged={refresh}
           />
-        ) : (
-          <SentenceManager key={lesson.id} lessonId={lesson.id} onChanged={refresh} onConfirm={showConfirm} />
         )}
+        {tab === 'game' && <VocabGames key={lesson.id} scope="lesson" id={lesson.id} onManage={() => openTab('manage')} />}
+        {tab === 'manage' && <SentenceManager key={lesson.id} lessonId={lesson.id} onChanged={refresh} onConfirm={showConfirm} />}
       </div>
     );
   };
@@ -342,13 +396,13 @@ export const Dictation: React.FC = () => {
     <div className="tw-shell dc-shell">
       <aside className="tw-nav">
         <div className="tw-nav-title">
-          Sessions
+          Khoá học
           <span className="flex" style={{ gap: 2 }}>
             <button className="icon-btn" title="Import từ file Excel / JSON" onClick={() => setImportOpen(true)}><Upload size={14} /></button>
-            <button className="icon-btn" title="Tạo session" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={14} /></button>
+            <button className="icon-btn" title="Tạo khoá học" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={14} /></button>
           </span>
         </div>
-        {sessions?.length === 0 && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0 8px' }}>Chưa có session nào.</p>}
+        {sessions?.length === 0 && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0 8px' }}>Chưa có khoá học nào.</p>}
         {sessions?.map((s, i) => (
           <div key={s.id}>
             <div style={{ position: 'relative' }}>
@@ -372,7 +426,7 @@ export const Dictation: React.FC = () => {
                   <button className="tw-popover-item" onClick={() => { setMenuId(null); setSessionForm({ id: s.id, title: s.title, description: s.description || '', level: s.level }); }}><Pencil size={14} /> Chỉnh sửa</button>
                   <button className="tw-popover-item" disabled={i === 0} onClick={() => { setMenuId(null); moveSession(i, -1); }}><ArrowUp size={14} /> Lên trên</button>
                   <button className="tw-popover-item" disabled={i === sessions.length - 1} onClick={() => { setMenuId(null); moveSession(i, 1); }}><ArrowDown size={14} /> Xuống dưới</button>
-                  <button className="tw-popover-item danger" onClick={() => { setMenuId(null); deleteSession(s); }}><Trash2 size={14} /> Xóa session</button>
+                  <button className="tw-popover-item danger" onClick={() => { setMenuId(null); deleteSession(s); }}><Trash2 size={14} /> Xóa khoá học</button>
                 </Popover>
               )}
             </div>
@@ -384,8 +438,8 @@ export const Dictation: React.FC = () => {
                     <span className="tw-count">{l.progress.completed}/{l.progress.total}</span>
                   </button>
                 ))}
-                <button className="tw-nav-item" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }} onClick={() => setLessonForm({ title: '', description: '' })}>
-                  <Plus size={12} /> Thêm bài
+                <button className="tw-nav-item" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }} onClick={() => newLesson()}>
+                  <Plus size={12} /> Thêm chủ đề
                 </button>
               </div>
             )}
@@ -399,13 +453,13 @@ export const Dictation: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3 style={{ margin: 0 }}>{sessionForm.id ? 'Sửa session' : 'Tạo session'}</h3>
+              <h3 style={{ margin: 0 }}>{sessionForm.id ? 'Sửa khoá học' : 'Tạo khoá học'}</h3>
               <button className="hamburger-btn" onClick={() => setSessionForm(null)}><X size={18} /></button>
             </div>
             <form onSubmit={saveSession}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label className="form-label">Tên session <span className="form-required">*</span></label>
+                  <label className="form-label">Tên khoá học <span className="form-required">*</span></label>
                   <input autoFocus required className="form-input" placeholder="VD: Daily Conversation" value={sessionForm.title} onChange={(e) => setSessionForm({ ...sessionForm, title: e.target.value })} />
                 </div>
                 <div className="form-group">
@@ -432,28 +486,43 @@ export const Dictation: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3 style={{ margin: 0 }}>{lessonForm.id ? 'Sửa bài' : 'Thêm bài'}</h3>
+              <h3 style={{ margin: 0 }}>{lessonForm.id ? 'Sửa chủ đề' : 'Thêm chủ đề'}</h3>
               <button className="hamburger-btn" onClick={() => setLessonForm(null)}><X size={18} /></button>
             </div>
             <form onSubmit={saveLesson}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label className="form-label">Tên bài <span className="form-required">*</span></label>
+                  <label className="form-label">Tên chủ đề <span className="form-required">*</span></label>
                   <input autoFocus required className="form-input" placeholder="VD: At the coffee shop" value={lessonForm.title} onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Mô tả</label>
                   <textarea className="form-input" rows={3} style={{ resize: 'none' }} value={lessonForm.description} onChange={(e) => setLessonForm({ ...lessonForm, description: e.target.value })} />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Link video bài học</label>
+                  <input type="url" className="form-input" placeholder="https://www.youtube.com/watch?v=..." value={lessonForm.videoUrl} onChange={(e) => setLessonForm({ ...lessonForm, videoUrl: e.target.value })} />
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>Hỗ trợ YouTube, Google Drive (đã chia sẻ công khai) hoặc link trực tiếp tới file video.</p>
+                </div>
                 {!lessonForm.id && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sau khi tạo, bạn sẽ được chuyển sang màn thêm câu.</p>}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setLessonForm(null)}>Hủy</button>
-                <button type="submit" className="btn btn-primary">{lessonForm.id ? 'Lưu' : 'Tạo bài'}</button>
+                <button type="submit" className="btn btn-primary">{lessonForm.id ? 'Lưu' : 'Tạo chủ đề'}</button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {generatorOpen && (
+        <LessonGenerator
+          sessions={sessions ?? []}
+          initialSessionId={sessionId}
+          onClose={() => setGeneratorOpen(false)}
+          onCreated={refresh}
+          onOpenLesson={(session, lesson) => { setGeneratorOpen(false); go({ session, lesson }); }}
+        />
       )}
 
       {importOpen && (

@@ -6,11 +6,20 @@ Tài liệu yêu cầu backend cho tính năng **Luyện chính tả tiếng Anh
 
 ## 1. Mô tả tính năng
 
-Người dùng nghe một câu tiếng Anh, gõ lại, hệ thống chỉ ra chỗ sai và nghĩa của câu.
+Người học đi qua từng **chủ đề**: xem video bài học, đọc bài đọc, chép chính tả, rồi chơi game từ vựng. Trên giao diện `Session` hiển thị là **khoá học**, `Lesson` là **chủ đề**; tên trong API không đổi.
 
 ```
-Session (bộ luyện tập)  ──<  Lesson (bài)  ──<  Sentence (câu)  ──<  Attempt (lượt gõ)
+Session (khoá học)  ──<  Lesson (chủ đề)  ──<  Sentence (câu)  ──<  Attempt (lượt gõ)
 ```
+
+Bốn phần của một chủ đề dùng chung một nguồn dữ liệu:
+
+| Phần | Dữ liệu | Ghi chú |
+|---|---|---|
+| Video | `Lesson.videoUrl` | Một link video cho mỗi chủ đề, xem 6.3 |
+| Bài đọc | Các `Sentence` theo `position` | FE ghép câu thành một văn bản liền mạch, không có API riêng |
+| Chính tả | `Sentence` + `Attempt` | Như luồng bên dưới |
+| Game | `vocabularies` của các câu | Mục 13 |
 
 Luồng thao tác trên **một câu**:
 
@@ -42,7 +51,7 @@ Cuối bài có màn tổng kết (số câu đúng, độ chính xác trung bì
 | Bảng | Trường | Ghi chú |
 |---|---|---|
 | `DictationSession` | `id`, `ownerId`, `title`, `description?`, `level` (enum), `position`, `createdAt`, `updatedAt`, `deletedAt` | |
-| `DictationLesson` | `id`, `sessionId`, `title`, `description?`, `position`, timestamps, `deletedAt` | |
+| `DictationLesson` | `id`, `sessionId`, `title`, `description?`, `videoUrl?`, `position`, timestamps, `deletedAt` | |
 | `DictationSentence` | `id`, `lessonId`, `text`, `translation?`, `note?`, `vocabularies` (JSON, mặc định `[]`), `audioFileId?`, `position`, timestamps, `deletedAt` | `text` ≤ 500 ký tự, bắt buộc. `vocabularies` xem 7.3 |
 | `DictationProgress` | `id`, `userId`, `sentenceId` (unique cùng `userId`), `status`, `attemptCount`, `bestAccuracy`, `lastInput?`, `completedAt?`, `updatedAt` | 1 dòng / user / câu |
 | `DictationAttempt` | `id`, `userId`, `sentenceId`, `input`, `isCorrect`, `accuracy`, `playCount`, `hintCount`, `revealed`, `durationMs`, `createdAt` | Lịch sử từng lượt kiểm tra |
@@ -135,7 +144,7 @@ Ví dụ: đáp án `I don't think so.`, người dùng gõ `i didn't think` ⇒
 ### 6.1 Lesson tóm tắt (dùng trong chi tiết session)
 ```json
 {
-  "id": "uuid", "sessionId": "uuid", "title": "At the coffee shop", "description": null, "position": 1024,
+  "id": "uuid", "sessionId": "uuid", "title": "At the coffee shop", "description": null, "videoUrl": null, "position": 1024,
   "sentenceCount": 8,
   "progress": { "completed": 3, "skipped": 1, "total": 8, "averageAccuracy": 87, "lastPracticedAt": "..." }
 }
@@ -145,12 +154,17 @@ Ví dụ: đáp án `I don't think so.`, người dùng gõ `i didn't think` ⇒
 ### 6.2 API
 | Method | Endpoint | Body / Ghi chú |
 |---|---|---|
-| POST | `/api/dictation/sessions/:id/lessons` | `{ "title": "...", "description": "..." }` — thêm vào cuối |
+| POST | `/api/dictation/sessions/:id/lessons` | `{ "title": "...", "description": "...", "videoUrl": "https://..." }` — thêm vào cuối |
 | PATCH | `/api/dictation/sessions/:id/lessons/reorder` | `{ "ids": [...] }` |
 | GET | `/api/dictation/lessons/:id` | Lesson tóm tắt + `session` (`id`, `title`) + `sentences` (mảng Sentence, xem 7.1) |
-| PATCH | `/api/dictation/lessons/:id` | `title`, `description` |
+| PATCH | `/api/dictation/lessons/:id` | `title`, `description`, `videoUrl` (gửi `null` hoặc chuỗi rỗng để gỡ video) |
 | DELETE | `/api/dictation/lessons/:id` | Xóa mềm lesson + sentence |
 | POST | `/api/dictation/lessons/:id/reset-progress` | Xóa `DictationProgress` của user cho mọi câu trong bài (giữ lịch sử `Attempt`). Dùng cho "Làm lại cả bài". Phản hồi: lesson như GET |
+
+### 6.3 Video bài học (`videoUrl`)
+
+* Tuỳ chọn; chỉ nhận link `http` / `https`, tối đa 2000 ký tự. BE không tự tải video từ link. Video tạo bằng `vdev-video` được upload qua `POST /api/storage/upload`; `GET /api/storage/files/:id/download` hỗ trợ header `Range` để tua.
+* FE (`src/pages/dictation/video.ts`) nhúng YouTube (qua `youtube-nocookie.com`) và Google Drive, phát trực tiếp link file `.mp4 .webm .ogv .ogg .mov .m4v` và link `/api/storage/files/:id/download`, còn lại hiện nút mở sang trang khác.
 
 ---
 
@@ -188,7 +202,7 @@ Ví dụ: đáp án `I don't think so.`, người dùng gõ `i didn't think` ⇒
 
 ### 7.3 Từ vựng của câu (`vocabularies`)
 
-Một câu có thể có nhiều từ / cụm từ mới, dùng cho game thủ thành (mục 13) và hiển thị sau khi luyện câu.
+Một câu có thể có nhiều từ / cụm từ mới, dùng cho game Thủ thành (mục 13) và hiển thị sau khi luyện câu.
 
 * Dạng lưu và trả về: `[{ "term": "large latte", "meaning": "ly latte lớn" }]` — `term` là tiếng Anh, `meaning` là nghĩa tiếng Việt.
 * Giới hạn: tối đa **20** từ / câu; `term` ≤ 100 ký tự, `meaning` ≤ 200 ký tự; cả hai bắt buộc.
@@ -343,7 +357,7 @@ Mảng session, hoặc object `{ "sessions": [...] }`. Câu có thể là chuỗ
   ]
 }
 ```
-`level` không phân biệt hoa thường, bỏ trống ⇒ `A1`. `lessons` / `sentences` có thể rỗng.
+`level` không phân biệt hoa thường, bỏ trống ⇒ `A1`. `lessons` / `sentences` có thể rỗng. Mỗi lesson có thể có `videoUrl` (xem 6.3).
 
 `vocabularies` của câu chấp nhận các dạng: mảng `{ term, meaning }`; object `{ "từ": "nghĩa" }`; mảng chuỗi `["large latte: ly latte lớn"]`; hoặc một chuỗi `"large latte: ly latte lớn; please: làm ơn"`. Lỗi ghi theo vị trí, ví dụ `sessions[0].lessons[0].sentences[2].vocabularies [0]: thiếu nghĩa (meaning)`.
 
@@ -357,6 +371,7 @@ Mảng session, hoặc object `{ "sessions": [...] }`. Câu có thể là chuỗ
 | Session description | `Session description`, `Mô tả bộ` | |
 | Lesson | `Lesson`, `Bài` | ✔ |
 | Lesson description | `Lesson description`, `Mô tả bài` | |
+| Video | `Video`, `Video URL`, `Link video` | |
 | Text | `Text`, `Sentence`, `Câu` | ✔ |
 | Translation | `Translation`, `Nghĩa` | |
 | Note | `Note`, `Ghi chú` | |
@@ -365,7 +380,7 @@ Mảng session, hoặc object `{ "sessions": [...] }`. Câu có thể là chuỗ
 Quy tắc:
 * Ô `Session` / `Lesson` để trống ⇒ dùng giá trị của dòng trên (tiện khi merge ô). Đổi session mà không ghi `Lesson` ⇒ lỗi.
 * Cùng tên session / bài (không phân biệt hoa thường) ⇒ gộp chung, giữ thứ tự xuất hiện.
-* `Level`, mô tả: lấy giá trị không rỗng đầu tiên của session / bài.
+* `Level`, mô tả, `Video`: lấy giá trị không rỗng đầu tiên của session / bài.
 * Dòng không có `Text` (chỉ có Session hoặc Session + Lesson) ⇒ tạo session / bài rỗng; dòng trống hoàn toàn bị bỏ qua.
 * Lỗi ghi theo số dòng Excel (`Dòng 5: ...`).
 * Cột `Vocabulary`: các cặp `từ: nghĩa` (hoặc `từ = nghĩa`) cách nhau bằng `;` hoặc xuống dòng trong ô, ví dụ `large latte: ly latte lớn; please: làm ơn`. Lỗi: `Dòng 3: từ vựng "oops": cần dạng "từ: nghĩa" hoặc { term, meaning }`.
@@ -377,7 +392,7 @@ Phản hồi `summary` có thêm `vocabularies` (tổng số từ vựng sẽ t�
 
 ## 13. Game từ vựng
 
-Năm trò chơi dùng chung danh sách từ vựng (7.3). Mọi trò đều đọc to từ tiếng Anh khi trả lời đúng (Web Speech API giọng en-US, theo cài đặt giọng / tốc độ của màn luyện tập; có nút tắt âm thanh).
+Chỉ còn một trò **Thủ thành**, dùng danh sách từ vựng (7.3). Khi bị bắn hạ, mỗi con quỷ đọc to từ tiếng Anh bằng giọng riêng (Web Speech API: giọng tiếng Anh của thiết bị, bỏ giọng đùa của macOS; cao độ và tốc độ theo màu quỷ, nhân với tốc độ ở cài đặt luyện tập). Có thêm hiệu ứng âm thanh; nút âm thanh tắt cả hai.
 
 ### 13.1 Lấy danh sách từ
 | Method | Endpoint | Ghi chú |
@@ -397,22 +412,28 @@ Thứ tự theo bài → câu; bỏ trùng theo khoá so sánh (7.3), giữ lầ
 ]
 ```
 
-### 13.2 Các trò chơi (FE — `vdev-admin/src/pages/dictation/games/`)
+### 13.2 Thủ thành (FE — `vdev-admin/src/pages/dictation/games/`)
 
-| Trò | File | Cách chơi | Độ khó (Dễ / Vừa / Khó) | Tối thiểu |
-|---|---|---|---|---|
-| Thủ thành | `DefenseGame.tsx` | Nghĩa tiếng Việt rơi xuống thành, gõ từ tiếng Anh + Enter để phá hủy. 5 mạng; nghĩa chạm thành ⇒ mất mạng, hiện đáp án; combo mỗi 10 từ ⇒ hồi 1 mạng. Rơi quá nửa sân ⇒ hiện chữ cái đầu (`l____ l____`). Tốc độ tự điều chỉnh: mỗi từ phá được +1.5% (tối đa ×1.4), mỗi từ chạm thành −15% (không dưới ×1) | rơi 16 / 11 / 7.5 s; xuất hiện mỗi 3.4 / 2.4 / 1.6 s; tối đa 3 / 4 / 6 ô trên sân | 1 từ |
-| Đánh quái | `MonsterGame.tsx` | Từ chia thành các màn 3–4 quái (chia đều, ví dụ 330 từ ⇒ 83 màn). Mỗi quái đọc một từ (quái đang chọn đọc khi vào màn / khi được chọn; chạm quái hoặc "Nghe lại" để nghe lại), chỉ hiện số ký tự. Gõ đúng từ của bất kỳ quái nào còn sống ⇒ hạ quái đó. Hạ hết quái mới qua màn; hết từ ⇒ thắng (không có thua). Gõ sai tính vào quái đang chọn và mở dần gợi ý; "Xem đáp án" hiện từ nhưng vẫn phải gõ lại để hạ. Quái phải gợi ý / sai / xem đáp án ⇒ vào danh sách ôn, không tính "Đúng"; +5 điểm nếu hạ ngay lần đầu | hiện nghĩa sau 0 / 1 / 2 lần sai; hiện chữ cái đầu sau 1 / 2 / 4 lần sai | 1 từ |
-| Trắc nghiệm tốc độ | `QuizGame.tsx` | Mỗi từ một câu, ngẫu nhiên chiều Việt → Anh hoặc Anh → Việt (chiều Anh → Việt đọc to từ hỏi). 4 lựa chọn (đáp án nhiễu lấy từ các từ khác); phím 1–4 trên máy tính | 12 / 8 / 5 s mỗi câu | 2 từ |
-| Ghép cặp | `MatchGame.tsx` | Hai cột Anh / Việt xáo trộn, chạm từ rồi chạm nghĩa. Chia lượt; hết giờ ⇒ cặp còn lại tính là sai. Ghép nhầm ⇒ cả hai từ vào danh sách ôn | 4 / 5 / 6 cặp mỗi lượt, 12 / 8 / 5 s mỗi cặp | 2 từ |
-| Xếp chữ | `ScrambleGame.tsx` | Chữ cái của từ bị xáo thành ô; chạm (hoặc gõ phím) theo thứ tự, chạm ô đã điền để gỡ. Gợi ý khoá chữ đúng tiếp theo (−5 điểm); bỏ qua / hết giờ ⇒ hiện đáp án | không giới hạn / 40 s / 20 s mỗi từ | 1 từ |
+| File | Vai trò |
+|---|---|
+| `VocabGames.tsx` | Màn chờ, độ khó, kết quả, kỷ lục |
+| `DefenseGame.tsx` | Luật chơi, điểm, ô nhập |
+| `defenseScene.ts` | Đồ hoạ Canvas 2D tự vẽ, không dùng file ảnh; chỉ vẽ, không chứa luật |
+| `defenseSound.ts` | Hiệu ứng âm thanh tổng hợp bằng Web Audio, không dùng file âm thanh |
 
-* So khớp đáp án gõ phím bằng khoá so sánh (7.3): không phân biệt hoa thường, dấu câu.
-* Ô đáp án của các trò gõ phím (`AnswerForm` trong `GameStage.tsx`) có nút **EN**: đổi ô sang `type="password"` (chữ vẫn hiện nhờ `-webkit-text-security: none`) để bàn phím điện thoại tắt gõ Telex/VNI; lựa chọn lưu ở `localStorage`.
-* Điểm: mỗi câu đúng khoảng 10 điểm + thưởng thời gian (trả lời càng nhanh càng cao) + `min(combo, 10) × 2`. Sai / hết giờ ⇒ combo về 0.
-* Kết thúc: điểm, số đúng / tổng, combo cao nhất, tỉ lệ chính xác, danh sách "từ cần ôn lại" (chạm để nghe), nút "Ôn từ sai" (chơi lại chỉ với các từ đó), "Chơi lại", "Trò khác".
-* Kỷ lục theo trò + bài / session + độ khó, độ khó đã chọn và bật / tắt âm thanh lưu ở `localStorage`. Phase 1 **không** lưu kết quả game lên BE.
-* **Mobile:** khi đang chơi, game chiếm toàn màn hình và co theo `visualViewport` để sân chơi + ô nhập luôn nằm trên bàn phím ảo; rung nhẹ (`navigator.vibrate`) khi đúng / sai; các trò chạm (trắc nghiệm, ghép cặp, xếp chữ) không cần bàn phím.
+* **Cách chơi:** Quỷ mang biển nghĩa tiếng Việt lao xuống thành, gõ từ tiếng Anh + Enter để nỏ bắn hạ. Tối thiểu 1 từ.
+* **Mạng:** 5 mạng; quỷ chạm thành ⇒ mất mạng, hiện đáp án kèm nghĩa; combo mỗi 10 từ ⇒ hồi 1 mạng. Mỗi mạng mất thêm một đám cháy trên tường thành.
+* **Gợi ý:** Rơi quá nửa sân ⇒ hiện chữ cái đầu (`l____ l____`).
+* **Tốc độ:** mỗi từ phá được +1.5% (tối đa ×1.4), mỗi từ chạm thành −15% (không dưới ×1).
+* **Độ khó (Dễ / Vừa / Khó):** rơi 20 / 14 / 9.5 s (quỷ bay vào từ phía trên sân); xuất hiện mỗi 3.4 / 2.4 / 1.6 s; tối đa 3 / 4 / 6 quỷ trên sân.
+* **Điểm:** mỗi từ 10 điểm + thưởng theo độ cao còn lại (tối đa 10) + `min(combo, 10) × 2`. Sai / chạm thành ⇒ combo về 0.
+* **Hiệu ứng theo combo:** từ 5 đạn xanh, từ 10 đạn tím và nổ lớn hơn. Gõ sai thì nỏ bắn trượt.
+* **Kết thúc:** cảnh pháo hoa hoặc thành sụp khoảng 2 giây, rồi hiện điểm, số đúng / tổng, combo cao nhất, tỉ lệ chính xác, danh sách "từ cần ôn lại" (chạm để nghe), nút "Ôn từ sai", "Chơi lại".
+* So khớp đáp án bằng khoá so sánh (7.3): không phân biệt hoa thường, dấu câu.
+* Ô đáp án (`AnswerForm` trong `GameStage.tsx`) có nút **EN**: đổi ô sang `type="password"` (chữ vẫn hiện nhờ `-webkit-text-security: none`) để bàn phím điện thoại tắt gõ Telex/VNI; lựa chọn lưu ở `localStorage`.
+* Kỷ lục theo bài / session + độ khó, độ khó đã chọn và bật / tắt âm thanh lưu ở `localStorage`. Phase 1 **không** lưu kết quả game lên BE.
+* **Mobile:** khi đang chơi, game chiếm toàn màn hình và co theo `visualViewport` để sân chơi + ô nhập luôn nằm trên bàn phím ảo; rung nhẹ (`navigator.vibrate`) khi đúng / sai.
+* Người dùng bật `prefers-reduced-motion` thì không rung màn hình và không nháy đỏ.
 
 ### 13.3 Phase 2 (đề xuất)
-* `POST /api/dictation/game-results` lưu điểm theo trò, từ cần ôn ⇒ kỷ lục đồng bộ giữa thiết bị, thống kê "từ hay quên" để ôn lại.
+* `POST /api/dictation/game-results` lưu điểm, từ cần ôn ⇒ kỷ lục đồng bộ giữa thiết bị, thống kê "từ hay quên" để ôn lại.

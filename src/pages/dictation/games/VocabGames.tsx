@@ -1,77 +1,52 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api, getErrorMessage } from '../../../services/api';
-import { BookOpen, Castle, Gamepad2, Ghost, Link2, Puzzle, RotateCcw, Trophy, Volume2, VolumeX, Zap } from 'lucide-react';
+import { BookOpen, Gamepad2, RotateCcw, Swords, Trophy, Volume2, VolumeX } from 'lucide-react';
 import { GameStage } from './GameStage';
 import { DefenseGame } from './DefenseGame';
-import { MonsterGame } from './MonsterGame';
-import { QuizGame } from './QuizGame';
-import { MatchGame } from './MatchGame';
-import { ScrambleGame } from './ScrambleGame';
-import { DIFFICULTY_LABEL, type Difficulty, type GameProps, type GameResult, type GameWord, readStore, speakTerm, unlockSpeech, writeStore } from './common';
+import { createDefenseScene } from './defenseScene';
+import { unlockSfx } from './defenseSound';
+import { DIFFICULTY_LABEL, type Difficulty, type GameResult, type GameWord, readStore, speakTerm, startLoop, unlockSpeech, writeStore } from './common';
 
-type Mode = 'defense' | 'monster' | 'quiz' | 'match' | 'scramble';
-
-interface ModeInfo {
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  minWords: number;
-  typing: boolean; // needs the on-screen keyboard on phones
-  headline: [win: string, lose: string];
-  render: (props: GameProps) => React.ReactNode;
-}
-
-const MODES: Record<Mode, ModeInfo> = {
-  defense: {
-    title: 'Thủ thành',
-    description: 'Nghĩa tiếng Việt rơi xuống thành — gõ đúng từ tiếng Anh để phá hủy.',
-    icon: Castle,
-    minWords: 1,
-    typing: true,
-    headline: ['Giữ thành thành công!', 'Thành đã thất thủ'],
-    render: (props) => <DefenseGame {...props} />
-  },
-  monster: {
-    title: 'Đánh quái',
-    description: 'Mỗi màn 3–4 quái, mỗi con đọc một từ — nghe và gõ đúng để hạ hết quái rồi qua màn.',
-    icon: Ghost,
-    minWords: 1,
-    typing: true,
-    headline: ['Đã dọn sạch quái!', 'Đã dọn sạch quái!'],
-    render: (props) => <MonsterGame {...props} />
-  },
-  quiz: {
-    title: 'Trắc nghiệm tốc độ',
-    description: 'Chọn 1 trong 4 đáp án trước khi hết giờ, hai chiều Anh ↔ Việt.',
-    icon: Zap,
-    minWords: 2,
-    typing: false,
-    headline: ['Phản xạ rất nhanh!', 'Ôn thêm rồi thử lại nhé'],
-    render: (props) => <QuizGame {...props} />
-  },
-  match: {
-    title: 'Ghép cặp',
-    description: 'Nối từ tiếng Anh với nghĩa của nó theo từng lượt có giới hạn thời gian.',
-    icon: Link2,
-    minWords: 2,
-    typing: false,
-    headline: ['Ghép cặp hoàn hảo!', 'Còn vài cặp bị nhầm'],
-    render: (props) => <MatchGame {...props} />
-  },
-  scramble: {
-    title: 'Xếp chữ',
-    description: 'Các chữ cái bị xáo trộn — sắp lại thành từ đúng chính tả.',
-    icon: Puzzle,
-    minWords: 1,
-    typing: false,
-    headline: ['Chính tả chuẩn!', 'Ôn thêm rồi thử lại nhé'],
-    render: (props) => <ScrambleGame {...props} />
-  }
-};
-
-const MODE_ORDER: Mode[] = ['defense', 'monster', 'quiz', 'match', 'scramble'];
+const GAME_TITLE = 'Thủ thành';
 const SOUND_KEY = 'dictation_game_sound';
 const DIFFICULTY_KEY = 'dictation_game_difficulty';
+// Kept to the sides so they don't cover the title and start button
+const POSTER_IMPS = [
+  { uid: 1, x: 0.1, y: 0.72, meaning: '', mask: null },
+  { uid: 2, x: 0.9, y: 0.5, meaning: '', mask: null }
+];
+
+// Live game scene as the start screen artwork
+const GamePoster: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const field = fieldRef.current;
+    const canvas = canvasRef.current;
+    if (!field || !canvas) return;
+    const scene = createDefenseScene(canvas);
+    const fit = () => scene.resize(field.clientWidth, field.clientHeight);
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(field);
+    const stop = startLoop((dt) => {
+      scene.render(POSTER_IMPS, 5, dt);
+      return true;
+    });
+    return () => {
+      observer.disconnect();
+      stop();
+    };
+  }, []);
+
+  return (
+    <div ref={fieldRef} className="vd-poster">
+      <canvas ref={canvasRef} className="vd-canvas" aria-hidden="true" />
+      <div className="vd-poster-body">{children}</div>
+    </div>
+  );
+};
 
 interface VocabGamesProps {
   scope: 'lesson' | 'session';
@@ -81,7 +56,6 @@ interface VocabGamesProps {
 
 export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) => {
   const [words, setWords] = useState<GameWord[] | null>(null);
-  const [mode, setMode] = useState<Mode | null>(null);
   const [playing, setPlaying] = useState<{ run: number; words: GameWord[] } | null>(null);
   const [result, setResult] = useState<(GameResult & { newRecord: boolean }) | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>(() => (readStore(DIFFICULTY_KEY) as Difficulty) || 'normal');
@@ -101,13 +75,13 @@ export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) =
     return () => { cancelled = true; };
   }, [scope, id]);
 
-  const bestKey = (m: Mode) => `dictation_game_best:${m}:${scope}:${id}:${difficulty}`;
-  const bestOf = (m: Mode) => Number(readStore(bestKey(m))) || 0;
+  const bestKey = `dictation_game_best:defense:${scope}:${id}:${difficulty}`;
+  const best = Number(readStore(bestKey)) || 0;
 
-  const start = (m: Mode, list: GameWord[]) => {
-    // Runs inside the click, so iOS lets the game speak later from timers / animation frames
+  const start = (list: GameWord[]) => {
+    // Runs inside the click, so iOS lets the game speak and play effects later from timers / animation frames
     unlockSpeech();
-    setMode(m);
+    unlockSfx();
     setResult(null);
     setPlaying((p) => ({ run: (p?.run ?? 0) + 1, words: list }));
   };
@@ -117,14 +91,13 @@ export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) =
   playingRef.current = playing;
   const run = playing?.run;
   const finish = useCallback((r: GameResult) => {
-    if (!mode || playingRef.current?.run !== run) return;
+    if (playingRef.current?.run !== run) return;
     playingRef.current = null;
-    const key = `dictation_game_best:${mode}:${scope}:${id}:${difficulty}`;
-    const newRecord = r.score > (Number(readStore(key)) || 0);
-    if (newRecord) writeStore(key, String(r.score));
+    const newRecord = r.score > (Number(readStore(bestKey)) || 0);
+    if (newRecord) writeStore(bestKey, String(r.score));
     setResult({ ...r, newRecord });
     setPlaying(null);
-  }, [run, mode, scope, id, difficulty]);
+  }, [run, bestKey]);
 
   const changeDifficulty = (d: Difficulty) => {
     setDifficulty(d);
@@ -144,19 +117,17 @@ export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) =
         <Gamepad2 className="empty-state-icon" size={32} />
         <p>Chưa có từ vựng để chơi.</p>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          Thêm từ vựng cho câu ở “Quản lý câu” (mỗi dòng <code>large latte: ly latte lớn</code>) hoặc cột <code>vocabularies</code> khi import.
+          Thêm từ vựng cho câu ở tab “Nội dung” (mỗi dòng <code>large latte: ly latte lớn</code>) hoặc cột <code>vocabularies</code> khi import.
         </p>
         {onManage && <button className="btn btn-primary mt-4" onClick={onManage}>Thêm từ vựng</button>}
       </div>
     );
   }
 
-  if (playing && mode) {
+  if (playing) {
     return (
-      <GameStage title={MODES[mode].title} onExit={() => setPlaying(null)}>
-        <React.Fragment key={playing.run}>
-          {MODES[mode].render({ words: playing.words, difficulty, sound, onFinish: finish })}
-        </React.Fragment>
+      <GameStage title={GAME_TITLE} onExit={() => setPlaying(null)}>
+        <DefenseGame key={playing.run} words={playing.words} difficulty={difficulty} sound={sound} onFinish={finish} />
       </GameStage>
     );
   }
@@ -174,14 +145,13 @@ export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) =
     </div>
   );
 
-  if (result && mode) {
-    const info = MODES[mode];
+  if (result) {
     return (
       <div className="dc-practice">
         <div className="card gm-result">
           <Trophy size={36} style={{ color: result.won ? 'var(--success)' : 'var(--danger)' }} />
-          <h2>{result.won ? info.headline[0] : info.headline[1]}</h2>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{info.title} · {DIFFICULTY_LABEL[difficulty]}</span>
+          <h2>{result.won ? 'Giữ thành thành công!' : 'Thành đã thất thủ'}</h2>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{GAME_TITLE} · {DIFFICULTY_LABEL[difficulty]}</span>
           <div className="gm-stats">
             {[
               ['Điểm', result.score],
@@ -196,7 +166,7 @@ export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) =
             ))}
           </div>
           <div style={{ fontSize: '0.85rem', color: result.newRecord ? 'var(--success)' : 'var(--text-muted)', fontWeight: result.newRecord ? 600 : 400 }}>
-            {result.newRecord ? 'Kỷ lục mới!' : `Kỷ lục: ${bestOf(mode)}`}
+            {result.newRecord ? 'Kỷ lục mới!' : `Kỷ lục: ${best}`}
           </div>
           {result.missed.length > 0 && (
             <div style={{ width: '100%', textAlign: 'left' }}>
@@ -214,11 +184,10 @@ export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) =
           )}
           {settingsRow}
           <div className="gm-actions">
-            <button className="btn btn-secondary" onClick={() => { setResult(null); setMode(null); }}><Gamepad2 size={16} /> Trò khác</button>
-            {result.missed.length >= info.minWords && (
-              <button className="btn btn-secondary" onClick={() => start(mode, result.missed)}>Ôn từ sai</button>
+            {result.missed.length > 0 && (
+              <button className="btn btn-secondary" onClick={() => start(result.missed)}>Ôn từ sai</button>
             )}
-            <button className="btn btn-primary" onClick={() => start(mode, words)}><RotateCcw size={16} /> Chơi lại</button>
+            <button className="btn btn-primary" onClick={() => start(words)}><RotateCcw size={16} /> Chơi lại</button>
           </div>
         </div>
       </div>
@@ -227,35 +196,13 @@ export const VocabGames: React.FC<VocabGamesProps> = ({ scope, id, onManage }) =
 
   return (
     <div className="dc-practice">
-      <div className="flex justify-between align-center" style={{ gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <b>Chọn trò chơi</b>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{words.length} từ vựng {scope === 'session' ? 'trong cả session' : 'trong bài'}</div>
-        </div>
-        {settingsRow}
-      </div>
-
-      <div className="gm-modes">
-        {MODE_ORDER.map((m) => {
-          const info = MODES[m];
-          const Icon = info.icon;
-          const disabled = words.length < info.minWords;
-          const best = bestOf(m);
-          return (
-            <button key={m} className="gm-mode" disabled={disabled} onClick={() => start(m, words)}>
-              <span className="gm-mode-icon"><Icon size={22} /></span>
-              <span className="gm-mode-body">
-                <b>{info.title}</b>
-                <span>{info.description}</span>
-                <span className="gm-mode-meta">
-                  {disabled ? `Cần ít nhất ${info.minWords} từ` : best ? `Kỷ lục: ${best}` : 'Chưa chơi'}
-                  {info.typing && ' · cần gõ phím'}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <GamePoster>
+        <h2>{GAME_TITLE}</h2>
+        <p>Quỷ mang nghĩa tiếng Việt lao xuống thành. Gõ đúng từ tiếng Anh để nỏ bắn hạ chúng.</p>
+        <button className="btn vd-start" onClick={() => start(words)}><Swords size={18} /> Vào trận</button>
+        <span className="vd-poster-meta">{words.length} từ vựng {scope === 'session' ? 'trong cả khoá học' : 'trong chủ đề'} · {best ? `Kỷ lục ${DIFFICULTY_LABEL[difficulty]}: ${best}` : 'Chưa có kỷ lục'}</span>
+      </GamePoster>
+      {settingsRow}
 
       <details className="gm-vocab">
         <summary><BookOpen size={14} /> Xem {words.length} từ vựng trước khi chơi</summary>

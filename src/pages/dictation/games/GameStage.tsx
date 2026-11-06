@@ -41,21 +41,6 @@ export const GameStage: React.FC<{ title: string; onExit: () => void; children: 
   );
 };
 
-export const GameHud: React.FC<{ score: number; combo: number; progress: string; children?: React.ReactNode }> = ({ score, combo, progress, children }) => (
-  <div className="gm-hud">
-    {children}
-    <span><b>{score}</b> điểm</span>
-    {combo > 1 && <span className="gm-combo">x{combo}</span>}
-    <span className="gm-progress">{progress}</span>
-  </div>
-);
-
-export const TimerBar: React.FC<{ ratio: number }> = ({ ratio }) => (
-  <div className={`gm-timer ${ratio < 0.3 ? 'low' : ''}`}>
-    <div style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%` }} />
-  </div>
-);
-
 // Pages can't turn off a phone's Vietnamese IME (Telex turns "nurse" into "núe"), but keyboards drop it
 // in password fields, so the EN toggle renders the answer box as a password input with visible text
 const PLAIN_KEYS_KEY = 'dictation_game_plain_keyboard';

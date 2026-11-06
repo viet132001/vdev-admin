@@ -1,8 +1,8 @@
-import { loadSettings, playSentence } from '../media';
+import { englishVoices, loadSettings, playSentence, speakAs } from '../media';
 
 export { unlockSpeech } from '../media';
 
-// Shared types and helpers for the vocabulary mini-games (see src/doc/dictation-api.md section 13)
+// Shared types and helpers for the vocabulary game (see src/doc/dictation-api.md section 13)
 
 export interface GameWord {
   term: string;
@@ -50,6 +50,25 @@ export const maskTerm = (term: string, reveal = 1) =>
 export const speakTerm = (term: string) => {
   const settings = loadSettings();
   return playSentence({ text: term }, settings.rate, settings.voiceURI);
+};
+
+// macOS joke voices are too distorted to learn pronunciation from
+const NOVELTY_VOICE = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Deranged|Good News|Hysterical|Jester|Organ|Pipe Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox)\b/i;
+// One per imp color, so each kind of imp has its own character. Kept in a range that stays easy to understand.
+const IMP_VOICES = [
+  { pitch: 0.7, rate: 0.92 },
+  { pitch: 1.35, rate: 1.05 },
+  { pitch: 1, rate: 0.98 },
+  { pitch: 1.6, rate: 1.1 }
+];
+
+// Every imp says its word in its own voice. Devices with few voices still sound different through pitch and speed.
+export const speakAsImp = (term: string, uid: number) => {
+  const settings = loadSettings();
+  const voices = englishVoices().filter((v) => !NOVELTY_VOICE.test(v.name));
+  const character = IMP_VOICES[uid % IMP_VOICES.length];
+  const voiceURI = voices.length ? voices[uid % voices.length].voiceURI : settings.voiceURI;
+  return speakAs(term, settings.rate * character.rate, voiceURI, character.pitch);
 };
 
 // Short haptic feedback on phones that support it
