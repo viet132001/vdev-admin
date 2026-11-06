@@ -1,17 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CircleCheck, CircleX, Loader2, RotateCcw, Sparkles, X } from 'lucide-react';
+import { CircleCheck, CircleX, Loader2, RotateCcw, Sparkles, Video, X } from 'lucide-react';
 import { api, getErrorMessage } from '../../services/api';
 import { useBusy } from '../tasks/agent';
 import { Markdown } from '../tasks/PlanPanel';
-import { WORKER_COMMAND, createJob, getJob, jobAction, jobVideoUrl, listJobs, workerHealth, type LessonJob } from './lessonWorker';
+import { VideoPublish } from './VideoPublish';
+import { WORKER_COMMAND, createJob, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, workerHealth, type LessonJob } from './lessonWorker';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const NEW_COURSE = '__new';
 const TASK_PROJECT_NAME = 'Bài học tiếng Anh';
 const POLL_MS = 2000;
 const WORDS = { min: 30, max: 600 };
+const REELS_SAFE_WORDS = 110;
 const VOCABULARY = { min: 0, max: 40 };
 const FINISHED = ['DONE', 'CANCELLED'];
+const RECENT_VIDEOS = 5;
 
 const shortError = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
@@ -39,6 +42,9 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
   const initial = sessions.find((s) => s.id === initialSessionId) ?? sessions[0] ?? null;
   const [workerState, setWorkerState] = useState<'checking' | 'online' | 'offline'>('checking');
   const [voices, setVoices] = useState('');
+  const [facebookReady, setFacebookReady] = useState(false);
+  const [youtubeReady, setYoutubeReady] = useState(false);
+  const [recent, setRecent] = useState<LessonJob[]>([]);
   const [job, setJob] = useState<LessonJob | null>(null);
   const [feedback, setFeedback] = useState('');
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -48,7 +54,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     topic: '',
     level: initial?.level ?? 'A2',
     format: 'dialogue' as 'dialogue' | 'reading',
-    words: 150,
+    words: 100,
     vocabulary: 10,
     video: true,
     aspect: '9:16' as '9:16' | '16:9',
@@ -63,9 +69,12 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     try {
       const health = await workerHealth();
       setVoices(health.voices);
+      setFacebookReady(Boolean(health.facebook));
+      setYoutubeReady(Boolean(health.youtube));
       const jobs = await listJobs();
       // Pick up work still in progress after the dialog or the page was closed
-      setJob(jobs.find((j) => !FINISHED.includes(j.status)) ?? null);
+      setJob(jobs.find((j) => !FINISHED.includes(j.status) || isPublishing(j)) ?? null);
+      setRecent(jobs.filter((j) => j.status === 'DONE' && j.videoPath).slice(0, RECENT_VIDEOS));
       setWorkerState('online');
     } catch {
       setWorkerState('offline');
@@ -76,13 +85,15 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
 
   const jobId = job?.id;
   const jobStatus = job?.status;
+  const publishingNow = !!job && isPublishing(job);
   useEffect(() => {
-    if (!jobId || jobStatus === 'DONE' || jobStatus === 'CANCELLED' || jobStatus === 'FAILED' || jobStatus === 'PLAN_READY') return;
+    if (!jobId) return;
+    if (!publishingNow && (jobStatus === 'DONE' || jobStatus === 'CANCELLED' || jobStatus === 'FAILED' || jobStatus === 'PLAN_READY')) return;
     const timer = window.setInterval(() => {
       getJob(jobId).then(setJob).catch(() => setWorkerState('offline'));
     }, POLL_MS);
     return () => window.clearInterval(timer);
-  }, [jobId, jobStatus]);
+  }, [jobId, jobStatus, publishingNow]);
 
   // The lesson goes to VDEV from here, on the user's own login; the worker never sees a token
   const publish = useCallback(async (current: LessonJob) => {
@@ -224,7 +235,12 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
       { label: 'Claude phân tích và lập kế hoạch', done: !['PLANNING'].includes(job.status) && !!job.plan, active: job.status === 'PLANNING' },
       { label: 'Claude soạn bài', done: !!job.lesson, active: job.status === 'WRITING' },
       { label: 'Đưa bài lên khoá học', done: !!job.meta?.lessonId && job.status !== 'LESSON_READY', active: job.status === 'LESSON_READY' },
-      ...(job.request.video ? [{ label: 'Tạo video trên máy', done: !!job.videoPath, active: job.status === 'RENDERING' }] : [])
+      ...(job.request.video ? [
+        { label: 'Tạo video trên máy', done: !!job.videoPath && job.status !== 'RENDERING', active: job.status === 'RENDERING' },
+        { label: 'Đăng lên Facebook', done: ['DRAFT', 'PUBLISHED', 'SUBMITTED'].includes(job.facebook?.status ?? ''), active: job.facebook?.status === 'UPLOADING' || job.facebook?.status === 'PROCESSING' },
+        { label: 'Đăng lên YouTube', done: job.youtube?.status === 'DONE', active: job.youtube?.status === 'UPLOADING' },
+        { label: 'Cập nhật link video vào bài học', done: !!job.meta?.videoLinkUrl, active: false }
+      ] : [])
     ];
     const failedLabel = job.status === 'FAILED' ? steps.find((s) => !s.done)?.label : null;
 
@@ -263,6 +279,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               </>
             )}
             <p className="lg-meta">Task nằm ở bảng “{TASK_PROJECT_NAME}”, đang chờ bạn đánh dấu Done.</p>
+            {job.videoPath && <VideoPublish job={job} facebookReady={facebookReady} youtubeReady={youtubeReady} onChange={setJob} onLinked={onCreated} />}
           </>
         )}
       </>,
@@ -278,7 +295,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
         {publishError && job.status === 'LESSON_READY' && <button className="btn btn-primary" onClick={() => publish(job)}><RotateCcw size={16} /> Lưu lại</button>}
         {job.status === 'DONE' && (
           <>
-            <button className="btn btn-secondary" onClick={() => setJob(null)}>Tạo bài khác</button>
+            <button className="btn btn-secondary" onClick={() => connect()}>Tạo bài khác</button>
             {job.meta?.lessonId && <button className="btn btn-primary" onClick={() => onOpenLesson(job.meta.courseId, job.meta.lessonId)}>Mở bài học</button>}
           </>
         )}
@@ -292,6 +309,22 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
         {header}
         <form onSubmit={submit}>
           <div className="modal-body">
+            {recent.length > 0 && (
+              <div className="form-group">
+                <label className="form-label">Video đã tạo</label>
+                <div className="lg-recent">
+                  {recent.map((item) => (
+                    <button key={item.id} type="button" className="lg-recent-item" onClick={() => setJob(item)}>
+                      <Video size={14} />
+                      <span>{item.lesson?.title ?? item.request.topic}</span>
+                      <span className="lg-meta" style={{ margin: 0 }}>
+                        {[item.facebook?.status === 'PUBLISHED' ? 'Facebook' : item.facebook?.status === 'DRAFT' ? 'Nháp Facebook' : null, item.youtube?.status === 'DONE' ? 'YouTube' : null].filter(Boolean).join(' · ') || 'Chưa đăng'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label">Chủ đề <span className="form-required">*</span></label>
               <input autoFocus required maxLength={150} className="form-input" placeholder="VD: Hai người bạn bàn kế hoạch cuối tuần" value={form.topic} onChange={(e) => update({ topic: e.target.value })} />
@@ -326,6 +359,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               <div className="form-group">
                 <label className="form-label">Độ dài bài (số từ)</label>
                 <input type="number" required min={WORDS.min} max={WORDS.max} step={10} className="form-input" value={form.words} onChange={(e) => update({ words: Number(e.target.value) })} />
+                {form.video && form.words > REELS_SAFE_WORDS && <p className="lg-meta">Video có thể dài hơn 90 giây, Facebook Reels sẽ không nhận. YouTube vẫn đăng được.</p>}
               </div>
               <div className="form-group">
                 <label className="form-label">Số từ vựng</label>

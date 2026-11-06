@@ -906,6 +906,14 @@ a:hover {
 .lg-dot { width: 16px; height: 16px; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: 50%; }
 .lg-error { margin: 0 0 8px; padding: 8px 10px; font-size: 0.8rem; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); border-radius: var(--radius-sm); }
 .lg-plan { max-height: 38vh; overflow-y: auto; padding: 12px; font-size: 0.85rem; line-height: 1.55; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.lg-recent { display: flex; flex-direction: column; gap: 4px; }
+.lg-recent-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; font: inherit; font-size: 0.85rem; text-align: left; color: var(--text-main); background: transparent; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer; }
+.lg-recent-item:hover { background-color: var(--bg-hover); }
+.lg-recent-item > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-facebook { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color); }
+.lg-publish-row { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color); }
+.lg-publish-name { margin: 0 0 6px; font-size: 0.85rem; font-weight: 600; }
+.lg-facebook-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .lg-video { display: block; width: 100%; max-height: 60vh; background-color: #000; border-radius: var(--radius-sm); }
 
 /* Reading passage: sentences flow as one text, side panel explains the selected one */
