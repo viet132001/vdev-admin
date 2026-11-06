@@ -51,6 +51,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     words: 150,
     vocabulary: 10,
     video: true,
+    aspect: '9:16' as '9:16' | '16:9',
     note: ''
   });
   const update = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
@@ -98,7 +99,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
         await jobAction(current.id, 'meta', { meta: { lessonId } });
       }
       if (!current.meta?.sentencesSaved) {
-        await api.post(`/api/dictation/lessons/${lessonId}/sentences/bulk`, { items: current.lesson.sentences });
+        await api.post(`/api/dictation/lessons/${lessonId}/sentences/bulk`, { items: current.lesson.sentences.map(({ phrases: _videoOnly, ...sentence }: any) => sentence) });
         await jobAction(current.id, 'meta', { meta: { sentencesSaved: true } });
       }
       await setTaskStatus(current.meta.writeTaskId, 'IN_REVIEW');
@@ -132,7 +133,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
         if (isNew) onCreated();
         const created = await createJob({
           topic: form.topic.trim(), courseTitle: course.title, level: form.level, format: form.format,
-          words: form.words, vocabulary: form.vocabulary, video: form.video, note: form.note.trim()
+          words: form.words, vocabulary: form.vocabulary, video: form.video, aspect: form.aspect, note: form.note.trim()
         });
         setJob(await jobAction(created.id, 'meta', { meta: { courseId: course.id } }));
       } catch (err) {
@@ -339,6 +340,15 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               <input type="checkbox" checked={form.video} onChange={(e) => update({ video: e.target.checked })} />
               Tạo video, lưu trên máy này (giọng đọc: {voices})
             </label>
+            {form.video && (
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <label className="form-label">Khung hình video</label>
+                <select className="form-input" value={form.aspect} onChange={(e) => update({ aspect: e.target.value as '9:16' | '16:9' })}>
+                  <option value="9:16">Dọc 9:16</option>
+                  <option value="16:9">Ngang 16:9</option>
+                </select>
+              </div>
+            )}
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>

@@ -41,7 +41,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ lessonId, title, video
           <a className="btn btn-primary mt-4" href={video.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} /> Mở video</a>
         </div>
       ) : (
-        <div className="dc-video-frame">
+        <div className={video.kind === 'file' ? 'dc-video-frame dc-video-frame-file' : 'dc-video-frame'}>
           {video.kind === 'embed' ? (
             // YouTube refuses to play without a referrer, so don't use no-referrer here
             <iframe

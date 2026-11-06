@@ -890,6 +890,9 @@ a:hover {
 .dc-video { display: flex; flex-direction: column; gap: 12px; max-width: 960px; width: 100%; margin: 0 auto; }
 .dc-video-frame { aspect-ratio: 16 / 9; width: 100%; background-color: #000; border-radius: var(--radius-md); overflow: hidden; }
 .dc-video-frame iframe, .dc-video-frame video { display: block; width: 100%; height: 100%; border: 0; }
+/* A video file may be vertical, so it keeps its own shape; only embeds need the fixed 16:9 box */
+.dc-video-frame-file { aspect-ratio: auto; }
+.dc-video-frame-file video { height: auto; max-height: 75vh; }
 
 /* Lesson generator */
 .lg-modal { max-width: 620px; }
@@ -903,7 +906,7 @@ a:hover {
 .lg-dot { width: 16px; height: 16px; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: 50%; }
 .lg-error { margin: 0 0 8px; padding: 8px 10px; font-size: 0.8rem; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); border-radius: var(--radius-sm); }
 .lg-plan { max-height: 38vh; overflow-y: auto; padding: 12px; font-size: 0.85rem; line-height: 1.55; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
-.lg-video { display: block; width: 100%; aspect-ratio: 16 / 9; background-color: #000; border-radius: var(--radius-sm); }
+.lg-video { display: block; width: 100%; max-height: 60vh; background-color: #000; border-radius: var(--radius-sm); }
 
 /* Reading passage: sentences flow as one text, side panel explains the selected one */
 .rd-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; max-width: 1120px; width: 100%; margin: 0 auto; }
