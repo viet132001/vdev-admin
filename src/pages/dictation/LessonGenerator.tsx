@@ -119,7 +119,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
         await jobAction(current.id, 'meta', { meta: { lessonId } });
       }
       if (!current.meta?.sentencesSaved) {
-        await api.post(`/api/dictation/lessons/${lessonId}/sentences/bulk`, { items: current.lesson.sentences.map(({ phrases: _videoOnly, ...sentence }: any) => sentence) });
+        await api.post(`/api/dictation/lessons/${lessonId}/sentences/bulk`, { items: current.lesson.sentences.map(({ phrases: _videoOnly, stage: _acting, ...sentence }: any) => sentence) });
         await jobAction(current.id, 'meta', { meta: { sentencesSaved: true } });
       }
       await setTaskStatus(current.meta.writeTaskId, 'IN_REVIEW');
