@@ -33,11 +33,32 @@ export interface YouTubePost {
 
 export interface PagePost {
   id: string;
+  genre?: string;
   text: string;
   scheduledAt: string;
   status: 'SCHEDULED' | 'PUBLISHED';
   permalink: string | null;
 }
+
+// Comes from the worker, so a genre added in vdev-video shows up here with no change to this page
+export interface VideoGenre {
+  id: string;
+  label: string;
+  description: string;
+  series: string;
+  channelName: string;
+  titleSuffix: string;
+  hashtags: string;
+  formats: ('dialogue' | 'reading')[];
+  styles: { id: string; label: string; aspects: ('9:16' | '16:9')[] }[];
+  facebook: boolean;
+  youtube: boolean;
+  env: { facebook: string[]; youtube: string };
+}
+
+// Jobs and posts from before genres have none: they all belong to the first series
+export const DEFAULT_GENRE = 'communication';
+export const genreIdOf = (item: { genre?: string } | null | undefined) => item?.genre ?? DEFAULT_GENRE;
 
 export interface LessonJob {
   id: string;
@@ -75,6 +96,30 @@ export const createJob = (request: unknown): Promise<LessonJob> => call('/jobs',
 export const jobAction = (id: string, action: 'feedback' | 'approve' | 'published' | 'meta' | 'retry' | 'cancel' | 'facebook' | 'youtube' | 'rerender', body: unknown = {}): Promise<LessonJob> =>
   call(`/jobs/${id}/${action}`, 'POST', body);
 export const listPosts = (): Promise<PagePost[]> => call('/posts');
-export const suggestPost = (idea: string): Promise<{ text: string }> => call('/posts/suggest', 'POST', { idea });
-export const createPost = (text: string, scheduledAt: string): Promise<PagePost> => call('/posts', 'POST', { text, scheduledAt });
+export const suggestPost = (idea: string, genre: string): Promise<{ text: string }> => call('/posts/suggest', 'POST', { idea, genre });
+export const createPost = (text: string, scheduledAt: string, genre: string): Promise<PagePost> => call('/posts', 'POST', { text, scheduledAt, genre });
+export interface FacebookChoice {
+  id: string;
+  name: string;
+  usedBy: string | null;
+}
+
+// Names and ids only: a token goes into the worker and never comes back
+export interface ChannelStatus {
+  genre: string;
+  label: string;
+  series: string;
+  scheduled: number;
+  facebook: { configured: boolean; pageId: string | null; name: string | null; expiresAt: string | null; expiryKnown: boolean; missingScopes: string[]; checkedAt: string | null };
+  youtube: { configured: boolean; channelId: string | null; title: string | null; login: { status: 'WAITING' | 'FAILED'; error: string | null } | null };
+}
+
+export interface ChannelsView {
+  youtubeClient: boolean;
+  channels: ChannelStatus[];
+}
+
+export const listChannels = (): Promise<ChannelsView> => call('/channels');
+export const saveYouTubeClient = (clientId: string, clientSecret: string): Promise<ChannelsView> => call('/channels/youtube-client', 'POST', { clientId, clientSecret });
+export const channelAction = (genre: string, action: 'facebook' | 'facebook-check' | 'facebook-remove' | 'youtube-login' | 'youtube-remove', body: unknown = {}): Promise<any> => call(`/channels/${genre}/${action}`, 'POST', body);
 export const jobVideoUrl = (id: string) => `${WORKER_URL}/videos/${id}`;

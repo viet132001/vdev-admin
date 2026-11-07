@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
-import { WORKER_COMMAND, createPost, listJobs, listPosts, suggestPost, type LessonJob, type PagePost } from './lessonWorker';
+import { DEFAULT_GENRE, WORKER_COMMAND, createPost, genreIdOf, listJobs, listPosts, suggestPost, workerHealth, type LessonJob, type PagePost, type VideoGenre } from './lessonWorker';
 import { formatDay, formatTime, jobWhen, postOnDay, sameDay, slotLabel, startOfWeek, weekSlots, type Slot } from './schedule';
 
 const POST_LIMIT = 2000;
@@ -27,8 +27,10 @@ const youtubeState = (job: LessonJob) => {
 export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { busy, run } = useBusy();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
-  const [jobs, setJobs] = useState<LessonJob[]>([]);
-  const [posts, setPosts] = useState<PagePost[]>([]);
+  const [genres, setGenres] = useState<VideoGenre[]>([]);
+  const [genreId, setGenreId] = useState(DEFAULT_GENRE);
+  const [allJobs, setJobs] = useState<LessonJob[]>([]);
+  const [allPosts, setPosts] = useState<PagePost[]>([]);
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState<Date | null>(null);
@@ -37,7 +39,8 @@ export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextJobs, nextPosts] = await Promise.all([listJobs(), listPosts()]);
+      const [health, nextJobs, nextPosts] = await Promise.all([workerHealth(), listJobs(), listPosts()]);
+      setGenres(health.genres ?? []);
       setJobs(nextJobs);
       setPosts(nextPosts);
       setOffline(false);
@@ -49,6 +52,10 @@ export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) 
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Each channel has its own week: what goes out on one channel doesn't fill a slot on another
+  const jobs = allJobs.filter((job) => genreIdOf(job.request) === genreId);
+  const posts = allPosts.filter((post) => genreIdOf(post) === genreId);
 
   const moveWeek = (weeks: number) => setWeekStart((current) => {
     const next = new Date(current);
@@ -69,7 +76,7 @@ export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
   const draft = () => run('suggest', async () => {
     try {
-      setText((await suggestPost(text.trim())).text);
+      setText((await suggestPost(text.trim(), genreId)).text);
     } catch (err) {
       alert(shortError(err, 'Claude chưa viết được bài'));
     }
@@ -77,7 +84,7 @@ export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) 
 
   const schedule = (at: Date) => run('schedule', async () => {
     try {
-      await createPost(text.trim(), at.toISOString());
+      await createPost(text.trim(), at.toISOString(), genreId);
       setComposing(null);
       setText('');
       await load();
@@ -105,6 +112,14 @@ export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) 
             </>
           ) : (
             <>
+              {genres.length > 1 && (
+                <div className="form-group">
+                  <label className="form-label">Kênh</label>
+                  <select className="form-input" value={genreId} onChange={(e) => { setGenreId(e.target.value); setComposing(null); }}>
+                    {genres.map((g) => <option key={g.id} value={g.id}>{g.label}: {g.channelName}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="flex justify-between align-center" style={{ marginBottom: 12 }}>
                 <button className="btn btn-secondary btn-sm" title="Tuần trước" onClick={() => moveWeek(-1)}><ChevronLeft size={16} /></button>
                 <strong style={{ fontSize: '0.9rem' }}>{formatDay(weekStart)} – {formatDay(weekEnd)}</strong>

@@ -5,7 +5,7 @@ import { useBusy } from '../tasks/agent';
 import { Markdown } from '../tasks/PlanPanel';
 import { CONTENT_TYPES, type ContentType } from './schedule';
 import { VideoPublish } from './VideoPublish';
-import { WORKER_COMMAND, createJob, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, workerHealth, type LessonJob } from './lessonWorker';
+import { DEFAULT_GENRE, WORKER_COMMAND, createJob, genreIdOf, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const NEW_COURSE = '__new';
@@ -33,18 +33,19 @@ const setTaskStatus = (id: string | undefined, status: string) =>
 interface LessonGeneratorProps {
   sessions: any[];
   initialSessionId: string | null;
+  channelsVersion: number;
+  onManageChannels: () => void;
   onClose: () => void;
   onCreated: () => void;
   onOpenLesson: (sessionId: string, lessonId: string) => void;
 }
 
-export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, initialSessionId, onClose, onCreated, onOpenLesson }) => {
+export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, initialSessionId, channelsVersion, onManageChannels, onClose, onCreated, onOpenLesson }) => {
   const { busy, run } = useBusy();
   const initial = sessions.find((s) => s.id === initialSessionId) ?? sessions[0] ?? null;
   const [workerState, setWorkerState] = useState<'checking' | 'online' | 'offline'>('checking');
   const [voices, setVoices] = useState('');
-  const [facebookReady, setFacebookReady] = useState(false);
-  const [youtubeReady, setYoutubeReady] = useState(false);
+  const [genres, setGenres] = useState<VideoGenre[]>([]);
   const [recent, setRecent] = useState<LessonJob[]>([]);
   const [job, setJob] = useState<LessonJob | null>(null);
   const [feedback, setFeedback] = useState('');
@@ -60,7 +61,8 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     vocabulary: 10,
     video: true,
     aspect: '9:16' as '9:16' | '16:9',
-    videoStyle: 'scene' as 'scene' | 'notebook' | 'scroll',
+    genre: DEFAULT_GENRE,
+    videoStyle: 'scene',
     note: ''
   });
   const update = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
@@ -72,8 +74,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     try {
       const health = await workerHealth();
       setVoices(health.voices);
-      setFacebookReady(Boolean(health.facebook));
-      setYoutubeReady(Boolean(health.youtube));
+      setGenres(health.genres ?? []);
       const jobs = await listJobs();
       // Pick up work still in progress after the dialog or the page was closed
       setJob(jobs.find((j) => !FINISHED.includes(j.status) || isPublishing(j)) ?? null);
@@ -85,6 +86,11 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
   }, []);
 
   useEffect(() => { connect(); }, [connect]);
+
+  // Only the readiness changes after a token is saved: reconnecting here would drop the job on screen
+  useEffect(() => {
+    if (channelsVersion) workerHealth().then((health) => setGenres(health.genres ?? [])).catch(() => undefined);
+  }, [channelsVersion]);
 
   const jobId = job?.id;
   const jobStatus = job?.status;
@@ -147,7 +153,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
         if (isNew) onCreated();
         const created = await createJob({
           topic: form.topic.trim(), courseTitle: course.title, level: form.level, contentType: form.contentType, format: form.format,
-          words: form.words, vocabulary: form.vocabulary, video: form.video, aspect: form.videoStyle === 'scroll' ? form.aspect : '9:16', videoStyle: form.videoStyle, note: form.note.trim()
+          words: form.words, vocabulary: form.vocabulary, video: form.video, aspect: currentStyle?.aspects.includes(form.aspect) ? form.aspect : currentStyle?.aspects[0], videoStyle: form.videoStyle, genre: form.genre, note: form.note.trim()
         });
         setJob(await jobAction(created.id, 'meta', { meta: { courseId: course.id } }));
       } catch (err) {
@@ -198,6 +204,17 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     }
   });
 
+  const currentGenre = genres.find((g) => g.id === form.genre);
+  const currentStyle = currentGenre?.styles.find((s) => s.id === form.videoStyle);
+  const genreOfJob = job ? genres.find((g) => g.id === genreIdOf(job.request)) : undefined;
+
+  // The genre decides which formats and styles exist, so a choice from another genre can't carry over
+  const changeGenre = (id: string) => {
+    const next = genres.find((g) => g.id === id);
+    if (!next) return;
+    update({ genre: id, videoStyle: next.styles[0].id, format: next.formats.includes(form.format) ? form.format : next.formats[0] });
+  };
+
   const changeCourse = (courseId: string) => {
     const course = sessions.find((s) => s.id === courseId);
     update({ courseId, ...(course ? { level: course.level } : {}) });
@@ -233,6 +250,14 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     );
   }
 
+  // A worker still running the old code has no genres until it restarts
+  if (!genres.length) {
+    return shell(
+      <p>Công cụ tạo bài trên máy đang chạy bản cũ. Chờ nó tự tắt sau khoảng 10 phút hoặc chạy lại <code>pnpm worker</code>, rồi kết nối lại.</p>,
+      <button className="btn btn-primary" onClick={connect}><RotateCcw size={16} /> Kết nối lại</button>
+    );
+  }
+
   if (job) {
     const steps = [
       { label: 'Claude phân tích và lập kế hoạch', done: !['PLANNING'].includes(job.status) && !!job.plan, active: job.status === 'PLANNING' },
@@ -250,7 +275,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     return shell(
       <>
         <p style={{ fontWeight: 600, margin: 0 }}>{job.request.topic}</p>
-        <p className="lg-meta">{job.episode ? `Tập ${job.episode} · ` : ''}{job.request.courseTitle} · {job.request.level} · {job.request.words} từ · {job.request.vocabulary} từ vựng</p>
+        <p className="lg-meta">{genreOfJob ? `${genreOfJob.label} · ` : ''}{job.episode ? `Tập ${job.episode} · ` : ''}{job.request.courseTitle} · {job.request.level} · {job.request.words} từ · {job.request.vocabulary} từ vựng</p>
         <ol className="lg-steps">
           {steps.map((step) => (
             <li key={step.label} className={step.done ? 'done' : step.active ? 'active' : step.label === failedLabel ? 'failed' : ''}>
@@ -282,7 +307,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               </>
             )}
             <p className="lg-meta">Task nằm ở bảng “{TASK_PROJECT_NAME}”, đang chờ bạn đánh dấu Done.</p>
-            {job.videoPath && <VideoPublish job={job} facebookReady={facebookReady} youtubeReady={youtubeReady} onChange={setJob} onLinked={onCreated} />}
+            {job.videoPath && genreOfJob && <VideoPublish key={job.id} job={job} genre={genreOfJob} onManageChannels={onManageChannels} onChange={setJob} onLinked={onCreated} />}
           </>
         )}
       </>,
@@ -329,6 +354,19 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               </div>
             )}
             <div className="form-group">
+              <label className="form-label">Thể loại</label>
+              <select className="form-input" value={form.genre} onChange={(e) => changeGenre(e.target.value)}>
+                {genres.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+              </select>
+              {currentGenre && (
+                <p className="lg-meta">
+                  {currentGenre.description}. Đăng lên kênh {currentGenre.channelName}.
+                  {(!currentGenre.facebook || !currentGenre.youtube) && ` Kênh này chưa kết nối ${[!currentGenre.facebook && 'Facebook', !currentGenre.youtube && 'YouTube'].filter(Boolean).join(' và ')}, vẫn tạo được video nhưng chưa đăng được.`}
+                  {' '}<button type="button" className="lg-link" onClick={onManageChannels}>Quản lý kênh</button>
+                </p>
+              )}
+            </div>
+            <div className="form-group">
               <label className="form-label">Chủ đề <span className="form-required">*</span></label>
               <input autoFocus required maxLength={150} className="form-input" placeholder="VD: Hai người bạn bàn kế hoạch cuối tuần" value={form.topic} onChange={(e) => update({ topic: e.target.value })} />
             </div>
@@ -336,7 +374,8 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               <label className="form-label">Chuyên mục</label>
               <select className="form-input" value={form.contentType} onChange={(e) => {
                 const contentType = e.target.value as ContentType;
-                update({ contentType, format: CONTENT_TYPES[contentType].format });
+                const suggested = CONTENT_TYPES[contentType].format;
+                update({ contentType, format: !currentGenre || currentGenre.formats.includes(suggested) ? suggested : currentGenre.formats[0] });
               }}>
                 {(Object.keys(CONTENT_TYPES) as ContentType[]).map((key) => <option key={key} value={key}>{CONTENT_TYPES[key].label}</option>)}
               </select>
@@ -363,9 +402,8 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               </div>
               <div className="form-group">
                 <label className="form-label">Hình thức</label>
-                <select className="form-input" value={form.format} onChange={(e) => update({ format: e.target.value as 'dialogue' | 'reading' })}>
-                  <option value="dialogue">Hội thoại nam và nữ</option>
-                  <option value="reading">Bài đọc</option>
+                <select className="form-input" value={form.format} disabled={(currentGenre?.formats.length ?? 0) < 2} onChange={(e) => update({ format: e.target.value as 'dialogue' | 'reading' })}>
+                  {currentGenre?.formats.map((format) => <option key={format} value={format}>{format === 'dialogue' ? 'Hội thoại nam và nữ' : 'Bài đọc'}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -386,22 +424,19 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               <input type="checkbox" checked={form.video} onChange={(e) => update({ video: e.target.checked })} />
               Tạo video, lưu trên máy này (giọng đọc: {voices})
             </label>
-            {form.video && (
+            {form.video && (currentGenre?.styles.length ?? 0) > 1 && (
               <div className="form-group" style={{ marginTop: 12 }}>
                 <label className="form-label">Kiểu video</label>
-                <select className="form-input" value={form.videoStyle} onChange={(e) => update({ videoStyle: e.target.value as 'scene' | 'notebook' | 'scroll' })}>
-                  <option value="scene">Nền động + phụ đề</option>
-                  <option value="notebook">Viết tay + bút chỉ theo giọng</option>
-                  <option value="scroll">Chạy chữ + nhạc nhẹ</option>
+                <select className="form-input" value={form.videoStyle} onChange={(e) => update({ videoStyle: e.target.value })}>
+                  {currentGenre?.styles.map((style) => <option key={style.id} value={style.id}>{style.label}</option>)}
                 </select>
               </div>
             )}
-            {form.video && form.videoStyle === 'scroll' && (
+            {form.video && (currentStyle?.aspects.length ?? 0) > 1 && (
               <div className="form-group" style={{ marginTop: 12 }}>
                 <label className="form-label">Khung hình video</label>
                 <select className="form-input" value={form.aspect} onChange={(e) => update({ aspect: e.target.value as '9:16' | '16:9' })}>
-                  <option value="9:16">Dọc 9:16</option>
-                  <option value="16:9">Ngang 16:9</option>
+                  {currentStyle?.aspects.map((aspect) => <option key={aspect} value={aspect}>{aspect === '9:16' ? 'Dọc 9:16' : 'Ngang 16:9'}</option>)}
                 </select>
               </div>
             )}
