@@ -143,6 +143,7 @@ export interface StudioShot {
   backdrop: string;
   night: boolean;
   zoom: number;
+  camera: { move: string; target: string }; // target: a cast id or 'group'
   shock: boolean;
   fall: boolean;
   actors: ShotActor[];
@@ -152,6 +153,7 @@ export interface ShotEdit {
   backdrop?: string;
   night?: boolean;
   zoom?: number;
+  camera?: { move?: string; target?: string };
   actors?: Record<string, { expression?: string; action?: string | null }>;
 }
 export type ShotEdits = Record<string, ShotEdit>;
@@ -169,6 +171,7 @@ export interface StudioView {
     expressions: { code: string; name: string; use: string }[];
     actions: { action: string; label: string }[];
     zooms: number[];
+    cameraMoves: { move: string; label: string }[];
   };
 }
 

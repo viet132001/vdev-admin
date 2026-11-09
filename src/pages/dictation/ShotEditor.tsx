@@ -241,6 +241,23 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ job, onClose, onRenderin
                     Ban đêm
                   </label>
                 </div>
+                {shot.camera && view.options.cameraMoves && (
+                <div className="se-row">
+                  <div className="form-group">
+                    <label className="form-label">Máy quay</label>
+                    <select className="form-input" disabled={readOnly} value={shot.camera.move} onChange={(e) => change(shot.key, (current) => ({ ...current, camera: { ...current.camera, move: e.target.value } }))}>
+                      {view.options.cameraMoves.map((m) => <option key={m.move} value={m.move}>{m.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Nhìn vào</label>
+                    <select className="form-input" disabled={readOnly} value={shot.camera.target} onChange={(e) => change(shot.key, (current) => ({ ...current, camera: { ...current.camera, target: e.target.value } }))}>
+                      {view.options.cast.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      <option value="group">Cả nhóm</option>
+                    </select>
+                  </div>
+                </div>
+                )}
                 {shot.actors.map((actor) => (
                   <div key={actor.id} className="se-actor">
                     <div className="se-actor-name">{name(actor.id)}{actor.falls && <span className="lg-meta" style={{ margin: 0 }}> · ngã khi nói xong</span>}</div>
