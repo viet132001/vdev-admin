@@ -130,6 +130,7 @@ export interface ShotActor {
   expression: string;
   falls: boolean;
   action: string | null;
+  beat?: number; // the word of the line the action starts on, -1 for the whole shot
 }
 
 export interface StudioShot {
@@ -154,7 +155,7 @@ export interface ShotEdit {
   night?: boolean;
   zoom?: number;
   camera?: { move?: string; target?: string };
-  actors?: Record<string, { expression?: string; action?: string | null }>;
+  actors?: Record<string, { expression?: string; action?: string | null; beat?: number | null }>;
 }
 export type ShotEdits = Record<string, ShotEdit>;
 

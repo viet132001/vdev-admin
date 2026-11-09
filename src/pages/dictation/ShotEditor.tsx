@@ -112,7 +112,7 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ job, onClose, onRenderin
       else delete next[key];
       return next;
     });
-  const changeActor = (key: string, id: string, field: 'expression' | 'action', value: string | null) =>
+  const changeActor = (key: string, id: string, field: 'expression' | 'action' | 'beat', value: string | number | null) =>
     change(key, (edit) => ({ ...edit, actors: { ...edit.actors, [id]: { ...edit.actors?.[id], [field]: value } } }));
   const reset = (key: string) => setDraft((current) => {
     const next = { ...current };
@@ -270,6 +270,15 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ job, onClose, onRenderin
                         {view.options.actions.map((a) => <option key={a.action} value={a.action} title={a.use}>{a.label}</option>)}
                       </select>
                     </div>
+                    {actor.action && shot.text && actor.beat !== undefined && (
+                      <div className="form-group" style={{ marginTop: 6, marginBottom: 0 }}>
+                        <label className="form-label">Bắt đầu ở</label>
+                        <select className="form-input" aria-label={`Hành động của ${name(actor.id)} bắt đầu ở`} disabled={readOnly} value={actor.beat} onChange={(e) => changeActor(shot.key, actor.id, 'beat', Number(e.target.value) < 0 ? null : Number(e.target.value))}>
+                          <option value={-1}>Cả câu</option>
+                          {shot.text.trim().split(/\s+/).map((word, i) => <option key={i} value={i}>Từ “{word}”</option>)}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
