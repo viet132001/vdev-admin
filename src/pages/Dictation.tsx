@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, getErrorMessage } from '../services/api';
-import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2, Video, BookOpen, Sparkles, CalendarDays, Radio } from 'lucide-react';
+import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2, Video, BookOpen, Sparkles, CalendarDays, Radio, Film } from 'lucide-react';
 import { Practice } from './dictation/Practice';
 import { LessonGenerator } from './dictation/LessonGenerator';
 import { ChannelManager } from './dictation/ChannelManager';
 import { PublishSchedule } from './dictation/PublishSchedule';
+import { VideoLibrary, type LibraryFocus } from './dictation/VideoLibrary';
 import { hasRole, useAuth } from '../context/AuthContext';
 import { Reading } from './dictation/Reading';
 import { VideoLesson } from './dictation/VideoLesson';
@@ -46,6 +47,9 @@ const ProgressBar: React.FC<{ completed: number; total: number }> = ({ completed
   </div>
 );
 
+// Stable while the courses load, so the video library doesn't reload on every render
+const NO_SESSIONS: any[] = [];
+
 export const Dictation: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const sessionId = searchParams.get('session');
@@ -62,6 +66,9 @@ export const Dictation: React.FC = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState<Date | null>(null);
+  // The library and the schedule open each other: a slot picks a video, a video shows its slot
+  const [library, setLibrary] = useState<{ focus: LibraryFocus | null } | null>(null);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [channelsVersion, setChannelsVersion] = useState(0);
   const { user } = useAuth();
@@ -235,6 +242,7 @@ export const Dictation: React.FC = () => {
             {sessions.length > 0 && (
               <div className="flex gap-2 dc-header-actions">
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null })}><Film size={16} /> Quản lý video</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setChannelsOpen(true)}><Radio size={16} /> Quản lý kênh</button>}
                 <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={16} /> Import</button>
@@ -248,6 +256,7 @@ export const Dictation: React.FC = () => {
               <p>Chưa có khoá học nào.</p>
               <div className="flex gap-2 mt-4" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null })}><Film size={16} /> Quản lý video</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setChannelsOpen(true)}><Radio size={16} /> Quản lý kênh</button>}
                 <button className="btn btn-primary" onClick={() => setSessionForm({ title: '', description: '', level: 'A2' })}><Plus size={16} /> Tạo khoá học</button>
@@ -303,6 +312,7 @@ export const Dictation: React.FC = () => {
             <div className="flex gap-2 dc-header-actions">
               <button className="btn btn-secondary" onClick={() => setSessionForm({ id: session.id, title: session.title, description: session.description || '', level: session.level })}><Pencil size={14} /> Sửa</button>
               {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null })}><Film size={16} /> Quản lý video</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setChannelsOpen(true)}><Radio size={16} /> Quản lý kênh</button>}
               <button className="btn btn-secondary" disabled={session.sentenceCount === 0} onClick={() => go({ session: sessionId, tab: 'game' })}><Gamepad2 size={16} /> Game từ vựng</button>
@@ -526,7 +536,25 @@ export const Dictation: React.FC = () => {
         </div>
       )}
 
-      {scheduleOpen && <PublishSchedule onClose={() => setScheduleOpen(false)} />}
+      {scheduleOpen && (
+        <PublishSchedule
+          initialDate={scheduleDate}
+          onPickVideo={(jobId, at) => { setScheduleOpen(false); setLibrary({ focus: { jobId, at } }); }}
+          onClose={() => { setScheduleOpen(false); setScheduleDate(null); }}
+        />
+      )}
+      {library && (
+        <VideoLibrary
+          sessions={sessions ?? NO_SESSIONS}
+          focus={library.focus}
+          channelsVersion={channelsVersion}
+          onManageChannels={() => setChannelsOpen(true)}
+          onOpenLesson={(courseId, lessonId) => { setLibrary(null); go({ session: courseId, lesson: lessonId }); }}
+          onOpenSchedule={(at) => { setLibrary(null); setScheduleDate(at); setScheduleOpen(true); }}
+          onChanged={() => { loadSessions(); loadSession(); }}
+          onClose={() => setLibrary(null)}
+        />
+      )}
       {generatorOpen && (
         <LessonGenerator
           channelsVersion={channelsVersion}

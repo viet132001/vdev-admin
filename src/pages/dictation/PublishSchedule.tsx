@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import { DEFAULT_GENRE, WORKER_COMMAND, createPost, genreIdOf, listJobs, listPosts, suggestPost, workerHealth, type LessonJob, type PagePost, type VideoGenre } from './lessonWorker';
-import { formatDay, formatTime, jobWhen, postOnDay, sameDay, slotLabel, startOfWeek, weekSlots, type Slot } from './schedule';
+import { formatDay, formatTime, jobWhen, postOnDay, sameDay, slotLabel, startOfWeek, weekSlots, type ContentType, type Slot } from './schedule';
+import { videoLinks, waitingFor } from './videoStatus';
 
 const POST_LIMIT = 2000;
 const shortError = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
@@ -24,9 +25,15 @@ const youtubeState = (job: LessonJob) => {
   return video.live === false ? <span>YouTube: đã hẹn</span> : <span className="ok">YouTube: đã đăng</span>;
 };
 
-export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+interface PublishScheduleProps {
+  initialDate?: Date | null; // opens on the week of this day
+  onPickVideo: (jobId: string, at?: Date) => void; // a video of the library, for this slot when given
+  onClose: () => void;
+}
+
+export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, onPickVideo, onClose }) => {
   const { busy, run } = useBusy();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(initialDate ?? new Date()));
   const [genres, setGenres] = useState<VideoGenre[]>([]);
   const [genreId, setGenreId] = useState(DEFAULT_GENRE);
   const [allJobs, setJobs] = useState<LessonJob[]>([]);
@@ -170,6 +177,8 @@ export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) 
                   );
                 }
                 const job = jobOn(slot);
+                // Videos made and not yet out, of this slot's category on this channel: one click to put it here
+                const waiting = !job && !past ? waitingFor(jobs, slot.kind as ContentType) : [];
                 return (
                   <div key={key} className="sc-row">
                     <div className="sc-when">{formatDay(slot.at)}<span>{formatTime(slot.at)}</span></div>
@@ -177,10 +186,22 @@ export const PublishSchedule: React.FC<{ onClose: () => void }> = ({ onClose }) 
                       <div className="sc-status" style={{ marginTop: 0 }}>{slotLabel(slot.kind)}</div>
                       {job ? (
                         <>
-                          <div className="sc-title">{job.lesson?.title ?? job.request?.topic}</div>
-                          <div className="sc-status">{facebookState(job)} · {youtubeState(job)}</div>
+                          <button className="lg-link sc-title" onClick={() => onPickVideo(job.id)}>{job.lesson?.title ?? job.request?.topic}</button>
+                          <div className="sc-status">
+                            {facebookState(job)} · {youtubeState(job)}
+                            {videoLinks(job).map((link) => <React.Fragment key={link.url}> · <a href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> {link.label}</a></React.Fragment>)}
+                          </div>
                         </>
-                      ) : <div className="sc-empty">{past ? 'Không có video' : 'Trống: tạo bài rồi hẹn giờ vào ngày này'}</div>}
+                      ) : (
+                        <>
+                          <div className="sc-empty">{past ? 'Không có video' : waiting.length ? 'Trống. Video chờ đăng của chuyên mục này:' : 'Trống: tạo bài rồi hẹn giờ vào ngày này'}</div>
+                          {waiting.length > 0 && (
+                            <div className="sc-pick">
+                              {waiting.slice(0, 4).map((item) => <button key={item.id} className="btn btn-secondary btn-sm" onClick={() => onPickVideo(item.id, slot.at)}>{item.lesson?.title ?? item.request?.topic}</button>)}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 );

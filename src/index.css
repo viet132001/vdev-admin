@@ -1275,3 +1275,34 @@ a:hover {
   .se-shots { flex-direction: row; max-height: none; overflow-x: auto; padding-bottom: 4px; }
   .se-shots li { flex: 0 0 180px; }
 }
+
+/* Video library: every lesson's video, where it is and where it went */
+.vl-modal { max-width: 760px; }
+.vl-notice { margin-bottom: 12px; padding: 10px 12px; font-size: 0.8rem; color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+.vl-toolbar { display: flex; gap: 8px; margin-bottom: 10px; }
+.vl-toolbar > select { flex: 0 0 auto; width: auto; max-width: 45%; }
+.vl-search { position: relative; flex: 1; min-width: 0; }
+.vl-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+.vl-search input { padding-left: 30px; }
+.vl-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.vl-filter { padding: 4px 10px; font: inherit; font-size: 0.8rem; color: var(--text-muted); background: transparent; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer; }
+.vl-filter span { margin-left: 4px; font-variant-numeric: tabular-nums; }
+.vl-filter.active { color: var(--text-main); border-color: var(--primary); background-color: var(--bg-hover); }
+.vl-course { margin-bottom: 16px; }
+.vl-course h4 { margin: 0 0 6px; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+.vl-row { border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 6px; }
+.vl-row-open { display: block; width: 100%; padding: 10px 12px; font: inherit; text-align: left; color: var(--text-main); background: transparent; border: none; border-radius: var(--radius-sm); }
+button.vl-row-open { cursor: pointer; }
+button.vl-row-open:hover { background-color: var(--bg-hover); }
+.vl-row-main { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vl-title { min-width: 0; font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vl-row-main .badge { flex-shrink: 0; }
+.vl-row-meta { margin-top: 2px; font-size: 0.75rem; color: var(--text-muted); }
+.vl-links { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 12px 10px; font-size: 0.8rem; }
+.vl-links a { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); }
+.vl-state-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sc-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+@media (max-width: 640px) {
+  .vl-toolbar { flex-direction: column; }
+  .vl-toolbar > select { max-width: none; width: 100%; }
+}

@@ -73,6 +73,7 @@ export interface LessonJob {
   youtube?: YouTubePost | null;
   error: string | null;
   failedStage: 'plan' | 'write' | 'render' | null;
+  createdAt?: string;
 }
 
 export const isFacebookBusy = (job: LessonJob) => job.facebook?.status === 'UPLOADING' || job.facebook?.status === 'PROCESSING';

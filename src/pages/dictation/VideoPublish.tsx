@@ -19,9 +19,11 @@ interface VideoPublishProps {
   onManageChannels: () => void;
   onChange: (job: LessonJob) => void;
   onLinked: () => void;
+  initialWhen?: Date; // a slot of the publishing plan this video was picked for: opens on scheduling it
+  suggestedWhen?: Date; // the plan's slot shown for it elsewhere, so the time offered here is the same one
 }
 
-export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManageChannels, onChange, onLinked }) => {
+export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManageChannels, onChange, onLinked, initialWhen, suggestedWhen }) => {
   const { busy, run } = useBusy();
   const facebookReady = genre.facebook;
   const youtubeReady = genre.youtube;
@@ -30,8 +32,8 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
   const [aiGenerated, setAiGenerated] = useState(true);
   const [privacy, setPrivacy] = useState<YouTubePrivacy>('unlisted');
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
-  const [timing, setTiming] = useState<'now' | 'later'>('now');
-  const [when, setWhen] = useState('');
+  const [timing, setTiming] = useState<'now' | 'later'>(initialWhen ? 'later' : 'now');
+  const [when, setWhen] = useState(() => { const preset = initialWhen ?? suggestedWhen; return preset ? toLocalInput(preset) : ''; });
   const [linkError, setLinkError] = useState<string | null>(null);
   const linking = useRef<string | null>(null);
 

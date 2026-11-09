@@ -65,8 +65,9 @@ export const jobWhen = (job: LessonJob): Date | null => {
   return iso ? new Date(iso) : null;
 };
 
-export const nextFreeSlot = (contentType: ContentType | undefined, jobs: LessonJob[], now = new Date()): Date => {
-  const taken = jobs.map(jobWhen).filter((date): date is Date => !!date);
+// alsoTaken: slots already promised to other videos, so a list of suggestions doesn't put two on one day
+export const nextFreeSlot = (contentType: ContentType | undefined, jobs: LessonJob[], now = new Date(), alsoTaken: Date[] = []): Date => {
+  const taken = [...jobs.map(jobWhen).filter((date): date is Date => !!date), ...alsoTaken];
   for (let offset = 0; offset < SEARCH_DAYS; offset++) {
     const date = new Date(now);
     date.setDate(date.getDate() + offset);
