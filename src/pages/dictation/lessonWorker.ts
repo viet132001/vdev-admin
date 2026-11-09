@@ -169,7 +169,7 @@ export interface StudioView {
     cast: { id: string; name: string }[];
     backdrops: { code: string; name: string }[];
     expressions: { code: string; name: string; use: string }[];
-    actions: { action: string; label: string }[];
+    actions: { action: string; label: string; use?: string }[];
     zooms: number[];
     cameraMoves: { move: string; label: string }[];
   };

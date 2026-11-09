@@ -267,7 +267,7 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ job, onClose, onRenderin
                       </select>
                       <select className="form-input" aria-label={`Hành động của ${name(actor.id)}`} disabled={readOnly} value={actor.action ?? ''} onChange={(e) => changeActor(shot.key, actor.id, 'action', e.target.value || null)}>
                         <option value="">Không hành động</option>
-                        {view.options.actions.map((a) => <option key={a.action} value={a.action}>{a.label}</option>)}
+                        {view.options.actions.map((a) => <option key={a.action} value={a.action} title={a.use}>{a.label}</option>)}
                       </select>
                     </div>
                   </div>
