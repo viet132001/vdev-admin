@@ -36,10 +36,36 @@ export const englishVoices = (): SpeechSynthesisVoice[] =>
 
 let currentAudio: HTMLAudioElement | null = null;
 
-// Chrome drops (and can get stuck on) a speak() issued right after cancel() interrupted speech,
-// so remember when we last interrupted something and give the engine a moment.
-let interruptedAt = 0;
+// Chrome (macOS) kills its speech engine for the rest of the page when cancel() lands in the same tick as a speak()
+// (e.g. unlockSpeech() followed by playSentence() in one click): every later utterance stays queued and never starts.
+// So a cancel that comes too soon after a speak is deferred, and the next speak waits until the engine has settled.
+const CANCEL_GUARD_MS = 50;
 const RESTART_DELAY_MS = 80;
+let lastSpeakAt = -Infinity; // when an utterance was last handed to the engine
+let readyAt = 0; // earliest time the next utterance may be handed to the engine
+let cancelTimer = 0;
+
+const engineSpeak = (synth: SpeechSynthesis, utterance: SpeechSynthesisUtterance) => {
+  lastSpeakAt = performance.now();
+  synth.speak(utterance);
+};
+
+const engineCancel = (synth: SpeechSynthesis) => {
+  if (cancelTimer) window.clearTimeout(cancelTimer);
+  cancelTimer = 0;
+  const now = performance.now();
+  const wait = lastSpeakAt + CANCEL_GUARD_MS - now;
+  if (wait > 0) {
+    cancelTimer = window.setTimeout(() => {
+      cancelTimer = 0;
+      synth.cancel();
+    }, wait);
+    readyAt = now + wait + RESTART_DELAY_MS;
+  } else {
+    synth.cancel();
+    readyAt = now + RESTART_DELAY_MS;
+  }
+};
 
 // Kept at module level: Chrome may garbage-collect an unreferenced utterance, and then onend never fires
 let currentUtterance: SpeechSynthesisUtterance | null = null;
@@ -54,8 +80,7 @@ export const stopPlayback = () => {
   }
   if ('speechSynthesis' in window) {
     const synth = window.speechSynthesis;
-    if (synth.speaking || synth.pending) interruptedAt = performance.now();
-    synth.cancel();
+    if (synth.speaking || synth.pending || cancelTimer) engineCancel(synth);
   }
 };
 
@@ -64,11 +89,11 @@ export const stopPlayback = () => {
 // Only needed once per page: repeating it means cancelling the silent utterance right away, which Chrome can choke on.
 let speechUnlocked = false;
 export const unlockSpeech = () => {
-  if (speechUnlocked || !('speechSynthesis' in window) || window.speechSynthesis.speaking) return;
+  if (speechUnlocked || !('speechSynthesis' in window) || window.speechSynthesis.speaking || cancelTimer) return;
   speechUnlocked = true;
   const utterance = new SpeechSynthesisUtterance(' ');
   utterance.volume = 0;
-  window.speechSynthesis.speak(utterance);
+  engineSpeak(window.speechSynthesis, utterance);
 };
 
 const speak = (text: string, rate: number, voiceURI: string, pitch = 1) =>
@@ -111,7 +136,7 @@ const speak = (text: string, rate: number, voiceURI: string, pitch = 1) =>
       if (utterance !== token) currentUtterance = utterance;
       // A tab that was hidden can leave the engine paused, which silences everything after it
       if (synth.paused) synth.resume();
-      synth.speak(utterance);
+      engineSpeak(synth, utterance);
       // Watchdogs so callers (e.g. the play button) never wait forever on a stuck engine:
       // nothing started → reset the engine and try once more; started but onend never came → give up after an estimate
       timers.push(window.setTimeout(() => {
@@ -124,7 +149,6 @@ const speak = (text: string, rate: number, voiceURI: string, pitch = 1) =>
         utterance.onstart = utterance.onend = utterance.onerror = null;
         synth.cancel();
         retried = true;
-        interruptedAt = performance.now();
         timers.forEach((t) => window.clearTimeout(t));
         timers.length = 0;
         timers.push(window.setTimeout(() => {
@@ -136,7 +160,8 @@ const speak = (text: string, rate: number, voiceURI: string, pitch = 1) =>
     };
 
     // Speak synchronously when possible: on iOS the first speech must happen inside the user gesture
-    if (performance.now() - interruptedAt < RESTART_DELAY_MS) window.setTimeout(attempt, RESTART_DELAY_MS);
+    const delay = readyAt - performance.now();
+    if (delay > 0) window.setTimeout(attempt, delay);
     else attempt();
   });
 
