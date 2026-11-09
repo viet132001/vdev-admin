@@ -3,7 +3,7 @@
 export const WORKER_URL = 'http://localhost:4599';
 export const WORKER_COMMAND = 'cd vdev-video && pnpm worker:install';
 
-export type LessonJobStatus = 'PLANNING' | 'PLAN_READY' | 'WRITING' | 'LESSON_READY' | 'RENDERING' | 'DONE' | 'FAILED' | 'CANCELLED';
+export type LessonJobStatus = 'QUEUED' | 'PLANNING' | 'PLAN_READY' | 'WRITING' | 'LESSON_READY' | 'RENDERING' | 'DONE' | 'FAILED' | 'CANCELLED';
 
 export type FacebookStatus = 'UPLOADING' | 'PROCESSING' | 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'SUBMITTED' | 'FAILED';
 
@@ -74,7 +74,34 @@ export interface LessonJob {
   error: string | null;
   failedStage: 'plan' | 'write' | 'render' | null;
   createdAt?: string;
+  target?: JobTarget;
 }
+
+// Where a job's video goes: its course's page, or its genre's when the course has no page of its own
+export interface JobTarget {
+  owner: string;
+  name: string;
+  facebook: boolean;
+  youtube: boolean;
+}
+
+// A course set up as a page, kept by the worker: the BE only knows the course itself
+export interface CoursePage {
+  courseId: string;
+  title: string;
+  genre: string;
+  videoStyle: string;
+  rules: string;
+  ownPage: boolean;
+  postTime: string; // HH:MM
+  updatedAt: string;
+  channel: JobTarget;
+  nextEpisode: number;
+}
+
+export const batchOf = (job: LessonJob): { id: string; index: number; total: number } | null => job.request?.batch ?? null;
+// The channel a job posts to, for keeping two videos of one channel off the same day
+export const ownerOf = (job: LessonJob) => job.target?.owner ?? genreIdOf(job.request);
 
 export const isFacebookBusy = (job: LessonJob) => job.facebook?.status === 'UPLOADING' || job.facebook?.status === 'PROCESSING';
 export const isPublishing = (job: LessonJob) => isFacebookBusy(job) || job.youtube?.status === 'UPLOADING';
@@ -96,6 +123,10 @@ export const getJob = (id: string): Promise<LessonJob> => call(`/jobs/${id}`);
 export const createJob = (request: unknown): Promise<LessonJob> => call('/jobs', 'POST', { request });
 export const jobAction = (id: string, action: 'feedback' | 'approve' | 'published' | 'meta' | 'retry' | 'cancel' | 'facebook' | 'youtube' | 'rerender', body: unknown = {}): Promise<LessonJob> =>
   call(`/jobs/${id}/${action}`, 'POST', body);
+export const listPages = (): Promise<CoursePage[]> => call('/pages');
+export const getPage = (courseId: string): Promise<CoursePage> => call(`/pages/${courseId}`);
+export const savePage = (courseId: string, page: Partial<CoursePage>): Promise<CoursePage> => call(`/pages/${courseId}`, 'POST', page);
+export const createBatch = (courseId: string, items: { topic: string; note: string }[], request: unknown): Promise<LessonJob[]> => call('/batches', 'POST', { courseId, items, request });
 export const listPosts = (): Promise<PagePost[]> => call('/posts');
 export const suggestPost = (idea: string, genre: string): Promise<{ text: string }> => call('/posts/suggest', 'POST', { idea, genre });
 export const createPost = (text: string, scheduledAt: string, genre: string): Promise<PagePost> => call('/posts', 'POST', { text, scheduledAt, genre });

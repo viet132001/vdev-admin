@@ -1306,3 +1306,17 @@ button.vl-row-open:hover { background-color: var(--bg-hover); }
   .vl-toolbar { flex-direction: column; }
   .vl-toolbar > select { max-width: none; width: 100%; }
 }
+
+/* Batch of lessons: one row per topic, then one card per lesson while it is made */
+.bg-rows { display: flex; flex-direction: column; gap: 8px; }
+.bg-row { display: grid; grid-template-columns: 20px minmax(0, 3fr) minmax(0, 2fr) auto; gap: 8px; align-items: center; }
+.bg-index { font-size: 0.75rem; color: var(--text-muted); text-align: right; }
+.bg-jobs { display: flex; flex-direction: column; gap: 8px; }
+.bg-job { padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.bg-job-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bg-job-toggle { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: none; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.bg-job-toggle:disabled { cursor: default; }
+@media (max-width: 640px) {
+  .bg-row { grid-template-columns: 20px minmax(0, 1fr) auto; }
+  .bg-row input:nth-of-type(2) { grid-column: 2 / 3; }
+}

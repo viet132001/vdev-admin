@@ -80,6 +80,28 @@ export const nextFreeSlot = (contentType: ContentType | undefined, jobs: LessonJ
   return new Date(now.getTime() + 24 * 60 * 60 * 1000);
 };
 
+const BATCH_SEARCH_DAYS = 60;
+
+// One video a day from the start date at the page's hour, skipping days this channel already posts on
+export const planDays = (pending: LessonJob[], all: LessonJob[], start: string, time: string, now = new Date()): Map<string, Date> => {
+  const taken = all.filter((job) => !pending.includes(job)).map(jobWhen).filter((date): date is Date => !!date);
+  const [hours, minutes] = time.split(':').map(Number);
+  const day = new Date(`${start}T00:00`);
+  const plan = new Map<string, Date>();
+  for (const job of pending) {
+    for (let i = 0; i < BATCH_SEARCH_DAYS; i++) {
+      const at = new Date(day);
+      at.setHours(hours, minutes, 0, 0);
+      day.setDate(day.getDate() + 1);
+      if (at.getTime() - now.getTime() < MIN_LEAD_MS || taken.some((other) => sameDay(other, at))) continue;
+      plan.set(job.id, at);
+      taken.push(at);
+      break;
+    }
+  }
+  return plan;
+};
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 export const toLocalInput = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;

@@ -29,7 +29,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navItems = [
     // Tổng quan, Tài chính, Khoản nợ, Khóa học are temporarily hidden
     { path: '/tasks', label: 'Công việc (Tasks)', icon: CheckSquare },
-    { path: '/dictation', label: 'Học tiếng Anh', icon: Headphones },
+    { path: '/dictation', label: 'Quản lý page', icon: Headphones },
     ...(hasRole(user, 'ADMIN') ? [{ path: '/users', label: 'Người dùng', icon: Users }] : []),
   ];
 

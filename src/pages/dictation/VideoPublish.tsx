@@ -3,24 +3,12 @@ import { CircleCheck, ExternalLink, Loader2, RotateCcw, Send } from 'lucide-reac
 import { api, getErrorMessage } from '../../services/api';
 import { useBusy } from '../tasks/agent';
 import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
-import { genreIdOf, isFacebookBusy, isPublishing, jobAction, listJobs, type LessonJob, type VideoGenre, type YouTubePrivacy } from './lessonWorker';
+import { isFacebookBusy, isPublishing, jobAction, listJobs, ownerOf, type LessonJob, type VideoGenre, type YouTubePrivacy } from './lessonWorker';
+import { CAPTION_LIMIT, TITLE_LIMIT, defaultCaption, defaultTitle, youtubeLinkOf } from './lessonSave';
 import { formatWhen, fromLocalInput, nextFreeSlot, toLocalInput } from './schedule';
 
-const CAPTION_LIMIT = 2200;
-const TITLE_LIMIT = 100;
 const PRIVACY_LABEL: Record<YouTubePrivacy, string> = { public: 'Công khai', unlisted: 'Không công khai (ai có link mới xem được)', private: 'Riêng tư' };
 
-// Every word the lesson teaches, once and in the order it comes up, so viewers can review them under the video
-const vocabularyList = (job: LessonJob) => {
-  const seen = new Set<string>();
-  const items = (job.lesson?.sentences ?? [])
-    .flatMap((s: any) => s.vocabularies ?? [])
-    .filter((v: any) => v?.term?.trim() && !seen.has(v.term.trim().toLowerCase()) && seen.add(v.term.trim().toLowerCase()));
-  return items.length ? ['Từ vựng trong bài:', ...items.map((v: any) => `• ${v.term.trim()}: ${String(v.meaning ?? '').trim()}`)].join('\n') : '';
-};
-
-const defaultCaption = (job: LessonJob, genre: VideoGenre) => [job.lesson?.description, vocabularyList(job), genre.hashtags].filter(Boolean).join('\n\n').slice(0, CAPTION_LIMIT);
-const defaultTitle = (job: LessonJob, genre: VideoGenre) => `${job.lesson?.title ?? job.request.topic} | ${genre.titleSuffix}`.slice(0, TITLE_LIMIT);
 
 interface VideoPublishProps {
   job: LessonJob;
@@ -34,8 +22,10 @@ interface VideoPublishProps {
 
 export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManageChannels, onChange, onLinked, initialWhen, suggestedWhen }) => {
   const { busy, run } = useBusy();
-  const facebookReady = genre.facebook;
-  const youtubeReady = genre.youtube;
+  // A course with a page of its own posts there, not where its genre posts
+  const facebookReady = job.target?.facebook ?? genre.facebook;
+  const youtubeReady = job.target?.youtube ?? genre.youtube;
+  const channelName = job.target?.name ?? genre.channelName;
   const [title, setTitle] = useState(() => defaultTitle(job, genre));
   const [caption, setCaption] = useState(() => defaultCaption(job, genre));
   const [aiGenerated, setAiGenerated] = useState(true);
@@ -78,13 +68,14 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
 
   // Offers the next free slot of this lesson's category in the weekly plan
   const contentType = job.request?.contentType;
+  const owner = ownerOf(job);
   useEffect(() => {
     // Another channel posting that day doesn't take this channel's slot
-    listJobs().then((jobs) => setWhen((current) => current || toLocalInput(nextFreeSlot(contentType, jobs.filter((j) => j.id !== job.id && genreIdOf(j.request) === genre.id))))).catch(() => undefined);
-  }, [contentType, job.id, genre.id]);
+    listJobs().then((jobs) => setWhen((current) => current || toLocalInput(nextFreeSlot(contentType, jobs.filter((j) => j.id !== job.id && ownerOf(j) === owner))))).catch(() => undefined);
+  }, [contentType, job.id, owner]);
 
   const askFacebook = () => setConfirm({
-    title: `Đăng công khai lên Facebook ${genre.channelName}?`,
+    title: `Đăng công khai lên Facebook ${channelName}?`,
     message: 'Mọi người sẽ thấy video này trên page ngay sau khi đăng. Muốn gỡ phải vào Facebook để xoá.',
     confirmLabel: 'Đăng công khai',
     action: async () => {
@@ -96,7 +87,7 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
   const askYouTube = () => {
     if (privacy !== 'public') return sendYouTube();
     setConfirm({
-      title: `Đăng công khai lên YouTube ${genre.channelName}?`,
+      title: `Đăng công khai lên YouTube ${channelName}?`,
       message: 'Mọi người sẽ tìm thấy video này trên kênh. Muốn gỡ phải vào YouTube Studio để xoá.',
       confirmLabel: 'Đăng công khai',
       action: async () => {
@@ -124,7 +115,7 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
 
   // A private video can't be played by learners, so that link never goes on the lesson by itself
   // A scheduled one is private only until its time, so its link goes on now: nobody has to be at the machine then
-  const youtubeUrl = youtube?.status === 'DONE' && (youtube.privacy !== 'private' || youtube.publishAt) ? youtube.url : null;
+  const youtubeUrl = youtubeLinkOf(job);
   useEffect(() => {
     if (youtubeUrl && linkedUrl !== youtubeUrl) link(youtubeUrl);
   }, [youtubeUrl, linkedUrl, link]);
@@ -134,7 +125,7 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
 
   return (
     <div className="lg-facebook">
-      <p style={{ fontWeight: 600, margin: '0 0 10px' }}>Đăng video lên kênh {genre.channelName}</p>
+      <p style={{ fontWeight: 600, margin: '0 0 10px' }}>Đăng video lên kênh {channelName}</p>
 
       {canEdit && (
         <>
@@ -173,7 +164,7 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
       <div className="lg-publish-row">
         <p className="lg-publish-name">Facebook</p>
         {facebook?.error && <p className="lg-error">{facebook.error}</p>}
-        {!facebookReady && !facebook && <p className="lg-meta" style={{ margin: 0 }}>Kênh {genre.channelName} chưa kết nối page.</p>}
+        {!facebookReady && !facebook && <p className="lg-meta" style={{ margin: 0 }}>Kênh {channelName} chưa kết nối page.</p>}
         {!facebookReady && !facebook && <div className="lg-facebook-actions"><button className="btn btn-secondary btn-sm" onClick={onManageChannels}>Quản lý kênh</button></div>}
         {facebook && isFacebookBusy(job) && (
           <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem' }}><Loader2 size={16} className="spin" />{facebook.status === 'UPLOADING' ? 'Đang tải video lên...' : 'Facebook đang xử lý video...'}</p>
@@ -194,7 +185,7 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
       <div className="lg-publish-row">
         <p className="lg-publish-name">YouTube</p>
         {youtube?.error && <p className="lg-error">{youtube.error}</p>}
-        {!youtubeReady && !youtube && <p className="lg-meta" style={{ margin: 0 }}>Kênh {genre.channelName} chưa đăng nhập YouTube.</p>}
+        {!youtubeReady && !youtube && <p className="lg-meta" style={{ margin: 0 }}>Kênh {channelName} chưa đăng nhập YouTube.</p>}
         {!youtubeReady && !youtube && <div className="lg-facebook-actions"><button className="btn btn-secondary btn-sm" onClick={onManageChannels}>Quản lý kênh</button></div>}
         {youtube?.status === 'UPLOADING' && <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem' }}><Loader2 size={16} className="spin" /> Đang tải video lên...</p>}
         {youtube?.status === 'DONE' && youtube.live === false && <p className="flex align-center gap-2" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--success)' }}><CircleCheck size={16} /> Đã hẹn công khai lúc {formatWhen(youtube.publishAt)}.</p>}

@@ -67,7 +67,7 @@ const FacebookRow: React.FC<{ channel: ChannelStatus; onChange: () => Promise<vo
   });
 
   const askRemove = () => setConfirm({
-    title: `Gỡ page khỏi thể loại ${label}?`,
+    title: `Gỡ page khỏi ${label}?`,
     message: `Thể loại này sẽ không đăng Facebook được cho tới khi kết nối lại.${scheduled ? ` Còn ${scheduled} bài đã hẹn: Facebook vẫn tự đăng, nhưng trang sẽ không cập nhật được trạng thái.` : ''}`,
     confirmLabel: 'Gỡ page',
     action: async () => {
@@ -106,7 +106,7 @@ const FacebookRow: React.FC<{ channel: ChannelStatus; onChange: () => Promise<vo
           )}
           {pages && (
             <>
-              <p className="form-label">Chọn page cho thể loại {label}</p>
+              <p className="form-label">Chọn page cho {label}</p>
               <div className="lg-recent">
                 {pages.map((page) => (
                   <button key={page.id} type="button" className="lg-recent-item" disabled={!!busy || !!page.usedBy} onClick={() => send(page.id)}>
@@ -157,7 +157,7 @@ const YouTubeRow: React.FC<{ channel: ChannelStatus; clientReady: boolean; onCha
   });
 
   const askRemove = () => setConfirm({
-    title: `Gỡ kênh YouTube khỏi thể loại ${label}?`,
+    title: `Gỡ kênh YouTube khỏi ${label}?`,
     message: `Thể loại này sẽ không đăng YouTube được cho tới khi đăng nhập lại.${scheduled ? ` Còn ${scheduled} bài đã hẹn: YouTube vẫn tự đăng, nhưng trang sẽ không cập nhật được trạng thái.` : ''}`,
     confirmLabel: 'Gỡ kênh',
     action: async () => {
@@ -283,11 +283,11 @@ export const ChannelManager: React.FC<{ onClose: () => void }> = ({ onClose }) =
           {!offline && !view && <div className="loading-container"><span className="spinner"></span></div>}
           {!offline && view && (
             <>
-              <p className="lg-meta" style={{ marginTop: 0, marginBottom: 12 }}>Mỗi thể loại đăng lên một page và một kênh riêng. Token chỉ lưu ở <code>~/.vdev-video/env</code> trên máy này.</p>
+              <p className="lg-meta" style={{ marginTop: 0, marginBottom: 12 }}>Mỗi thể loại, và mỗi khoá học chọn page riêng ở Cài đặt page, đăng lên một page và một kênh riêng. Token chỉ lưu ở <code>~/.vdev-video/env</code> trên máy này.</p>
               <GoogleClient ready={view.youtubeClient} onChange={load} />
               {view.channels.map((channel) => (
                 <div key={channel.genre} className="lg-facebook" style={{ marginBottom: 12 }}>
-                  <p style={{ fontWeight: 600, margin: 0 }}>{channel.label}: {channel.series}</p>
+                  <p style={{ fontWeight: 600, margin: 0 }}>{channel.genre.startsWith('course-') ? `Khoá học ${channel.label}` : `${channel.label}: ${channel.series}`}</p>
                   <FacebookRow channel={channel} onChange={load} />
                   <YouTubeRow channel={channel} clientReady={view.youtubeClient} onChange={load} />
                 </div>

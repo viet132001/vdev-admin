@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, getErrorMessage } from '../services/api';
-import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2, Video, BookOpen, Sparkles, CalendarDays, Radio, Film } from 'lucide-react';
+import { Plus, Ellipsis, Pencil, Trash2, ArrowUp, ArrowDown, X, Headphones, ChevronRight, ChevronDown, PlayCircle, ListChecks, Upload, Gamepad2, Video, BookOpen, Sparkles, CalendarDays, Radio, Film, Layers, Settings } from 'lucide-react';
 import { Practice } from './dictation/Practice';
 import { LessonGenerator } from './dictation/LessonGenerator';
+import { BatchGenerator } from './dictation/BatchGenerator';
+import { PageSettings } from './dictation/PageSettings';
+import { useBatchRunner } from './dictation/batchRunner';
 import { ChannelManager } from './dictation/ChannelManager';
 import { PublishSchedule } from './dictation/PublishSchedule';
 import { VideoLibrary, type LibraryFocus } from './dictation/VideoLibrary';
@@ -68,7 +71,9 @@ export const Dictation: React.FC = () => {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleDate, setScheduleDate] = useState<Date | null>(null);
   // The library and the schedule open each other: a slot picks a video, a video shows its slot
-  const [library, setLibrary] = useState<{ focus: LibraryFocus | null } | null>(null);
+  const [library, setLibrary] = useState<{ focus: LibraryFocus | null; courseId?: string } | null>(null);
+  const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [channelsVersion, setChannelsVersion] = useState(0);
   const { user } = useAuth();
@@ -109,6 +114,9 @@ export const Dictation: React.FC = () => {
     loadSessions();
     loadSession();
   }, [loadSessions, loadSession]);
+
+  // A batch keeps going while this page is open: written lessons go onto their course, YouTube links onto lessons
+  const kickBatches = useBatchRunner(canGenerate, refresh);
 
   const showConfirm = (title: string, message: string, action: () => Promise<void>) =>
     setConfirm({ title, message, confirmLabel: 'Xóa', action });
@@ -236,13 +244,15 @@ export const Dictation: React.FC = () => {
         <div className="flex flex-col gap-4">
           <header className="flex justify-between align-center" style={{ gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <h1 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 600 }}>Học tiếng Anh</h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Mỗi chủ đề gồm video bài học, bài đọc, luyện chính tả và game từ vựng.</p>
+              <h1 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 600 }}>Quản lý page</h1>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Mỗi khoá học là một page, có thể loại, luật và kênh đăng riêng. Mỗi chủ đề gồm video bài học, bài đọc, luyện chính tả và game từ vựng.</p>
             </div>
             {sessions.length > 0 && (
               <div className="flex gap-2 dc-header-actions">
-                {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
-                {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null })}><Film size={16} /> Quản lý video</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setPageSettingsOpen(true)}><Settings size={16} /> Cài đặt page</button>}
+              {canGenerate && <button className="btn btn-secondary" onClick={() => setBatchOpen(true)}><Layers size={16} /> Tạo nhiều bài</button>}
+              {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null, courseId: session.id })}><Film size={16} /> Quản lý video</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setChannelsOpen(true)}><Radio size={16} /> Quản lý kênh</button>}
                 <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={16} /> Import</button>
@@ -547,6 +557,7 @@ export const Dictation: React.FC = () => {
         <VideoLibrary
           sessions={sessions ?? NO_SESSIONS}
           focus={library.focus}
+          initialCourseId={library.courseId}
           channelsVersion={channelsVersion}
           onManageChannels={() => setChannelsOpen(true)}
           onOpenLesson={(courseId, lessonId) => { setLibrary(null); go({ session: courseId, lesson: lessonId }); }}
@@ -564,6 +575,24 @@ export const Dictation: React.FC = () => {
           onClose={() => setGeneratorOpen(false)}
           onCreated={refresh}
           onOpenLesson={(session, lesson) => { setGeneratorOpen(false); go({ session, lesson }); }}
+        />
+      )}
+      {pageSettingsOpen && session && (
+        <PageSettings
+          course={session}
+          channelsVersion={channelsVersion}
+          onManageChannels={() => setChannelsOpen(true)}
+          onSaved={() => undefined}
+          onClose={() => setPageSettingsOpen(false)}
+        />
+      )}
+      {batchOpen && session && (
+        <BatchGenerator
+          course={session}
+          onOpenSettings={() => { setBatchOpen(false); setPageSettingsOpen(true); }}
+          onManageChannels={() => setChannelsOpen(true)}
+          onStarted={kickBatches}
+          onClose={() => setBatchOpen(false)}
         />
       )}
       {channelsOpen && <ChannelManager onClose={() => { setChannelsOpen(false); setChannelsVersion((version) => version + 1); }} />}

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
-import { DEFAULT_GENRE, WORKER_COMMAND, createPost, genreIdOf, listJobs, listPosts, suggestPost, workerHealth, type LessonJob, type PagePost, type VideoGenre } from './lessonWorker';
+import { DEFAULT_GENRE, WORKER_COMMAND, createPost, genreIdOf, listJobs, listPages, listPosts, ownerOf, suggestPost, workerHealth, type CoursePage, type LessonJob, type PagePost, type VideoGenre } from './lessonWorker';
 import { formatDay, formatTime, jobWhen, postOnDay, sameDay, slotLabel, startOfWeek, weekSlots, type ContentType, type Slot } from './schedule';
 import { videoLinks, waitingFor } from './videoStatus';
 
@@ -35,6 +35,7 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   const { busy, run } = useBusy();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(initialDate ?? new Date()));
   const [genres, setGenres] = useState<VideoGenre[]>([]);
+  const [pages, setPages] = useState<CoursePage[]>([]);
   const [genreId, setGenreId] = useState(DEFAULT_GENRE);
   const [allJobs, setJobs] = useState<LessonJob[]>([]);
   const [allPosts, setPosts] = useState<PagePost[]>([]);
@@ -46,8 +47,9 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [health, nextJobs, nextPosts] = await Promise.all([workerHealth(), listJobs(), listPosts()]);
+      const [health, nextJobs, nextPosts, nextPages] = await Promise.all([workerHealth(), listJobs(), listPosts(), listPages().catch(() => [])]);
       setGenres(health.genres ?? []);
+      setPages(nextPages.filter((page) => page.ownPage));
       setJobs(nextJobs);
       setPosts(nextPosts);
       setOffline(false);
@@ -61,8 +63,10 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   useEffect(() => { load(); }, [load]);
 
   // Each channel has its own week: what goes out on one channel doesn't fill a slot on another
-  const jobs = allJobs.filter((job) => genreIdOf(job.request) === genreId);
-  const posts = allPosts.filter((post) => genreIdOf(post) === genreId);
+  // A course with a page of its own is a channel too; text posts only exist for a genre's page for now
+  const isCourse = genreId.startsWith('course-');
+  const jobs = allJobs.filter((job) => ownerOf(job) === genreId);
+  const posts = isCourse ? [] : allPosts.filter((post) => genreIdOf(post) === genreId);
 
   const moveWeek = (weeks: number) => setWeekStart((current) => {
     const next = new Date(current);
@@ -119,11 +123,12 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
             </>
           ) : (
             <>
-              {genres.length > 1 && (
+              {genres.length + pages.length > 1 && (
                 <div className="form-group">
                   <label className="form-label">Kênh</label>
                   <select className="form-input" value={genreId} onChange={(e) => { setGenreId(e.target.value); setComposing(null); }}>
                     {genres.map((g) => <option key={g.id} value={g.id}>{g.label}: {g.channelName}</option>)}
+                    {pages.map((page) => <option key={page.courseId} value={page.channel.owner}>Khoá học: {page.title}</option>)}
                   </select>
                 </div>
               )}
@@ -159,8 +164,8 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
                             </div>
                           </>
                         )}
-                        {!post && !open && (past
-                          ? <div className="sc-empty">Không có bài</div>
+                        {!post && !open && (past || isCourse
+                          ? <div className="sc-empty">{isCourse && !past ? 'Bài chữ chỉ có ở page của thể loại' : 'Không có bài'}</div>
                           : <button className="btn btn-secondary btn-sm" style={{ marginTop: 4 }} onClick={() => { setComposing(slot.at); setText(''); }}>Soạn bài</button>)}
                         {!post && open && (
                           <>

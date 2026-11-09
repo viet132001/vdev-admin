@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleCheck, CircleX, Clapperboard, Loader2, RotateCcw, Sparkles, Video, X } from 'lucide-react';
 import { api, getErrorMessage } from '../../services/api';
+import { TASK_PROJECT_NAME, lessonProjectId, saveLessonToCourse, setTaskStatus } from './lessonSave';
 import { useBusy } from '../tasks/agent';
 import { Markdown } from '../tasks/PlanPanel';
 import { CONTENT_TYPES, type ContentType } from './schedule';
 import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
-import { DEFAULT_GENRE, WORKER_COMMAND, createJob, genreIdOf, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
+import { DEFAULT_GENRE, WORKER_COMMAND, batchOf, createJob, genreIdOf, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, listPages, workerHealth, type CoursePage, type LessonJob, type VideoGenre } from './lessonWorker';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const NEW_COURSE = '__new';
-const TASK_PROJECT_NAME = 'Bài học tiếng Anh';
 const POLL_MS = 2000;
 const WORDS = { min: 30, max: 600 };
 const REELS_SAFE_WORDS = 110;
@@ -19,17 +19,6 @@ const FINISHED = ['DONE', 'CANCELLED'];
 const RECENT_VIDEOS = 5;
 
 const shortError = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
-
-// Keeps lesson tasks together on one board instead of the inbox
-const lessonProjectId = async () => {
-  const projects = await api.get('/api/task-projects', { noCache: true });
-  const found = (Array.isArray(projects) ? projects : []).find((p: any) => p.name === TASK_PROJECT_NAME);
-  if (found) return found.id;
-  return (await api.post('/api/task-projects', { name: TASK_PROJECT_NAME })).id;
-};
-
-const setTaskStatus = (id: string | undefined, status: string) =>
-  id ? api.patch(`/api/tasks/${id}`, { status }) : Promise.resolve();
 
 interface LessonGeneratorProps {
   sessions: any[];
@@ -47,6 +36,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
   const [workerState, setWorkerState] = useState<'checking' | 'online' | 'offline'>('checking');
   const [voices, setVoices] = useState('');
   const [genres, setGenres] = useState<VideoGenre[]>([]);
+  const [pages, setPages] = useState<CoursePage[]>([]);
   const [recent, setRecent] = useState<LessonJob[]>([]);
   const [job, setJob] = useState<LessonJob | null>(null);
   const [feedback, setFeedback] = useState('');
@@ -77,9 +67,10 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
       const health = await workerHealth();
       setVoices(health.voices);
       setGenres(health.genres ?? []);
+      setPages(await listPages().catch(() => []));
       const jobs = await listJobs();
-      // Pick up work still in progress after the dialog or the page was closed
-      setJob(jobs.find((j) => !FINISHED.includes(j.status) || isPublishing(j)) ?? null);
+      // Pick up work still in progress after the dialog or the page was closed. A batch has its own screen.
+      setJob(jobs.find((j) => !batchOf(j) && (!FINISHED.includes(j.status) || isPublishing(j))) ?? null);
       setRecent(jobs.filter((j) => j.status === 'DONE' && j.videoPath).slice(0, RECENT_VIDEOS));
       setWorkerState('online');
     } catch {
@@ -112,21 +103,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     publishing.current = true;
     setPublishError(null);
     try {
-      let lessonId: string | undefined = current.meta?.lessonId;
-      if (!lessonId) {
-        const { title, description } = current.lesson;
-        const created = await api.post(`/api/dictation/sessions/${current.meta.courseId}/lessons`, { title, description });
-        lessonId = created.id as string;
-        // Saved right away: if the next step fails, a retry continues with this lesson instead of making another
-        await jobAction(current.id, 'meta', { meta: { lessonId } });
-      }
-      if (!current.meta?.sentencesSaved) {
-        await api.post(`/api/dictation/lessons/${lessonId}/sentences/bulk`, { items: current.lesson.sentences.map(({ phrases: _videoOnly, stage: _acting, ...sentence }: any) => sentence) });
-        await jobAction(current.id, 'meta', { meta: { sentencesSaved: true } });
-      }
-      await setTaskStatus(current.meta.writeTaskId, 'IN_REVIEW');
-      await setTaskStatus(current.meta.videoTaskId, 'IN_PROGRESS');
-      setJob(await jobAction(current.id, 'published', { meta: { lessonId } }));
+      setJob(await saveLessonToCourse(current));
       onCreated();
     } catch (err) {
       setPublishError(getErrorMessage(err, 'Không lưu được bài lên VDEV'));
@@ -155,7 +132,8 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
         if (isNew) onCreated();
         const created = await createJob({
           topic: form.topic.trim(), courseTitle: course.title, level: form.level, contentType: form.contentType, format: form.format,
-          words: form.words, vocabulary: form.vocabulary, video: form.video, aspect: currentStyle?.aspects.includes(form.aspect) ? form.aspect : currentStyle?.aspects[0], videoStyle: form.videoStyle, genre: form.genre, note: form.note.trim()
+          words: form.words, vocabulary: form.vocabulary, video: form.video, aspect: currentStyle?.aspects.includes(form.aspect) ? form.aspect : currentStyle?.aspects[0], videoStyle: form.videoStyle, genre: form.genre, note: form.note.trim(),
+          courseId: course.id
         });
         setJob(await jobAction(created.id, 'meta', { meta: { courseId: course.id } }));
       } catch (err) {
@@ -185,6 +163,14 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     } catch (err) {
       alert(getErrorMessage(err, 'Không tạo được task'));
     }
+  });
+
+  // The plan needs no review: it goes on to writing as soon as it is ready. Not in a batch, whose worker does it.
+  const autoApproved = useRef<string | null>(null);
+  useEffect(() => {
+    if (!job || job.status !== 'PLAN_READY' || autoApproved.current === job.id) return;
+    autoApproved.current = job.id;
+    approve();
   });
 
   const retry = () => run('retry', async () => {
@@ -217,10 +203,20 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     update({ genre: id, videoStyle: next.styles[0].id, format: next.formats.includes(form.format) ? form.format : next.formats[0] });
   };
 
+  // A course set up as a page decides the genre and the style of its videos
+  const pageOf = (courseId: string) => pages.find((p) => p.courseId === courseId);
   const changeCourse = (courseId: string) => {
     const course = sessions.find((s) => s.id === courseId);
-    update({ courseId, ...(course ? { level: course.level } : {}) });
+    const page = pageOf(courseId);
+    update({ courseId, ...(course ? { level: course.level } : {}), ...(page ? { genre: page.genre, videoStyle: page.videoStyle } : {}) });
   };
+  const coursePage = pageOf(form.courseId);
+  const pagesLoaded = pages.length;
+  const initialCourse = initial?.id;
+  useEffect(() => {
+    const page = pages.find((p) => p.courseId === initialCourse);
+    if (page) setForm((f) => (f.courseId === page.courseId ? { ...f, genre: page.genre, videoStyle: page.videoStyle } : f));
+  }, [pagesLoaded, pages, initialCourse]);
 
   const header = (
     <div className="modal-header">
@@ -367,10 +363,11 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
             )}
             <div className="form-group">
               <label className="form-label">Thể loại</label>
-              <select className="form-input" value={form.genre} onChange={(e) => changeGenre(e.target.value)}>
+              <select className="form-input" value={form.genre} disabled={!!coursePage} onChange={(e) => changeGenre(e.target.value)}>
                 {genres.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
               </select>
-              {currentGenre && (
+              {coursePage && <p className="lg-meta">Khoá học này đã cài đặt page: thể loại, kiểu video và luật lấy theo page, đăng lên {coursePage.channel.name}, tập tiếp theo là tập {coursePage.nextEpisode}.</p>}
+              {currentGenre && !coursePage && (
                 <p className="lg-meta">
                   {currentGenre.description}. Đăng lên kênh {currentGenre.channelName}.
                   {(!currentGenre.facebook || !currentGenre.youtube) && ` Kênh này chưa kết nối ${[!currentGenre.facebook && 'Facebook', !currentGenre.youtube && 'YouTube'].filter(Boolean).join(' và ')}, vẫn tạo được video nhưng chưa đăng được.`}
@@ -439,7 +436,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
             {form.video && (currentGenre?.styles.length ?? 0) > 1 && (
               <div className="form-group" style={{ marginTop: 12 }}>
                 <label className="form-label">Kiểu video</label>
-                <select className="form-input" value={form.videoStyle} onChange={(e) => update({ videoStyle: e.target.value })}>
+                <select className="form-input" value={form.videoStyle} disabled={!!coursePage} onChange={(e) => update({ videoStyle: e.target.value })}>
                   {currentGenre?.styles.map((style) => <option key={style.id} value={style.id}>{style.label}</option>)}
                 </select>
               </div>

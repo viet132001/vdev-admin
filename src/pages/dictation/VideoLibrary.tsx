@@ -3,7 +3,7 @@ import { CalendarDays, ChevronLeft, Clapperboard, ExternalLink, PlayCircle, Rota
 import { api } from '../../services/api';
 import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
-import { WORKER_COMMAND, genreIdOf, jobVideoUrl, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
+import { WORKER_COMMAND, genreIdOf, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
 import { formatWhen } from './schedule';
 import { VIDEO_FILTERS, VIDEO_STATE, contentLabel, isVideoJob, planVideos, videoLinks, videoState, type VideoState } from './videoStatus';
 
@@ -27,6 +27,7 @@ export interface LibraryFocus {
 interface VideoLibraryProps {
   sessions: any[];
   focus: LibraryFocus | null;
+  initialCourseId?: string; // opened from a course: its videos only, until another course is picked
   channelsVersion: number;
   onManageChannels: () => void;
   onOpenLesson: (sessionId: string, lessonId: string) => void;
@@ -35,13 +36,14 @@ interface VideoLibraryProps {
   onClose: () => void;
 }
 
-export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, channelsVersion, onManageChannels, onOpenLesson, onOpenSchedule, onChanged, onClose }) => {
+export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, initialCourseId, channelsVersion, onManageChannels, onOpenLesson, onOpenSchedule, onChanged, onClose }) => {
   const [jobs, setJobs] = useState<LessonJob[]>([]);
   const [genres, setGenres] = useState<VideoGenre[]>([]);
   const [lessons, setLessons] = useState<{ courseId: string; courseTitle: string; lesson: any }[]>([]);
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [genreId, setGenreId] = useState<string>('all');
+  const [courseId, setCourseId] = useState<string>(initialCourseId ?? 'all');
   const [filter, setFilter] = useState<(typeof VIDEO_FILTERS)[number]['id']>('all');
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(focus?.jobId ?? null);
@@ -106,12 +108,12 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, cha
 
   const states = VIDEO_FILTERS.find((f) => f.id === filter)!.states;
   const needle = query.trim().toLowerCase();
-  const shown = rows.filter((row) => (genreId === 'all' || (row.job ? genreIdOf(row.job.request) === genreId : false))
+  const shown = rows.filter((row) => (courseId === 'all' || row.courseId === courseId) && (genreId === 'all' || (row.job ? genreIdOf(row.job.request) === genreId : false))
     && (!states.length || states.includes(row.state))
     && (!needle || row.title.toLowerCase().includes(needle) || row.courseTitle.toLowerCase().includes(needle)));
   const counts = Object.fromEntries(VIDEO_FILTERS.map((f) => [f.id, rows.filter((row) => !f.states.length || f.states.includes(row.state)).length]));
   const courses = [...new Set(shown.map((row) => row.courseTitle))];
-  const plans = planVideos(videoJobs, (job) => genreIdOf(job.request));
+  const plans = planVideos(videoJobs, ownerOf);
 
   const header = (title: string, back?: () => void) => (
     <div className="modal-header">
@@ -183,6 +185,12 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, cha
               <Search size={14} />
               <input className="form-input" placeholder="Tìm theo bài học hoặc khoá học" value={query} onChange={(e) => setQuery(e.target.value)} />
             </div>
+            {sessions.length > 1 && (
+              <select className="form-input" aria-label="Khoá học" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+                <option value="all">Mọi khoá học</option>
+                {sessions.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+              </select>
+            )}
             {genres.length > 1 && (
               <select className="form-input" aria-label="Kênh" value={genreId} onChange={(e) => setGenreId(e.target.value)}>
                 <option value="all">Mọi kênh</option>
