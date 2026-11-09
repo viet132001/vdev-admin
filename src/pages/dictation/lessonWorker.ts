@@ -123,3 +123,59 @@ export const listChannels = (): Promise<ChannelsView> => call('/channels');
 export const saveYouTubeClient = (clientId: string, clientSecret: string): Promise<ChannelsView> => call('/channels/youtube-client', 'POST', { clientId, clientSecret });
 export const channelAction = (genre: string, action: 'facebook' | 'facebook-check' | 'facebook-remove' | 'youtube-login' | 'youtube-remove', body: unknown = {}): Promise<any> => call(`/channels/${genre}/${action}`, 'POST', body);
 export const jobVideoUrl = (id: string) => `${WORKER_URL}/videos/${id}`;
+
+// The shots of a rendered Stick Talk video (vdev-video src/shots.ts): edited here, kept by the worker for the next render
+export interface ShotActor {
+  id: string;
+  expression: string;
+  falls: boolean;
+  action: string | null;
+}
+
+export interface StudioShot {
+  key: string;
+  kind: string;
+  index: number;
+  from: number;
+  frames: number;
+  label: string;
+  text: string | null;
+  backdrop: string;
+  night: boolean;
+  zoom: number;
+  shock: boolean;
+  fall: boolean;
+  actors: ShotActor[];
+}
+
+export interface ShotEdit {
+  backdrop?: string;
+  night?: boolean;
+  zoom?: number;
+  actors?: Record<string, { expression?: string; action?: string | null }>;
+}
+export type ShotEdits = Record<string, ShotEdit>;
+
+export interface StudioView {
+  fps: number;
+  frames: number;
+  shots: StudioShot[];
+  edits: ShotEdits;
+  errors: string[];
+  added?: string[]; // problems the draft brings in, on a dry run
+  options: {
+    cast: { id: string; name: string }[];
+    backdrops: { code: string; name: string }[];
+    expressions: { code: string; name: string; use: string }[];
+    actions: { action: string; label: string }[];
+    zooms: number[];
+  };
+}
+
+export const getShots = (id: string): Promise<StudioView> => call(`/jobs/${id}/shots`);
+export const tryShots = (id: string, edits: ShotEdits): Promise<StudioView> => call(`/jobs/${id}/shots`, 'POST', { edits, save: false });
+export const saveShots = (id: string, edits: ShotEdits): Promise<StudioView> => call(`/jobs/${id}/shots`, 'POST', { edits });
+export const previewShot = async (id: string, body: { key: string; kind: 'still' | 'clip'; edits: ShotEdits; at?: number }) => {
+  const { url } = await call(`/jobs/${id}/preview`, 'POST', body);
+  return `${WORKER_URL}${url}`;
+};

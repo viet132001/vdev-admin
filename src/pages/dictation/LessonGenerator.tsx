@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CircleCheck, CircleX, Loader2, RotateCcw, Sparkles, Video, X } from 'lucide-react';
+import { CircleCheck, CircleX, Clapperboard, Loader2, RotateCcw, Sparkles, Video, X } from 'lucide-react';
 import { api, getErrorMessage } from '../../services/api';
 import { useBusy } from '../tasks/agent';
 import { Markdown } from '../tasks/PlanPanel';
 import { CONTENT_TYPES, type ContentType } from './schedule';
+import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
 import { DEFAULT_GENRE, WORKER_COMMAND, createJob, genreIdOf, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
 
@@ -50,6 +51,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
   const [job, setJob] = useState<LessonJob | null>(null);
   const [feedback, setFeedback] = useState('');
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [editingShots, setEditingShots] = useState(false);
   const [form, setForm] = useState({
     courseId: initial?.id ?? NEW_COURSE,
     courseTitle: '',
@@ -271,8 +273,10 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
       ] : [])
     ];
     const failedLabel = job.status === 'FAILED' ? steps.find((s) => !s.done)?.label : null;
+    // Only Stick Talk has a shot list; a failed render may have been stopped by its check
+    const editable = job.request.videoStyle === 'stickman' && !!job.lesson && ((job.status === 'DONE' && !!job.videoPath) || (job.status === 'FAILED' && job.failedStage === 'render'));
 
-    return shell(
+    const page = shell(
       <>
         <p style={{ fontWeight: 600, margin: 0 }}>{job.request.topic}</p>
         <p className="lg-meta">{genreOfJob ? `${genreOfJob.label} · ` : ''}{job.episode ? `Tập ${job.episode} · ` : ''}{job.request.courseTitle} · {job.request.level} · {job.request.words} từ · {job.request.vocabulary} từ vựng</p>
@@ -304,6 +308,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               <>
                 <video className="lg-video" src={jobVideoUrl(job.id)} controls playsInline preload="metadata" />
                 <p className="lg-meta">Video chỉ lưu trên máy này: <code>{job.videoPath}</code></p>
+                {editable && <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={() => setEditingShots(true)}><Clapperboard size={14} /> Chỉnh cảnh</button>}
               </>
             )}
             <p className="lg-meta">Task nằm ở bảng “{TASK_PROJECT_NAME}”, đang chờ bạn đánh dấu Done.</p>
@@ -319,6 +324,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
             <button className="btn btn-primary" disabled={!!busy} onClick={approve}><CircleCheck size={16} /> Duyệt và tạo bài</button>
           </>
         )}
+        {job.status === 'FAILED' && editable && <button className="btn btn-secondary" disabled={!!busy} onClick={() => setEditingShots(true)}><Clapperboard size={16} /> Chỉnh cảnh</button>}
         {job.status === 'FAILED' && <button className="btn btn-primary" disabled={!!busy} onClick={retry}><RotateCcw size={16} /> Thử lại</button>}
         {publishError && job.status === 'LESSON_READY' && <button className="btn btn-primary" onClick={() => publish(job)}><RotateCcw size={16} /> Lưu lại</button>}
         {job.status === 'DONE' && (
@@ -327,6 +333,12 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
             {job.meta?.lessonId && <button className="btn btn-primary" onClick={() => onOpenLesson(job.meta.courseId, job.meta.lessonId)}>Mở bài học</button>}
           </>
         )}
+      </>
+    );
+    return (
+      <>
+        {page}
+        {editingShots && editable && <ShotEditor job={job} onClose={() => setEditingShots(false)} onRendering={(next) => { setEditingShots(false); setJob(next); }} />}
       </>
     );
   }
