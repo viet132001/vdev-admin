@@ -110,10 +110,11 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
 
   const states = VIDEO_FILTERS.find((f) => f.id === filter)!.states;
   const needle = query.trim().toLowerCase();
-  const shown = rows.filter((row) => (courseId === 'all' || row.courseId === courseId) && (genreId === 'all' || (row.job ? genreIdOf(row.job.request) === genreId : false))
-    && (!states.length || states.includes(row.state))
+  // The counts follow the course, channel and search picked, so each one is what its button would show
+  const matching = rows.filter((row) => (courseId === 'all' || row.courseId === courseId) && (genreId === 'all' || (row.job ? genreIdOf(row.job.request) === genreId : false))
     && (!needle || row.title.toLowerCase().includes(needle) || row.courseTitle.toLowerCase().includes(needle)));
-  const counts = Object.fromEntries(VIDEO_FILTERS.map((f) => [f.id, rows.filter((row) => !f.states.length || f.states.includes(row.state)).length]));
+  const shown = matching.filter((row) => !states.length || states.includes(row.state));
+  const counts = Object.fromEntries(VIDEO_FILTERS.map((f) => [f.id, matching.filter((row) => !f.states.length || f.states.includes(row.state)).length]));
   const courses = [...new Set(shown.map((row) => row.courseTitle))];
   const plans = planVideos(videoJobs, ownerOf);
 
@@ -231,7 +232,7 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
           {loading && <div className="loading-container"><span className="spinner"></span></div>}
           {!loading && !shown.length && (
             <div className="sc-empty" style={{ padding: '24px 0', textAlign: 'center' }}>
-              {rows.length ? 'Không có video nào khớp bộ lọc.' : 'Chưa có video nào. Tạo bài bằng Claude và bật "Tạo video" để có video đầu tiên.'}
+              {matching.length ? 'Không có video nào khớp bộ lọc.' : rows.length ? 'Chưa có video nào ở đây. Chọn "Mọi khoá học" để xem video của khoá học khác.' : 'Chưa có video nào. Tạo bài bằng Claude và bật "Tạo video" để có video đầu tiên.'}
             </div>
           )}
           {!loading && courses.map((course) => (
