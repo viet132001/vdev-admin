@@ -10,7 +10,16 @@ const CAPTION_LIMIT = 2200;
 const TITLE_LIMIT = 100;
 const PRIVACY_LABEL: Record<YouTubePrivacy, string> = { public: 'Công khai', unlisted: 'Không công khai (ai có link mới xem được)', private: 'Riêng tư' };
 
-const defaultCaption = (job: LessonJob, genre: VideoGenre) => [job.lesson?.description, genre.hashtags].filter(Boolean).join('\n\n');
+// Every word the lesson teaches, once and in the order it comes up, so viewers can review them under the video
+const vocabularyList = (job: LessonJob) => {
+  const seen = new Set<string>();
+  const items = (job.lesson?.sentences ?? [])
+    .flatMap((s: any) => s.vocabularies ?? [])
+    .filter((v: any) => v?.term?.trim() && !seen.has(v.term.trim().toLowerCase()) && seen.add(v.term.trim().toLowerCase()));
+  return items.length ? ['Từ vựng trong bài:', ...items.map((v: any) => `• ${v.term.trim()}: ${String(v.meaning ?? '').trim()}`)].join('\n') : '';
+};
+
+const defaultCaption = (job: LessonJob, genre: VideoGenre) => [job.lesson?.description, vocabularyList(job), genre.hashtags].filter(Boolean).join('\n\n').slice(0, CAPTION_LIMIT);
 const defaultTitle = (job: LessonJob, genre: VideoGenre) => `${job.lesson?.title ?? job.request.topic} | ${genre.titleSuffix}`.slice(0, TITLE_LIMIT);
 
 interface VideoPublishProps {
