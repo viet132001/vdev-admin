@@ -121,7 +121,7 @@ export const workerHealth = () => call('/health');
 export const listJobs = (): Promise<LessonJob[]> => call('/jobs');
 export const getJob = (id: string): Promise<LessonJob> => call(`/jobs/${id}`);
 export const createJob = (request: unknown): Promise<LessonJob> => call('/jobs', 'POST', { request });
-export const jobAction = (id: string, action: 'feedback' | 'approve' | 'published' | 'meta' | 'retry' | 'cancel' | 'facebook' | 'youtube' | 'rerender', body: unknown = {}): Promise<LessonJob> =>
+export const jobAction = (id: string, action: 'feedback' | 'approve' | 'published' | 'meta' | 'retry' | 'cancel' | 'delete' | 'facebook' | 'youtube' | 'rerender', body: unknown = {}): Promise<LessonJob> =>
   call(`/jobs/${id}/${action}`, 'POST', body);
 export const listPages = (): Promise<CoursePage[]> => call('/pages');
 export const getPage = (courseId: string): Promise<CoursePage> => call(`/pages/${courseId}`);

@@ -1320,3 +1320,6 @@ button.vl-row-open:hover { background-color: var(--bg-hover); }
   .bg-row { grid-template-columns: 20px minmax(0, 1fr) auto; }
   .bg-row input:nth-of-type(2) { grid-column: 2 / 3; }
 }
+.vl-row-line { display: flex; align-items: center; }
+.vl-row-line .vl-row-open { flex: 1; min-width: 0; }
+.vl-row-delete { flex-shrink: 0; margin-right: 8px; color: var(--text-muted); }

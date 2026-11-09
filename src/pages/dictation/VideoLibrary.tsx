@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, ChevronLeft, Clapperboard, ExternalLink, PlayCircle, RotateCcw, Search, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, Clapperboard, ExternalLink, PlayCircle, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import { api } from '../../services/api';
+import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
-import { WORKER_COMMAND, genreIdOf, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
+import { WORKER_COMMAND, genreIdOf, jobAction, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
 import { formatWhen } from './schedule';
 import { VIDEO_FILTERS, VIDEO_STATE, contentLabel, isVideoJob, planVideos, videoLinks, videoState, type VideoState } from './videoStatus';
 
@@ -48,6 +49,7 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(focus?.jobId ?? null);
   const [editingShots, setEditingShots] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,6 +129,26 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
 
   const replaceJob = (next: LessonJob) => setJobs((current) => current.map((job) => (job.id === next.id ? next : job)));
 
+  // Only the copy on this machine: the lesson stays on its course, and a post stays on Facebook or YouTube
+  const askDelete = (job: LessonJob, title: string) => {
+    const posted = (job.facebook && job.facebook.status !== 'FAILED') || (job.youtube && job.youtube.status !== 'FAILED');
+    setConfirm({
+      title: `Xoá video “${title}”?`,
+      message: `File video trên máy bị xoá và video không còn trong danh sách này. Bài học trên khoá học vẫn giữ nguyên${posted ? '. Bài đã đăng hoặc đã hẹn trên Facebook / YouTube vẫn còn, muốn gỡ phải vào đó xoá' : ''}.`,
+      confirmLabel: 'Xoá',
+      action: async () => {
+        setConfirm(null);
+        try {
+          await jobAction(job.id, 'delete');
+          setJobs((current) => current.filter((other) => other.id !== job.id));
+          setOpenId((current) => (current === job.id ? null : current));
+        } catch (err) {
+          alert(err instanceof Error && err.message ? err.message : 'Không xoá được video');
+        }
+      }
+    });
+  };
+
   // ---------- one video ----------
   const open = openId ? videoJobs.find((job) => job.id === openId) : undefined;
   if (open) {
@@ -157,6 +179,7 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
               {row.courseId && row.lessonId && <button className="btn btn-secondary btn-sm" onClick={() => onOpenLesson(row.courseId!, row.lessonId!)}><PlayCircle size={14} /> Mở bài học</button>}
               {plan && <button className="btn btn-secondary btn-sm" onClick={() => onOpenSchedule(plan.at)}><CalendarDays size={14} /> Xem trong lịch đăng</button>}
               {stickman && <button className="btn btn-secondary btn-sm" onClick={() => setEditingShots(true)}><Clapperboard size={14} /> Chỉnh cảnh</button>}
+              <button className="btn btn-secondary btn-sm" onClick={() => askDelete(open, row.title)}><Trash2 size={14} /> Xoá video</button>
             </div>
             {open.status === 'DONE' && open.videoPath && genre && (
               <VideoPublish key={`${open.id}-${focus?.at?.getTime() ?? ''}`} job={open} genre={genre} initialWhen={open.id === focus?.jobId ? focus.at : undefined} suggestedWhen={plan?.suggested ? plan.at : undefined} onManageChannels={onManageChannels} onChange={replaceJob} onLinked={onChanged} />
@@ -164,6 +187,7 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
           </div>
         </div>
         {editingShots && <ShotEditor job={open} onClose={() => setEditingShots(false)} onRendering={(next) => { setEditingShots(false); replaceJob(next); }} />}
+        <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
       </div>
     );
   }
@@ -231,7 +255,10 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
                 );
                 return (
                   <div key={row.key} className="vl-row">
-                    {row.job ? <button className="vl-row-open" onClick={() => setOpenId(row.job!.id)}>{body}</button> : <div className="vl-row-open">{body}</div>}
+                    <div className="vl-row-line">
+                      {row.job ? <button className="vl-row-open" onClick={() => setOpenId(row.job!.id)}>{body}</button> : <div className="vl-row-open">{body}</div>}
+                      {row.job && <button className="icon-btn vl-row-delete" title="Xoá video trên máy" onClick={() => askDelete(row.job!, row.title)}><Trash2 size={14} /></button>}
+                    </div>
                     {links.length > 0 && (
                       <div className="vl-links">
                         {links.map((link) => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> {link.label}</a>)}
@@ -244,6 +271,7 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
           ))}
         </div>
       </div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 };
