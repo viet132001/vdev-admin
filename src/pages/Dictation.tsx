@@ -249,10 +249,8 @@ export const Dictation: React.FC = () => {
             </div>
             {sessions.length > 0 && (
               <div className="flex gap-2 dc-header-actions">
-                {canGenerate && <button className="btn btn-secondary" onClick={() => setPageSettingsOpen(true)}><Settings size={16} /> Cài đặt page</button>}
-              {canGenerate && <button className="btn btn-secondary" onClick={() => setBatchOpen(true)}><Layers size={16} /> Tạo nhiều bài</button>}
-              {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
-                {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null, courseId: session.id })}><Film size={16} /> Quản lý video</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
+                {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null })}><Film size={16} /> Quản lý video</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setChannelsOpen(true)}><Radio size={16} /> Quản lý kênh</button>}
                 <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={16} /> Import</button>
@@ -321,8 +319,10 @@ export const Dictation: React.FC = () => {
             </div>
             <div className="flex gap-2 dc-header-actions">
               <button className="btn btn-secondary" onClick={() => setSessionForm({ id: session.id, title: session.title, description: session.description || '', level: session.level })}><Pencil size={14} /> Sửa</button>
+              {canGenerate && <button className="btn btn-secondary" onClick={() => setPageSettingsOpen(true)}><Settings size={16} /> Cài đặt page</button>}
+              {canGenerate && <button className="btn btn-secondary" onClick={() => setBatchOpen(true)}><Layers size={16} /> Tạo nhiều bài</button>}
               {canGenerate && <button className="btn btn-secondary" onClick={() => setGeneratorOpen(true)}><Sparkles size={16} /> Tạo bài bằng Claude</button>}
-                {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null })}><Film size={16} /> Quản lý video</button>}
+              {canGenerate && <button className="btn btn-secondary" onClick={() => setLibrary({ focus: null, courseId: session.id })}><Film size={16} /> Quản lý video</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setScheduleOpen(true)}><CalendarDays size={16} /> Lịch đăng</button>}
                 {canGenerate && <button className="btn btn-secondary" onClick={() => setChannelsOpen(true)}><Radio size={16} /> Quản lý kênh</button>}
               <button className="btn btn-secondary" disabled={session.sentenceCount === 0} onClick={() => go({ session: sessionId, tab: 'game' })}><Gamepad2 size={16} /> Game từ vựng</button>
