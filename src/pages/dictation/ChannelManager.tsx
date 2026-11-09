@@ -48,7 +48,19 @@ const FacebookRow: React.FC<{ channel: ChannelStatus; onChange: () => Promise<vo
     setError(null);
     try {
       const result = await channelAction(genre, 'facebook', { token: token.trim(), ...(pageId ? { pageId } : {}) });
-      if (result.status === 'choose') return setPages(result.pages);
+      if (result.status === 'choose') {
+        // With only one page there is nothing to choose: saving it is what the person came to do
+        const free: FacebookChoice[] = result.pages.filter((page: FacebookChoice) => !page.usedBy);
+        if (!pageId && result.pages.length === 1 && free.length === 1) {
+          const saved = await channelAction(genre, 'facebook', { token: token.trim(), pageId: free[0].id });
+          if (saved.status !== 'choose') {
+            close();
+            await onChange();
+            return;
+          }
+        }
+        return setPages(result.pages);
+      }
       close();
       await onChange();
     } catch (err) {
@@ -107,11 +119,12 @@ const FacebookRow: React.FC<{ channel: ChannelStatus; onChange: () => Promise<vo
           {pages && (
             <>
               <p className="form-label">Chọn page cho {label}</p>
+              <p className="lg-meta" style={{ marginTop: 0 }}>Bấm vào page để lưu. Chưa bấm thì page chưa được kết nối.</p>
               <div className="lg-recent">
                 {pages.map((page) => (
                   <button key={page.id} type="button" className="lg-recent-item" disabled={!!busy || !!page.usedBy} onClick={() => send(page.id)}>
                     <span>{page.name}</span>
-                    <span className="lg-meta" style={{ margin: 0 }}>{page.usedBy ? `Đang dùng cho ${page.usedBy}` : `ID ${page.id}`}</span>
+                    <span className="lg-meta" style={{ margin: 0 }}>{page.usedBy ? `Đang dùng cho ${page.usedBy}` : busy === 'save' ? 'Đang lưu...' : `ID ${page.id} · Chọn page này`}</span>
                   </button>
                 ))}
               </div>

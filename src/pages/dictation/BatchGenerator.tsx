@@ -323,7 +323,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
     <>
       <button className="btn btn-secondary" onClick={() => setCreating(true)}><Plus size={16} /> Tạo lô mới</button>
       <button className="btn btn-primary" disabled={!!busy || !ready || tooFar || !plan.size || (!target?.facebook && !target?.youtube)} onClick={askSchedule}>
-        <CalendarCheck size={16} /> {moving ? `Chờ ${live.length - done} bài nữa` : `Duyệt và lên lịch ${plan.size} video`}
+        <CalendarCheck size={16} /> {moving ? `Chờ ${live.length - done} bài nữa` : !target?.facebook && !target?.youtube ? 'Chưa kết nối kênh để đăng' : `Duyệt và lên lịch ${plan.size} video`}
       </button>
     </>
   );
