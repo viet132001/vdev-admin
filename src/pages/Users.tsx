@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Search, Users as UsersIcon } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Pencil, Search, Trash2, Users as UsersIcon, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api, getErrorMessage } from '../services/api';
 import { ConfirmDialog, type ConfirmState } from './tasks/shared';
@@ -38,6 +38,41 @@ export const Users: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
+
+  const saveName = async () => {
+    if (!editing) return;
+    const fullName = editing.name.trim();
+    if (!fullName) {
+      alert('Họ tên không được để trống.');
+      return;
+    }
+    try {
+      const updated = await api.patch(`/api/users/${editing.id}`, { fullName });
+      setUsers(prev => prev.map(u => (u.id === editing.id ? updated : u)));
+      setEditing(null);
+      if (editing.id === currentUser?.id) await refreshProfile();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Không đổi được họ tên.'));
+    }
+  };
+
+  const askDelete = (target: any) => {
+    setConfirm({
+      title: 'Xoá người dùng?',
+      message: `${target.fullName} (${target.email}) bị đăng xuất, mất quyền vào các dự án nhóm và token MCP / runner bị thu hồi. Đăng nhập lại bằng email này sẽ tạo tài khoản mới.`,
+      confirmLabel: 'Xoá',
+      action: async () => {
+        try {
+          await api.delete(`/api/users/${target.id}`);
+          await load();
+        } catch (err) {
+          const message = getErrorMessage(err, 'Không xoá được người dùng.');
+          alert(message === 'Cannot delete an admin' ? 'Gỡ quyền quản trị trước khi xoá.' : message);
+        }
+      },
+    });
+  };
 
   const askBlock = (type: BlockType, value: string) => {
     setConfirm({
@@ -192,17 +227,52 @@ export const Users: React.FC = () => {
                   <th>Đăng nhập gần nhất</th>
                   <th>Ngày tạo</th>
                   <th>Trạng thái</th>
-                  <th>Chặn</th>
+                  <th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map(u => (
                   <tr key={u.id}>
                     <td data-label="Người dùng">
-                      <div style={{ fontWeight: 600 }}>
-                        {u.fullName}
-                        {u.id === currentUser?.id && <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> (bạn)</span>}
-                      </div>
+                      {editing?.id === u.id ? (
+                        <form
+                          className="flex align-center gap-1"
+                          onSubmit={(e) => { e.preventDefault(); run(`${u.id}:name`, saveName); }}
+                        >
+                          <input
+                            className="form-input"
+                            style={{ padding: '4px 8px', minWidth: 0, flex: 1 }}
+                            aria-label="Họ tên"
+                            autoFocus
+                            maxLength={100}
+                            value={editing?.name ?? ''}
+                            onChange={(e) => setEditing({ id: u.id, name: e.target.value })}
+                            onKeyDown={(e) => { if (e.key === 'Escape') setEditing(null); }}
+                          />
+                          <button type="submit" className="btn btn-secondary btn-sm" aria-label="Lưu họ tên" disabled={busy !== null}>
+                            <Check size={14} />
+                          </button>
+                          <button type="button" className="btn btn-ghost btn-sm" aria-label="Huỷ" onClick={() => setEditing(null)}>
+                            <X size={14} />
+                          </button>
+                        </form>
+                      ) : (
+                        <div className="flex align-center gap-1" style={{ fontWeight: 600 }}>
+                          <span>
+                            {u.fullName}
+                            {u.id === currentUser?.id && <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}> (bạn)</span>}
+                          </span>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: 4 }}
+                            aria-label="Sửa họ tên"
+                            title="Sửa họ tên"
+                            onClick={() => setEditing({ id: u.id, name: u.fullName })}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </div>
+                      )}
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</div>
                     </td>
                     <td data-label="Vai trò">
@@ -236,8 +306,8 @@ export const Users: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td data-label="Chặn">
-                      {/* The backend refuses admins, so don't offer an action that can only fail */}
+                    <td data-label="Thao tác">
+                      {/* The backend refuses blocking or deleting admins, so don't offer actions that can only fail */}
                       {u.id === currentUser?.id || u.roles.includes('ADMIN') ? (
                         <span style={{ color: 'var(--text-muted)' }}>-</span>
                       ) : (
@@ -252,6 +322,9 @@ export const Users: React.FC = () => {
                           ) : (
                             <button className="btn btn-secondary btn-sm" onClick={() => askBlock('IP', u.lastLoginIp)}>Chặn IP</button>
                           ))}
+                          <button className="btn btn-danger btn-sm" onClick={() => askDelete(u)}>
+                            <Trash2 size={13} /> Xoá
+                          </button>
                         </div>
                       )}
                     </td>

@@ -188,6 +188,24 @@ Các API dưới đây yêu cầu role `ADMIN`, thiếu quyền trả **403**.
 * **400:** `roles` rỗng, role không tồn tại, hoặc gỡ `ADMIN` của admin cuối cùng (`Cannot remove the last admin`).
 * **404:** không tìm thấy user.
 
+### `PATCH /api/users/:id`
+
+Sửa họ tên, trả về user như một phần tử của danh sách trên.
+
+```json
+{ "fullName": "Anh Long" }
+```
+
+* **400:** `fullName` rỗng hoặc dài quá 100 ký tự.
+* **404:** không tìm thấy user.
+
+### `DELETE /api/users/:id`
+
+Xoá mềm tài khoản: đặt `deletedAt`, đổi email thành `deleted.<timestamp>.<email>` để giải phóng email, bỏ liên kết Google, thu hồi token runner (`vdr_`) và token MCP (`vdp_`). Phiên đang mở bị 401 ở request tiếp theo. Người đó đăng ký / đăng nhập Google lại thì thành **tài khoản mới** (không còn dữ liệu, dự án nhóm cũ). Trả `{ "id": "..." }`.
+
+* **400:** xoá chính mình (`Cannot delete yourself`) hoặc xoá user đang có `ADMIN` (`Cannot delete an admin`, gỡ quyền trước).
+* **404:** không tìm thấy user.
+
 
 ---
 

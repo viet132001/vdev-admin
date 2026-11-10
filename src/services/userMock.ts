@@ -88,5 +88,22 @@ export const mockUsers = (method: string, url: string, body?: any): { handled: b
     return { handled: true, data: withBlocks(user) };
   }
 
+  const userMatch = path.match(/^\/api\/users\/([^/]+)$/);
+  if (userMatch && (method === 'PATCH' || method === 'DELETE')) {
+    const users = load();
+    const user = users.find(u => u.id === userMatch[1]);
+    if (!user) return fail('User not found', 'NOTFOUND');
+    if (method === 'PATCH') {
+      const fullName = String(body?.fullName ?? '').trim();
+      if (!fullName) return fail('Full name is required');
+      user.fullName = fullName;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+      return { handled: true, data: withBlocks(user) };
+    }
+    if (user.roles.includes('ADMIN')) return fail('Cannot delete an admin');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(users.filter(u => u.id !== user.id)));
+    return { handled: true, data: { id: user.id } };
+  }
+
   return { handled: false };
 };
