@@ -412,7 +412,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               <div className="form-group">
                 <label className="form-label">Hình thức</label>
                 <select className="form-input" value={form.format} disabled={(currentGenre?.formats.length ?? 0) < 2} onChange={(e) => update({ format: e.target.value as 'dialogue' | 'reading' })}>
-                  {currentGenre?.formats.map((format) => <option key={format} value={format}>{format === 'dialogue' ? 'Hội thoại nam và nữ' : 'Bài đọc'}</option>)}
+                  {currentGenre?.formats.map((format) => <option key={format} value={format}>{format === 'dialogue' ? 'Hội thoại nam và nữ' : currentGenre.narrated ? 'Một người đọc (shadowing)' : 'Bài đọc'}</option>)}
                 </select>
               </div>
               <div className="form-group">

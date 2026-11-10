@@ -50,6 +50,7 @@ export interface VideoGenre {
   titleSuffix: string;
   hashtags: string;
   formats: ('dialogue' | 'reading')[];
+  narrated?: boolean; // one reader for the whole lesson (Shadowing); older workers don't send it
   styles: { id: string; label: string; aspects: ('9:16' | '16:9')[] }[];
   facebook: boolean;
   youtube: boolean;
