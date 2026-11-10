@@ -5,6 +5,8 @@ import { mockDictation } from './dictationMock';
 import { mockUsers } from './userMock';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Public so pages can show absolute BE URLs (e.g. the remote MCP endpoint)
+export const API_BASE_URL = BASE_URL;
 
 const TOKEN_KEY = 'vdev_token';
 const REFRESH_TOKEN_KEY = 'vdev_refresh_token';

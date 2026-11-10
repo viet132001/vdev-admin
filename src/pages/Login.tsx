@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { takeAfterLogin } from '../services/afterLogin';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { blockErrorMessage } from './users/blocks';
 import { ShieldAlert } from 'lucide-react';
@@ -26,7 +27,7 @@ export const Login: React.FC = () => {
 
     try {
       await login(email, password);
-      navigate('/');
+      navigate(takeAfterLogin());
     } catch (err: any) {
       setError(blockErrorMessage(err, 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.'));
     } finally {

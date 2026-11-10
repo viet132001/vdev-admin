@@ -75,7 +75,54 @@ export interface LessonJob {
   failedStage: 'plan' | 'write' | 'render' | null;
   createdAt?: string;
   target?: JobTarget;
+  comedy?: { script: ComedyScript };
 }
+
+// ---------- comedy shorts (the Studio) ----------
+
+export interface ComedyLine {
+  speaker: string;
+  text: string;
+  expression: string;
+  pose: string;
+  camera: 'wide' | 'close' | 'insert';
+  spot?: string | null;
+  pause?: number | null;
+  hold?: number | null;
+  fx?: string | null;
+  sfx?: string | null;
+  listener?: { expression: string; pose: string } | null;
+}
+
+export interface ComedyShot {
+  set: string;
+  blocking: { cast: string; mark: string; facing: 1 | -1 }[];
+  lines: ComedyLine[];
+}
+
+export interface ComedyScript {
+  title: string;
+  shots: ComedyShot[];
+}
+
+export interface ComedyCatalog {
+  cast: { id: string; name: string; about: string }[];
+  poses: { id: string; use: string }[];
+  expressions: { id: string; use: string }[];
+  cameras: string[];
+  fx: string[];
+  sfx: string[];
+  sets: { id: string; description: string; marks: { name: string; stance: string }[]; spots: { name: string; about: string }[] }[];
+}
+
+export const isComedyJob = (job: LessonJob) => job.request?.kind === 'comedy';
+
+// Comedy shorts post to a channel of their own; the publish form reads its name and tags from a genre
+export const COMEDY_GENRE: VideoGenre = {
+  id: 'comedy', label: 'Hài ngắn', description: 'Video hài ngắn người que', series: 'Hài ngắn', channelName: 'Hài ngắn', titleSuffix: 'Hài ngắn',
+  hashtags: '#haihuoc #stickman #tienganh', formats: ['dialogue'], styles: [], facebook: false, youtube: false, env: { facebook: [], youtube: '' }
+};
+export const genreForJob = (job: LessonJob, genres: VideoGenre[]) => (isComedyJob(job) ? COMEDY_GENRE : genres.find((g) => g.id === genreIdOf(job.request)));
 
 // Where a job's video goes: its course's page, or its genre's when the course has no page of its own
 export interface JobTarget {
@@ -127,6 +174,11 @@ export const listPages = (): Promise<CoursePage[]> => call('/pages');
 export const getPage = (courseId: string): Promise<CoursePage> => call(`/pages/${courseId}`);
 export const savePage = (courseId: string, page: Partial<CoursePage>): Promise<CoursePage> => call(`/pages/${courseId}`, 'POST', page);
 export const createBatch = (courseId: string, items: { topic: string; note: string }[], request: unknown): Promise<LessonJob[]> => call('/batches', 'POST', { courseId, items, request });
+export const comedyCatalog = (): Promise<ComedyCatalog> => call('/comedy/catalog');
+export const createComedy = (idea: string, note: string): Promise<LessonJob> => call('/comedy', 'POST', { idea, note });
+export const saveComedyScript = (id: string, script: ComedyScript): Promise<LessonJob> => call(`/comedy/${id}/script`, 'POST', { script });
+export const paintComedySet = (id: string, setId: string, description: string): Promise<ComedyCatalog> => call(`/comedy/${id}/set`, 'POST', { id: setId, description });
+export const previewComedyLine = async (id: string, line: number, script: ComedyScript) => `${WORKER_URL}${(await call(`/comedy/${id}/preview`, 'POST', { line, script })).url}`;
 export const listPosts = (): Promise<PagePost[]> => call('/posts');
 export const suggestPost = (idea: string, genre: string): Promise<{ text: string }> => call('/posts/suggest', 'POST', { idea, genre });
 export const createPost = (text: string, scheduledAt: string, genre: string): Promise<PagePost> => call('/posts', 'POST', { text, scheduledAt, genre });

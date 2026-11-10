@@ -4,7 +4,7 @@ import { api } from '../../services/api';
 import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
-import { WORKER_COMMAND, genreIdOf, jobAction, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
+import { WORKER_COMMAND, genreForJob, genreIdOf, jobAction, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
 import { formatWhen } from './schedule';
 import { VIDEO_FILTERS, VIDEO_STATE, contentLabel, isVideoJob, planVideos, videoLinks, videoState, type VideoState } from './videoStatus';
 
@@ -153,7 +153,7 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
   // ---------- one video ----------
   const open = openId ? videoJobs.find((job) => job.id === openId) : undefined;
   if (open) {
-    const genre = genres.find((g) => g.id === genreIdOf(open.request));
+    const genre = genreForJob(open, genres);
     const row = rows.find((r) => r.key === open.id)!;
     const plan = plans.get(open.id);
     const stickman = open.request?.videoStyle === 'stickman' && !!open.lesson && open.status === 'DONE' && !!open.videoPath;
@@ -241,7 +241,7 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
               {shown.filter((row) => row.courseTitle === course).map((row) => {
                 const plan = row.job ? plans.get(row.job.id) : undefined;
                 const links = videoLinks(row.job, row.lessonUrl);
-                const genre = row.job ? genres.find((g) => g.id === genreIdOf(row.job!.request)) : undefined;
+                const genre = row.job ? genreForJob(row.job, genres) : undefined;
                 const body = (
                   <>
                     <div className="vl-row-main">

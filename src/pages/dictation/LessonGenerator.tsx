@@ -7,7 +7,7 @@ import { Markdown } from '../tasks/PlanPanel';
 import { CONTENT_TYPES, type ContentType } from './schedule';
 import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
-import { DEFAULT_GENRE, WORKER_COMMAND, batchOf, createJob, genreIdOf, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, listPages, workerHealth, type CoursePage, type LessonJob, type VideoGenre } from './lessonWorker';
+import { DEFAULT_GENRE, WORKER_COMMAND, batchOf, createJob, isComedyJob, genreIdOf, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, listPages, workerHealth, type CoursePage, type LessonJob, type VideoGenre } from './lessonWorker';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const NEW_COURSE = '__new';
@@ -70,8 +70,8 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
       setPages(await listPages().catch(() => []));
       const jobs = await listJobs();
       // Pick up work still in progress after the dialog or the page was closed. A batch has its own screen.
-      setJob(jobs.find((j) => !batchOf(j) && (!FINISHED.includes(j.status) || isPublishing(j))) ?? null);
-      setRecent(jobs.filter((j) => j.status === 'DONE' && j.videoPath).slice(0, RECENT_VIDEOS));
+      setJob(jobs.find((j) => !batchOf(j) && !isComedyJob(j) && (!FINISHED.includes(j.status) || isPublishing(j))) ?? null);
+      setRecent(jobs.filter((j) => j.status === 'DONE' && j.videoPath && !isComedyJob(j)).slice(0, RECENT_VIDEOS));
       setWorkerState('online');
     } catch {
       setWorkerState('offline');

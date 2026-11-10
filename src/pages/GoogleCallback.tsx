@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { takeAfterLogin } from '../services/afterLogin';
 
 // Landing page of the Google redirect: the backend puts the tokens in the URL fragment
 export const GoogleCallback: React.FC = () => {
@@ -17,7 +18,7 @@ export const GoogleCallback: React.FC = () => {
     window.history.replaceState(null, '', window.location.pathname);
 
     completeGoogleLogin(hash)
-      .then(() => navigate('/', { replace: true }))
+      .then(() => navigate(takeAfterLogin(), { replace: true }))
       .catch(() => navigate('/login?oauth_error=google', { replace: true }));
   }, [completeGoogleLogin, navigate]);
 

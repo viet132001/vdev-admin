@@ -64,7 +64,7 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
 
   // Each channel has its own week: what goes out on one channel doesn't fill a slot on another
   // A course with a page of its own is a channel too; text posts only exist for a genre's page for now
-  const isCourse = genreId.startsWith('course-');
+  const isCourse = genreId.startsWith('course-') || genreId === 'comedy';
   const jobs = allJobs.filter((job) => ownerOf(job) === genreId);
   const posts = isCourse ? [] : allPosts.filter((post) => genreIdOf(post) === genreId);
 
@@ -123,12 +123,13 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
             </>
           ) : (
             <>
-              {genres.length + pages.length > 1 && (
+              {genres.length + pages.length > 0 && (
                 <div className="form-group">
                   <label className="form-label">Kênh</label>
                   <select className="form-input" value={genreId} onChange={(e) => { setGenreId(e.target.value); setComposing(null); }}>
                     {genres.map((g) => <option key={g.id} value={g.id}>{g.label}: {g.channelName}</option>)}
                     {pages.map((page) => <option key={page.courseId} value={page.channel.owner}>Khoá học: {page.title}</option>)}
+                    <option value="comedy">Hài ngắn</option>
                   </select>
                 </div>
               )}

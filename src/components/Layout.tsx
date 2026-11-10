@@ -8,8 +8,7 @@ import {
   X,
   CheckSquare,
   Headphones,
-  Users
-} from 'lucide-react';
+  Users, Clapperboard, FolderKanban } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,10 +26,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const navItems = [
-    // Tổng quan, Tài chính, Khoản nợ, Khóa học are temporarily hidden
-    { path: '/tasks', label: 'Công việc (Tasks)', icon: CheckSquare },
-    { path: '/dictation', label: 'Quản lý page', icon: Headphones },
-    ...(hasRole(user, 'ADMIN') ? [{ path: '/users', label: 'Người dùng', icon: Users }] : []),
+    // Tổng quan, Tài chính, Khoản nợ, Khóa học are temporarily hidden.
+    // Invited (non-admin) users only work in team projects
+    ...(hasRole(user, 'ADMIN') ? [{ path: '/tasks', label: 'Công việc (Tasks)', icon: CheckSquare }] : []),
+    { path: '/projects', label: 'Dự án nhóm', icon: FolderKanban },
+    ...(hasRole(user, 'ADMIN') ? [
+      { path: '/dictation', label: 'Quản lý page', icon: Headphones },
+      { path: '/studio', label: 'Studio', icon: Clapperboard },
+      { path: '/users', label: 'Người dùng', icon: Users }
+    ] : []),
   ];
 
   return (
