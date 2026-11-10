@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { blockErrorMessage } from './users/blocks';
 import { ShieldAlert } from 'lucide-react';
+import { ThemeToggleButton } from '../components/ThemeToggle';
 
 export const Register: React.FC = () => {
   const { register } = useAuth();
@@ -44,6 +45,7 @@ export const Register: React.FC = () => {
       </aside>
 
       <main className="auth-main">
+        <ThemeToggleButton className="auth-theme-toggle" />
         <div className="auth-form">
           <div style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: '1.4rem', margin: 0 }}>Tạo tài khoản</h2>

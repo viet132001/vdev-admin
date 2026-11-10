@@ -7,6 +7,7 @@ import { GoogleLoginButton } from '../components/GoogleLoginButton';
 import { setAfterLogin } from '../services/afterLogin';
 import { roleLabel } from './projects/shared';
 import { formatDate } from './tasks/shared';
+import { ThemeToggleButton } from '../components/ThemeToggle';
 
 const STATE_TEXT: Record<string, { title: string; message: string }> = {
   ACCEPTED: { title: 'Lời mời đã được dùng', message: 'Tài khoản được mời đã tham gia dự án này.' },
@@ -133,6 +134,7 @@ export const Invite: React.FC = () => {
       </aside>
 
       <main className="auth-main">
+        <ThemeToggleButton className="auth-theme-toggle" />
         <div className="auth-form flex flex-col gap-4">
           <div className="auth-mobile-brand"><Brand /></div>
 

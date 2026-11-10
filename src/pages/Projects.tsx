@@ -109,6 +109,8 @@ const CreateProjectModal: React.FC<{ onClose: () => void; onCreated: (project: a
 
 const ProjectList: React.FC<{ onOpen: (key: string) => void; onMcp: () => void }> = ({ onOpen, onMcp }) => {
   const { user } = useAuth();
+  // PROJECT_CREATOR: may create team projects without seeing the other admin menus
+  const canCreate = hasRole(user, 'ADMIN', 'PROJECT_CREATOR');
   const [projects, setProjects] = useState<any[] | null>(null);
   const [invites, setInvites] = useState<any[]>([]);
   const [creating, setCreating] = useState(false);
@@ -150,7 +152,7 @@ const ProjectList: React.FC<{ onOpen: (key: string) => void; onMcp: () => void }
         </div>
         <div className="flex gap-2">
           <button className="btn btn-secondary" onClick={onMcp}><Plug size={16} /> Kết nối MCP</button>
-          {hasRole(user, 'ADMIN') && <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Tạo dự án</button>}
+          {canCreate && <button className="btn btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Tạo dự án</button>}
         </div>
       </div>
 
@@ -176,7 +178,7 @@ const ProjectList: React.FC<{ onOpen: (key: string) => void; onMcp: () => void }
           <FolderKanban size={32} className="empty-state-icon" />
           <div style={{ fontWeight: 600 }}>Chưa có dự án nào</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            {hasRole(user, 'ADMIN') ? 'Tạo dự án rồi mời thành viên qua email.' : 'Nhờ quản lý dự án mời bạn qua email đang đăng nhập.'}
+            {canCreate ? 'Tạo dự án rồi mời thành viên qua email.' : 'Nhờ quản lý dự án mời bạn qua email đang đăng nhập.'}
           </div>
         </div>
       ) : (

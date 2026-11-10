@@ -18,28 +18,31 @@ Tài liệu này đóng vai trò là kim chỉ nam thiết kế giao diện (UI)
 
 ## 2. Màu Sắc & Kiểu Chữ (Colors & Typography)
 
-Hệ thống dùng bảng màu **trung tính (đen – trắng – xám, thang zinc)**. Màu chủ đạo là "mực": gần đen ở chế độ Sáng, gần trắng ở chế độ Tối. Màu có sắc độ chỉ dùng cho ý nghĩa trạng thái (thành công / cảnh báo / lỗi), không dùng để trang trí. Token khai báo trong `src/index.css`.
+Hệ thống dùng bảng màu **trung tính (đen – trắng – xám, thang zinc)**. Màu chủ đạo là "mực": gần đen ở chế độ Sáng, gần trắng ở chế độ Tối. Màu có sắc độ chỉ dùng cho ý nghĩa trạng thái (thành công / cảnh báo / lỗi) và một màu nhấn `--accent` (indigo) dùng tiết chế: viền focus, vạch mục menu đang chọn, thanh tiến độ, vùng bôi đen, checkbox. Token khai báo trong `src/index.css`.
+
+**Chế độ Sáng / Tối**: người dùng tự chọn Sáng / Tối / Hệ thống ở cuối sidebar (trang đăng nhập có nút đổi nhanh góc phải). Lựa chọn lưu `localStorage` (`vdev_theme`), được ghi lên `<html data-theme="light|dark">` (`src/context/ThemeContext.tsx`, script inline trong `index.html` chạy trước khi vẽ để không nháy). CSS tối viết dưới `:root[data-theme="dark"]`, **không** dùng `@media (prefers-color-scheme)` nữa.
 
 ### 2.1 Bảng Màu Hệ Thống (Color Palette)
 
 | Token | Mô tả | Light Mode | Dark Mode | Giao diện áp dụng |
 | :--- | :--- | :--- | :--- | :--- |
 | `--primary` | Màu chủ đạo (mực) | `#18181b` | `#fafafa` | Nút chính, thanh tiến độ, điểm nhấn |
-| `--primary-hover` | Di chuột nút chính | `#3f3f46` | `#d4d4d8` | Hover nút chính |
+| `--primary-hover` | Di chuột nút chính | `#2e2e33` | `#d4d4d8` | Hover nút chính |
+| `--accent` | Màu nhấn | `#4f46e5` | `#818cf8` | Focus ring, menu đang chọn, tiến độ |
 | `--primary-fg` | Chữ trên nền `--primary` | `#ffffff` | `#09090b` | Chữ / icon trong nút chính |
-| `--bg-hover` | Nền khi hover / mục đang chọn | `#f4f4f5` | `#1f1f23` | Menu đang chọn, hàng bảng hover |
+| `--bg-hover` | Nền khi hover / mục đang chọn | `#f1f1f3` | `#212126` | Menu đang chọn, hàng bảng hover |
 | `--success` | Thành công | `#15803d` | `#4ade80` | Hoàn thành, câu đúng, thu nhập |
 | `--warning` | Cảnh báo | `#b45309` | `#fbbf24` | Ưu tiên cao, lưu ý |
 | `--danger` | Lỗi / Xóa | `#dc2626` | `#f87171` | Nút xóa, quá hạn, từ gõ sai |
-| `--bg-app` | Nền ứng dụng | `#fafafa` | `#09090b` | Nền toàn màn hình |
-| `--bg-card` | Nền thẻ / bảng / sidebar | `#ffffff` | `#111113` | Thẻ, bảng, sidebar |
-| `--text-main` | Chữ chính | `#09090b` | `#fafafa` | Tiêu đề, nội dung |
-| `--text-muted` | Chữ phụ | `#71717a` | `#a1a1aa` | Phụ đề, placeholder, thời gian |
-| `--border-color` | Viền | `#e4e4e7` | `#27272a` | Viền thẻ, input, bảng |
+| `--bg-app` | Nền ứng dụng | `#f7f7f8` | `#0a0a0c` | Nền toàn màn hình |
+| `--bg-card` | Nền thẻ / bảng / sidebar | `#ffffff` | `#131316` | Thẻ, bảng, sidebar |
+| `--text-main` | Chữ chính | `#09090b` | `#f4f4f5` | Tiêu đề, nội dung |
+| `--text-muted` | Chữ phụ | `#6b6b76` | `#a1a1aa` | Phụ đề, placeholder, thời gian |
+| `--border-color` | Viền | `#e6e6ea` | `#26262b` | Viền thẻ, input, bảng |
 
 **Nguyên tắc tối giản:**
-* Không dùng gradient, hiệu ứng blur/glass, bóng đổ đậm hay hiệu ứng nhấc thẻ khi hover; phân tách bằng viền 1px.
-* Bo góc nhỏ: `4px` (badge), `6px` (nút, input), `8px` (thẻ, modal).
+* Không dùng gradient, hiệu ứng blur/glass, bóng đổ đậm hay hiệu ứng nhấc thẻ khi hover; phân tách bằng viền 1px, bóng rất nhẹ (`--shadow-sm` cho nút / input / thẻ, `--shadow-lg` cho modal / popover).
+* Bo góc: `6px` (`--radius-sm`: badge, nút nhỏ), `8px` (`--radius-md`: nút, input), `12px` (`--radius-lg`: thẻ, modal).
 * Badge dạng viền mảnh, chữ màu theo ý nghĩa; không tô nền màu.
 * Ngoại lệ: sân chơi của game Thủ thành là cảnh game có đồ hoạ riêng (màu, gradient, hiệu ứng), không theo token và không đổi theo Sáng / Tối. Phần giao diện quanh sân chơi vẫn theo chuẩn này.
 * Không dùng emoji làm trang trí giao diện (emoji chỉ xuất hiện khi người dùng tự đặt làm icon).

@@ -8,6 +8,7 @@ const BLOCKS_KEY = 'mock_access_blocks';
 
 const ROLES = [
   { code: 'ADMIN', name: 'Administrator', description: 'System administrator with full permissions' },
+  { code: 'PROJECT_CREATOR', name: 'Project Creator', description: 'Can create team projects; no access to other admin features' },
   { code: 'USER', name: 'Regular User', description: 'Standard user with personal resources' }
 ];
 

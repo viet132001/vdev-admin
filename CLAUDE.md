@@ -4,7 +4,7 @@ Bản đồ code cho phiên Claude làm task trong repo này. Đọc trước kh
 
 ## 1. Mục đích & tech stack
 
-- **VDEV Admin Portal**: SPA quản trị cá nhân, gọi REST API của BE VDEV. Menu hiện chỉ có **Tasks** (quản lý công việc + Task Agent Claude), **Dự án nhóm** (route `/projects`, mọi user: chỉ thấy dự án được mời; thành viên, mời qua email, source BE/AD/APP, task, kế hoạch, tài liệu, dashboard, kết nối MCP — `src/pages/Projects.tsx` + `src/pages/projects/`, trang nhận lời mời công khai `/invite/:token` ở `src/pages/Invite.tsx`), **Quản lý page** (route `/dictation`: mỗi khoá học là một page có thể loại, luật và kênh đăng riêng → chủ đề, mỗi chủ đề có video, bài đọc, chính tả, game) **Studio** (route `/studio`, chỉ `ADMIN`: video hài ngắn người que, nhập ý tưởng → Claude viết kịch bản → sửa từng câu, xem thử, render, đăng; `src/pages/Studio.tsx`, gọi `/comedy` của worker vdev-video) và **Người dùng** (chỉ role `ADMIN`); Dashboard / Finance / Liabilities / Learning vẫn có route nhưng đã ẩn khỏi menu (`src/components/Layout.tsx`). **User không phải `ADMIN` (người được mời) chỉ có menu Dự án nhóm**: mọi route khác bọc `ProtectedRoute roles={['ADMIN']}`, `/` của họ (`HomeRedirect` trong `src/App.tsx`) mở `/projects`, của ADMIN mở `/tasks`.
+- **VDEV Admin Portal**: SPA quản trị cá nhân, gọi REST API của BE VDEV. Menu hiện chỉ có **Tasks** (quản lý công việc + Task Agent Claude), **Dự án nhóm** (route `/projects`, mọi user: chỉ thấy dự án được mời; thành viên, mời qua email, source BE/AD/APP, task, kế hoạch, tài liệu, dashboard, kết nối MCP — `src/pages/Projects.tsx` + `src/pages/projects/`, trang nhận lời mời công khai `/invite/:token` ở `src/pages/Invite.tsx`), **Quản lý page** (route `/dictation`: mỗi khoá học là một page có thể loại, luật và kênh đăng riêng → chủ đề, mỗi chủ đề có video, bài đọc, chính tả, game) **Studio** (route `/studio`, chỉ `ADMIN`: video hài ngắn người que, nhập ý tưởng → Claude viết kịch bản → sửa từng câu, xem thử, render, đăng; `src/pages/Studio.tsx`, gọi `/comedy` của worker vdev-video) và **Người dùng** (chỉ role `ADMIN`); Dashboard / Finance / Liabilities / Learning vẫn có route nhưng đã ẩn khỏi menu (`src/components/Layout.tsx`). **User không phải `ADMIN` (người được mời) chỉ có menu Dự án nhóm**; role `PROJECT_CREATOR` ("Tạo dự án nhóm") chỉ thêm nút Tạo dự án, không mở menu khác: mọi route khác bọc `ProtectedRoute roles={['ADMIN']}`, `/` của họ (`HomeRedirect` trong `src/App.tsx`) mở `/projects`, của ADMIN mở `/tasks`.
 - React `^19.2.7`, react-router-dom `^7.18.1`, TypeScript `~6.0.2`, Vite `^8.1.1` (`@vitejs/plugin-react`), icon `lucide-react`, lint bằng `oxlint ^1.71.0`. Không dùng thư viện UI / CSS framework, không có state manager (chỉ React state + Context).
 - Deploy lên GitHub Pages dưới đường dẫn `/vdev-admin/` (CI: Node 22, pnpm 10).
 - `expo` có trong `dependencies` (và thư mục `.expo/`) nhưng không được import ở `src/`.
@@ -14,12 +14,13 @@ Bản đồ code cho phiên Claude làm task trong repo này. Đọc trước kh
 ```
 index.html, src/main.tsx      entry: render <App/>, import src/index.css
 src/App.tsx                   router (basename "/vdev-admin"), ProtectedRoute / GuestRoute, "/" → "/tasks"
+src/context/ThemeContext.tsx  ThemeProvider + useTheme(): Sáng / Tối / Hệ thống, lưu localStorage vdev_theme, ghi <html data-theme>
 src/context/AuthContext.tsx   AuthProvider + useAuth(): login / register / logout / Google login, tải /api/auth/profile; hasRole(user, ...roles)
 src/services/api.ts           API client duy nhất: api.get/post/patch/delete, authFetch, getErrorMessage, cache, mock fallback
 src/services/*Mock.ts         mock localStorage khi BE không kết nối được:
                                 taskMock.ts (tasks, task-projects, task-tags) + taskAgentMock.ts (Task Agent),
                                 dictationMock.ts, liabilityMock.ts, userMock.ts; auth/finance/learning mock nằm thẳng trong api.ts
-src/components/               Layout.tsx (sidebar + mobile header), MoneyInput.tsx, GoogleLoginButton.tsx
+src/components/               Layout.tsx (sidebar + mobile header), ThemeToggle.tsx (ThemeSwitch ở sidebar, ThemeToggleButton ở trang đăng nhập / header mobile), MoneyInput.tsx, GoogleLoginButton.tsx
 src/pages/*.tsx               một file / trang: Tasks, Dictation, Users, Finance, Liabilities, Learning, Dashboard, Login, Register, GoogleCallback
 src/pages/tasks/              màn Tasks: TaskBoard / TaskTable / TaskCalendar (view), TaskDetail, TaskReview (diff),
                                 PlanPanel (kế hoạch Claude), ReviewQueue, RunnersModal, AgentSettingsModal,
@@ -64,6 +65,7 @@ pnpm preview            # vite preview
 - **Nút đang chạy / chống double click**: `useBusy()` trong `src/pages/tasks/agent.ts`.
 - **Phân quyền**: route chỉ cho role nào thì `<ProtectedRoute roles={['ADMIN']}>`; ẩn/hiện UI bằng `hasRole(user, 'ADMIN')`. Đây chỉ là tiện ích giao diện, BE mới là nơi chặn quyền (`src/doc/auth-api.md` mục 6).
 - **State trên URL**: trang dùng `useSearchParams` cho lựa chọn hiện tại (`?project=&task=` ở Tasks, `?session=&lesson=&tab=` ở Dictation).
+- **Sáng / Tối**: CSS tối viết dưới `:root[data-theme="dark"]` (không dùng `@media (prefers-color-scheme)`); script inline ở `index.html` áp theme trước khi vẽ, phải khớp `ThemeContext.tsx`.
 - **Style**: class trong `src/index.css` + inline style dùng biến CSS (`var(--primary)`, `var(--text-muted)`, `var(--radius-sm)`…). Không hard-code màu cho trạng thái; theo `DesignGuideline.md` (bảng màu zinc trung tính, không gradient/blur/emoji trang trí, viền 1px).
 - **Mock**: mỗi module mock export hàm `mockXxx(method, url, body?) => { handled, data? }`, lỗi ném `Error(JSON.stringify({ success:false, message, errorCode, errors: [] }))` giống BE (mẫu `src/services/taskMock.ts`). Mock bám theo `src/doc/*.md`; thêm endpoint mới mà muốn chạy offline thì thêm vào mock tương ứng.
 - **TypeScript** (`tsconfig.app.json`): `noUnusedLocals`, `noUnusedParameters` ⇒ biến/import thừa làm `pnpm build` lỗi; `verbatimModuleSyntax` ⇒ import kiểu phải ghi `type` (`import { ConfirmDialog, type ConfirmState } ...`); `erasableSyntaxOnly` ⇒ không dùng `enum`, namespace, parameter property. Dữ liệu từ API phần lớn để `any`.

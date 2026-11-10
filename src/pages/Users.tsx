@@ -10,7 +10,7 @@ import { blockErrorMessage, createBlock, removeBlock, type BlockType } from './u
 
 const PAGE_SIZE = 20;
 
-const ROLE_LABELS: Record<string, string> = { ADMIN: 'Quản trị viên', USER: 'Người dùng' };
+const ROLE_LABELS: Record<string, string> = { ADMIN: 'Quản trị viên', USER: 'Người dùng', PROJECT_CREATOR: 'Tạo dự án nhóm' };
 const roleLabel = (role: { code: string; name: string }) => ROLE_LABELS[role.code] || role.name;
 
 const formatDateTime = (iso: string) =>

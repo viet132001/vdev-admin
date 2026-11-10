@@ -19,7 +19,7 @@ Mọi API kiểm tra **thành viên dự án**. Không phải thành viên ⇒ `
 | `MEMBER` | Tạo, sửa, đổi trạng thái mọi task; được giao task; bình luận; tạo / sửa tài liệu; xoá task / tài liệu / bình luận do mình tạo |
 | `VIEWER` | Chỉ xem, không được giao task |
 
-* **Tạo dự án:** chỉ user có system role `ADMIN`; người tạo là `OWNER`.
+* **Tạo dự án:** user có system role `ADMIN` hoặc `PROJECT_CREATOR`; người tạo là `OWNER`. `PROJECT_CREATOR` chỉ mở quyền tạo dự án nhóm, không mở các màn quản trị khác.
 * Đổi một người thành `VIEWER` hoặc xoá khỏi dự án ⇒ task **đang mở** của họ về "chưa giao"; họ mất quyền ngay, kể cả qua MCP.
 * `:id` của dự án nhận **UUID hoặc mã dự án** (`NEXQ`). `:ref` của task nhận **UUID hoặc mã task** (`NEXQ-12`, không phân biệt hoa thường).
 
@@ -49,7 +49,7 @@ Mọi API kiểm tra **thành viên dự án**. Không phải thành viên ⇒ `
 | Method | Endpoint | Quyền | Body / ghi chú |
 |---|---|---|---|
 | GET | `/api/team-projects?includeArchived=false` | thành viên | Dự án của tôi, mỗi dự án có `myRole`, `memberCount`, `myOpenTaskCount`, `stats` (xem 7) |
-| POST | `/api/team-projects` | system `ADMIN` | `{ key, name, description?, color?, startDate?, targetDate?, sources?: [{ key, name, description?, repoUrl?, techStack? }] }`. Trùng `key` ⇒ `409` |
+| POST | `/api/team-projects` | system `ADMIN` / `PROJECT_CREATOR` | `{ key, name, description?, color?, startDate?, targetDate?, sources?: [{ key, name, description?, repoUrl?, techStack? }] }`. Trùng `key` ⇒ `409` |
 | GET | `/api/team-projects/:id` | VIEWER | Dự án + `myRole`, `members[] { userId, role, fullName, email, joinedAt }`, `sources[]` (kèm `lead`), `milestones[]` (kèm `taskCount`, `doneCount`) |
 | PATCH | `/api/team-projects/:id` | MANAGER | `name`, `description`, `color`, `startDate`, `targetDate` (`null` để xoá), `isArchived` |
 | DELETE | `/api/team-projects/:id` | OWNER | Xoá mềm |

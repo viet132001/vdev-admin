@@ -138,7 +138,7 @@ Luồng redirect toàn trang, BE không có session:
 
 ## 6. Vai trò (Role)
 
-* Hai role: `ADMIN`, `USER`. Mọi tài khoản có ít nhất `USER`; một user có thể có nhiều role.
+* Ba role: `ADMIN`, `USER`, `PROJECT_CREATOR` (chỉ được tạo dự án nhóm, xem `team-projects-api.md`). Mọi tài khoản có ít nhất `USER`; một user có thể có nhiều role.
 * `POST /api/auth/login` (`user.roles`) và `GET /api/auth/profile` (`roles`) trả mảng mã role, ví dụ `["USER"]`.
 * Role đọc từ DB ở mỗi request nên thu hồi có hiệu lực ngay, không cần đăng nhập lại.
 * **Admin đầu tiên:** đặt `ADMIN_EMAILS=a@x.dev,b@x.dev` ở BE; email trong danh sách nhận `ADMIN` khi đăng nhập bằng **Google** (đăng nhập bằng mật khẩu không được cấp vì email chưa xác minh).
