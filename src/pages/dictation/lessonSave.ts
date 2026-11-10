@@ -25,8 +25,8 @@ export const saveLessonToCourse = async (job: LessonJob): Promise<LessonJob> => 
     await jobAction(job.id, 'meta', { meta: { lessonId } });
   }
   if (!job.meta?.sentencesSaved) {
-    // phrases and stage are for the video only
-    await api.post(`/api/dictation/lessons/${lessonId}/sentences/bulk`, { items: job.lesson.sentences.map(({ phrases: _videoOnly, stage: _acting, ...sentence }: any) => sentence) });
+    // phrases, stage and ipa are for the video only
+    await api.post(`/api/dictation/lessons/${lessonId}/sentences/bulk`, { items: job.lesson.sentences.map(({ phrases: _videoOnly, stage: _acting, ipa: _pronunciation, ...sentence }: any) => sentence) });
     await jobAction(job.id, 'meta', { meta: { sentencesSaved: true } });
   }
   await setTaskStatus(job.meta.writeTaskId, 'IN_REVIEW');
