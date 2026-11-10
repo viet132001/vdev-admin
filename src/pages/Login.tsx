@@ -9,9 +9,10 @@ import { ShieldAlert } from 'lucide-react';
 export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [searchParams] = useSearchParams();
+  // Prefilled from the invite page link
+  const [email, setEmail] = useState(searchParams.get('email') || '');
+  const [password, setPassword] = useState('');
   const oauthError = searchParams.get('oauth_error');
   const [error, setError] = useState(
     oauthError === 'blocked' ? 'Tài khoản này đã bị chặn.'
