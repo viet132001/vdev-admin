@@ -5,9 +5,10 @@ import { useBusy } from './tasks/agent';
 import { ConfirmDialog, type ConfirmState } from './tasks/shared';
 import { VideoPublish } from './dictation/VideoPublish';
 import {
-  COMEDY_GENRE, WORKER_COMMAND, comedyCatalog, createComedy, getJob, isComedyJob, isPublishing, jobAction, jobVideoUrl, listJobs, paintComedySet, previewComedyLine, saveComedyScript,
-  type ComedyCatalog, type ComedyLine, type ComedyScript, type LessonJob
+  COMEDY_GENRE, WORKER_COMMAND, comedyCatalog, createComedy, getJob, isComedyJob, isPublishing, jobAction, jobVideoUrl, listJobs, paintComedySet, pickComedyDraft, previewComedyLine, saveComedyScript, WRITER_NAME,
+  type ComedyCatalog, type ComedyLine, type ComedyScript, type ComedyWriter, type LessonJob
 } from './dictation/lessonWorker';
+import { IdeaBoard, PackagingCard, RoomPanel, RoomProgress } from './studio/WritersRoom';
 
 const POLL_MS = 2500;
 const MOVING = ['PLANNING', 'RENDERING'];
@@ -20,6 +21,9 @@ const STATUS: Record<string, { label: string; tone: string }> = {
   CANCELLED: { label: 'Đã huỷ', tone: 'warning' }
 };
 const CAMERA_LABEL: Record<string, string> = { wide: 'Toàn cảnh', close: 'Cận người nói', insert: 'Cận đồ vật' };
+
+const isDuo = (job: LessonJob) => job.request?.team === 'duo';
+const statusOf = (job: LessonJob) => (job.status === 'PLANNING' && isDuo(job) ? { label: 'Claude + Codex đang viết', tone: 'info' } : STATUS[job.status] ?? { label: job.status, tone: 'info' });
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
@@ -93,6 +97,7 @@ export const Studio: React.FC = () => {
   const [dirty, setDirty] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [idea, setIdea] = useState({ idea: '', note: '' });
+  const [duo, setDuo] = useState(true);
   const [previews, setPreviews] = useState<Record<number, string>>({});
   const [previewing, setPreviewing] = useState<number | null>(null);
   const [painting, setPainting] = useState<{ shot: number; id: string; description: string } | null>(null);
@@ -143,12 +148,12 @@ export const Studio: React.FC = () => {
     e.preventDefault();
     run('idea', async () => {
       try {
-        const created = await createComedy(idea.idea.trim(), idea.note.trim());
+        const created = await createComedy(idea.idea.trim(), idea.note.trim(), duo && !!catalog?.writers?.codex);
         replace(created);
         setIdea({ idea: '', note: '' });
         select(created.id);
       } catch (err) {
-        alert(message(err, 'Không gửi được ý tưởng cho Claude'));
+        alert(message(err, 'Không gửi được ý tưởng'));
       }
     });
   };
@@ -202,6 +207,29 @@ export const Studio: React.FC = () => {
     }
   });
 
+  const pickDraft = (by: ComedyWriter) => {
+    if (!job) return;
+    const go = () => run('pick', async () => {
+      try {
+        const next = await pickComedyDraft(job.id, by);
+        setDirty(false);
+        setErrors([]);
+        setPreviews({});
+        setScript(next.comedy?.script ? structuredClone(next.comedy.script) : null);
+        replace(next);
+      } catch (err) {
+        alert(message(err, 'Không đổi được bản nháp'));
+      }
+    });
+    if (!dirty) return go();
+    setConfirm({
+      title: `Dùng bản của ${WRITER_NAME[by]}?`,
+      message: 'Các chỉnh sửa chưa lưu ở kịch bản hiện tại sẽ mất.',
+      confirmLabel: 'Đổi bản',
+      action: async () => { setConfirm(null); go(); }
+    });
+  };
+
   const retry = () => run('retry', async () => {
     if (!job) return;
     try {
@@ -242,7 +270,8 @@ export const Studio: React.FC = () => {
   }
 
   const setOf = (id: string) => catalog?.sets.find((s) => s.id === id);
-  const status = job ? STATUS[job.status] ?? { label: job.status, tone: 'info' } : null;
+  const status = job ? statusOf(job) : null;
+  const codexReady = !!catalog?.writers?.codex;
   const editable = !!job && !!script && ['PLAN_READY', 'DONE', 'FAILED'].includes(job.status) && !!catalog;
   const posted = !!job && (!!(job.facebook && job.facebook.status !== 'FAILED') || !!(job.youtube && job.youtube.status !== 'FAILED'));
   let lineNo = 0;
@@ -253,7 +282,7 @@ export const Studio: React.FC = () => {
         <button className={`btn ${selectedId ? 'btn-secondary' : 'btn-primary'}`} style={{ width: '100%' }} onClick={() => select(null)}><Plus size={16} /> Ý tưởng mới</button>
         {jobs.length === 0 && <p className="lg-meta">Chưa có video nào.</p>}
         {jobs.map((j) => {
-          const s = STATUS[j.status] ?? { label: j.status, tone: 'info' };
+          const s = statusOf(j);
           return (
             <button key={j.id} className={`st-item${j.id === selectedId ? ' active' : ''}`} onClick={() => select(j.id)}>
               <span className="vl-title">{j.comedy?.script.title ?? j.request.topic}</span>
@@ -268,7 +297,11 @@ export const Studio: React.FC = () => {
           <form className="card flex flex-col gap-4" onSubmit={submitIdea}>
             <div>
               <h1 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 600 }}>Studio video hài</h1>
-              <p className="lg-meta" style={{ marginTop: 4 }}>Nhập ý tưởng, Claude viết kịch bản khoảng 20 giây, chọn nhân vật, tư thế, góc máy và vẽ bối cảnh nếu cần. Bạn sửa từng câu, xem thử rồi render với giọng ElevenLabs.</p>
+              <p className="lg-meta" style={{ marginTop: 4 }}>Nhập ý tưởng, Claude viết kịch bản khoảng 20 giây, chọn nhân vật, tư thế, góc máy và vẽ bối cảnh nếu cần. Bật Claude + Codex thì cả hai cùng viết, chấm bản của nhau và Codex soạn sẵn tiêu đề, mô tả, tag cho YouTube. Bạn sửa từng câu, xem thử rồi render với giọng ElevenLabs.</p>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Ý tưởng cho kênh</label>
+              <IdeaBoard onUse={(picked) => setIdea({ idea: picked.idea, note: picked.note })} />
             </div>
             <div className="form-group">
               <label className="form-label">Ý tưởng <span className="form-required">*</span></label>
@@ -279,7 +312,12 @@ export const Studio: React.FC = () => {
               <textarea rows={2} maxLength={600} className="form-input" style={{ resize: 'vertical' }} placeholder="VD: dùng Bo và Tú, ở văn phòng, câu chốt thật khô" value={idea.note} onChange={(e) => setIdea({ ...idea, note: e.target.value })} />
             </div>
             {catalog && <p className="lg-meta" style={{ margin: 0 }}>Dàn nhân vật: {catalog.cast.map((c) => c.name).join(', ')}. Bối cảnh có sẵn: {catalog.sets.map((s) => s.id).join(', ')}.</p>}
-            <div><button type="submit" className="btn btn-primary" disabled={!!busy || !idea.idea.trim()}><Sparkles size={16} /> {busy ? 'Đang gửi...' : 'Gửi cho Claude'}</button></div>
+            <label className="flex align-center gap-2" style={{ fontSize: '0.9rem' }}>
+              <input type="checkbox" checked={duo && codexReady} disabled={!codexReady} onChange={(e) => setDuo(e.target.checked)} />
+              Claude + Codex cùng viết, chấm chéo và chọn bản hay hơn
+            </label>
+            {!codexReady && <p className="lg-meta" style={{ margin: 0 }}>Máy này chưa có Codex: cài ứng dụng ChatGPT (có Codex) hoặc Codex CLI, hay đặt CODEX_BIN trong ~/.vdev-video/env.</p>}
+            <div><button type="submit" className="btn btn-primary" disabled={!!busy || !idea.idea.trim()}><Sparkles size={16} /> {busy ? 'Đang gửi...' : duo && codexReady ? 'Gửi cho Claude + Codex' : 'Gửi cho Claude'}</button></div>
           </form>
         )}
 
@@ -296,7 +334,7 @@ export const Studio: React.FC = () => {
               </div>
             </header>
 
-            {job.status === 'PLANNING' && <div className="card flex align-center gap-2"><Loader2 size={16} className="spin" /> Claude đang viết kịch bản và vẽ bối cảnh mới nếu cần. Thường mất 1–3 phút.</div>}
+            {job.status === 'PLANNING' && (isDuo(job) ? <RoomProgress room={job.room} /> : <div className="card flex align-center gap-2"><Loader2 size={16} className="spin" /> Claude đang viết kịch bản và vẽ bối cảnh mới nếu cần. Thường mất 1–3 phút.</div>)}
             {job.status === 'RENDERING' && <div className="card flex align-center gap-2"><Loader2 size={16} className="spin" /> Đang lồng giọng ElevenLabs và render video...</div>}
             {job.status === 'FAILED' && (
               <div className="card">
@@ -309,9 +347,14 @@ export const Studio: React.FC = () => {
               <div className="card">
                 <video className="lg-video" src={jobVideoUrl(job.id)} controls playsInline preload="metadata" />
                 <p className="lg-meta">Bản trên máy: <code>{job.videoPath}</code></p>
-                <VideoPublish key={job.id} job={job} genre={COMEDY_GENRE} onManageChannels={() => alert('Kết nối kênh "Hài ngắn" ở màn Quản lý kênh trong Quản lý page.')} onChange={replace} onLinked={() => undefined} />
+                <VideoPublish key={job.id} job={job} genre={COMEDY_GENRE} initialTitle={job.room?.packaging?.title} initialCaption={job.room?.packaging?.description} onManageChannels={() => alert('Kết nối kênh "Hài ngắn" ở màn Quản lý kênh trong Quản lý page.')} onChange={replace} onLinked={() => undefined} />
               </div>
             )}
+
+            {job.room && job.status !== 'PLANNING' && job.room.drafts.length > 0 && (
+              <RoomPanel room={job.room} busy={!!busy} canPick={!posted && (job.status === 'PLAN_READY' || (job.status === 'FAILED' && job.failedStage === 'render'))} onPick={pickDraft} />
+            )}
+            {job.room?.packaging && job.status !== 'PLANNING' && <PackagingCard packaging={job.room.packaging} />}
 
             {editable && script && catalog && (
               <div className="card flex flex-col gap-4">

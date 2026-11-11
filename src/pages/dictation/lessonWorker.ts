@@ -76,8 +76,10 @@ export interface LessonJob {
   error: string | null;
   failedStage: 'plan' | 'write' | 'render' | null;
   createdAt?: string;
+  updatedAt?: string;
   target?: JobTarget;
   comedy?: { script: ComedyScript };
+  room?: WritersRoom;
 }
 
 // ---------- comedy shorts (the Studio) ----------
@@ -115,7 +117,17 @@ export interface ComedyCatalog {
   fx: string[];
   sfx: string[];
   sets: { id: string; description: string; marks: { name: string; stance: string }[]; spots: { name: string; about: string }[] }[];
+  writers?: { claude: boolean; codex: boolean };
 }
+
+// Claude and Codex as a writers' room (scripts/writersRoom.ts of vdev-video)
+export type ComedyWriter = 'claude' | 'codex';
+export const WRITER_NAME: Record<ComedyWriter, string> = { claude: 'Claude', codex: 'Codex' };
+export interface ComedyReview { by: ComedyWriter; score: number; verdict: string; keep: string; fix: string[] }
+export interface ComedyDraft { by: ComedyWriter; script: ComedyScript | null; description: string; review: ComedyReview | null; error: string | null }
+export interface ComedyPackaging { by: ComedyWriter; title: string; description: string; tags: string[]; hook: string; thumbnail: string }
+export interface WritersRoom { step: 'drafting' | 'reviewing' | 'polishing' | 'packaging' | 'done'; drafts: ComedyDraft[]; winner: ComedyWriter | null; polished: boolean; packaging: ComedyPackaging | null }
+export interface ComedyIdea { by: ComedyWriter; idea: string; note: string; why: string }
 
 export const isComedyJob = (job: LessonJob) => job.request?.kind === 'comedy';
 
@@ -177,7 +189,9 @@ export const getPage = (courseId: string): Promise<CoursePage> => call(`/pages/$
 export const savePage = (courseId: string, page: Partial<CoursePage>): Promise<CoursePage> => call(`/pages/${courseId}`, 'POST', page);
 export const createBatch = (courseId: string, items: { topic: string; note: string }[], request: unknown): Promise<LessonJob[]> => call('/batches', 'POST', { courseId, items, request });
 export const comedyCatalog = (): Promise<ComedyCatalog> => call('/comedy/catalog');
-export const createComedy = (idea: string, note: string): Promise<LessonJob> => call('/comedy', 'POST', { idea, note });
+export const createComedy = (idea: string, note: string, duo = false): Promise<LessonJob> => call('/comedy', 'POST', { idea, note, ...(duo ? { team: 'duo' } : {}) });
+export const pickComedyDraft = (id: string, by: ComedyWriter): Promise<LessonJob> => call(`/comedy/${id}/pick`, 'POST', { by });
+export const brainstormComedy = async (theme: string): Promise<ComedyIdea[]> => (await call('/comedy/ideas', 'POST', { theme })).ideas;
 export const saveComedyScript = (id: string, script: ComedyScript): Promise<LessonJob> => call(`/comedy/${id}/script`, 'POST', { script });
 export const paintComedySet = (id: string, setId: string, description: string): Promise<ComedyCatalog> => call(`/comedy/${id}/set`, 'POST', { id: setId, description });
 export const previewComedyLine = async (id: string, line: number, script: ComedyScript) => `${WORKER_URL}${(await call(`/comedy/${id}/preview`, 'POST', { line, script })).url}`;

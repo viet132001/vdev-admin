@@ -7,7 +7,7 @@ import {
   X,
   CheckSquare,
   Headphones,
-  Users, Clapperboard, FolderKanban } from 'lucide-react';
+  Users, Clapperboard, FolderKanban, Rocket } from 'lucide-react';
 import { ThemeSwitch, ThemeToggleButton } from './ThemeToggle';
 
 interface LayoutProps {
@@ -51,6 +51,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     ...(hasRole(user, 'ADMIN') ? [
       { path: '/dictation', label: 'Quản lý page', icon: Headphones },
       { path: '/studio', label: 'Studio', icon: Clapperboard },
+      { path: '/story', label: 'Truyện viễn tưởng', icon: Rocket },
       { path: '/users', label: 'Người dùng', icon: Users }
     ] : []),
   ];

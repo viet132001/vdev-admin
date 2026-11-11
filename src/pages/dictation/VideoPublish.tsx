@@ -18,16 +18,18 @@ interface VideoPublishProps {
   onLinked: () => void;
   initialWhen?: Date; // a slot of the publishing plan this video was picked for: opens on scheduling it
   suggestedWhen?: Date; // the plan's slot shown for it elsewhere, so the time offered here is the same one
+  initialTitle?: string; // written for the channel elsewhere (the Studio's packaging), instead of the default
+  initialCaption?: string;
 }
 
-export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManageChannels, onChange, onLinked, initialWhen, suggestedWhen }) => {
+export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManageChannels, onChange, onLinked, initialWhen, suggestedWhen, initialTitle, initialCaption }) => {
   const { busy, run } = useBusy();
   // A course with a page of its own posts there, not where its genre posts
   const facebookReady = job.target?.facebook ?? genre.facebook;
   const youtubeReady = job.target?.youtube ?? genre.youtube;
   const channelName = job.target?.name ?? genre.channelName;
-  const [title, setTitle] = useState(() => defaultTitle(job, genre));
-  const [caption, setCaption] = useState(() => defaultCaption(job, genre));
+  const [title, setTitle] = useState(() => initialTitle?.trim().slice(0, TITLE_LIMIT) || defaultTitle(job, genre));
+  const [caption, setCaption] = useState(() => initialCaption?.trim().slice(0, CAPTION_LIMIT) || defaultCaption(job, genre));
   const [aiGenerated, setAiGenerated] = useState(true);
   const [privacy, setPrivacy] = useState<YouTubePrivacy>('unlisted');
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);

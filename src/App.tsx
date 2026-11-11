@@ -10,6 +10,7 @@ import { Learning } from './pages/Learning';
 import { Tasks } from './pages/Tasks';
 import { Dictation } from './pages/Dictation';
 import { Studio } from './pages/Studio';
+import { Story } from './pages/Story';
 import { Users } from './pages/Users';
 import { Projects } from './pages/Projects';
 import { Invite } from './pages/Invite';
@@ -94,6 +95,7 @@ function App() {
           <Route path="/tasks" element={<ProtectedRoute roles={['ADMIN']}><Tasks /></ProtectedRoute>} />
           <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
           <Route path="/studio" element={<ProtectedRoute roles={['ADMIN']}><Studio /></ProtectedRoute>} />
+          <Route path="/story" element={<ProtectedRoute roles={['ADMIN']}><Story /></ProtectedRoute>} />
           <Route path="/dictation" element={<ProtectedRoute roles={['ADMIN']}><Dictation /></ProtectedRoute>} />
 
           <Route path="/users" element={<ProtectedRoute roles={['ADMIN']}><Users /></ProtectedRoute>} />
