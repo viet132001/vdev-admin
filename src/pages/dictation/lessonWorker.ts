@@ -37,6 +37,7 @@ export interface PagePost {
   text: string;
   scheduledAt: string;
   status: 'SCHEDULED' | 'PUBLISHED';
+  postId?: string; // the post on Facebook
   permalink: string | null;
 }
 
@@ -212,6 +213,8 @@ export interface FacebookContent {
   watchTime: boolean; // false: the token lacks read_insights
   fetchedAt: string;
 }
+// Checks every video VDEV recorded as posted, on every channel, and forgets the ones Facebook no longer has
+export const cleanFacebook = (): Promise<{ cleared: string[] }> => call('/channels/facebook-clean', 'POST', {});
 export const facebookContent = (owner: string, fresh = false): Promise<FacebookContent> => call(`/channels/${encodeURIComponent(owner)}/facebook-content${fresh ? '?fresh=1' : ''}`);
 
 // When the channel's Page already has a video out or booked, by VDEV or by hand, so a suggested slot never lands on

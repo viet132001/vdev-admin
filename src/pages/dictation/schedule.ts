@@ -60,8 +60,11 @@ export const weekSlots = (weekStart: Date): Slot[] =>
   }).sort((a, b) => a.at.getTime() - b.at.getTime());
 
 // When a job's video goes or went out: it can't be two different days on the two platforms in this plan
+// A failed post never went out, so it takes no day
 export const jobWhen = (job: LessonJob): Date | null => {
-  const iso = job.facebook?.scheduledAt ?? job.youtube?.publishAt ?? job.facebook?.postedAt ?? job.youtube?.postedAt;
+  const facebook = job.facebook?.status === 'FAILED' ? null : job.facebook;
+  const youtube = job.youtube?.status === 'FAILED' ? null : job.youtube;
+  const iso = facebook?.scheduledAt ?? youtube?.publishAt ?? facebook?.postedAt ?? youtube?.postedAt;
   return iso ? new Date(iso) : null;
 };
 
