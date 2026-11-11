@@ -3,8 +3,8 @@ import { ChevronLeft, ChevronRight, ExternalLink, LayoutGrid, List, PenLine, Rot
 import { useBusy } from '../tasks/agent';
 import { FacebookOverview } from './FacebookOverview';
 import {
-  DEFAULT_GENRE, WORKER_COMMAND, cleanFacebook, createPost, facebookContent, genreIdOf, listJobs, listPages, listPosts, ownerOf, suggestPost, workerHealth,
-  type CoursePage, type FacebookContent, type LessonJob, type PagePost, type PageReel, type PageScheduled, type VideoGenre
+  WORKER_COMMAND, cleanFacebook, createPost, facebookContent, genreIdOf, listChannels, listJobs, listPosts, ownerOf, suggestPost,
+  type FacebookContent, type LessonJob, type PagePost, type PageReel, type PageScheduled
 } from './lessonWorker';
 import { formatDay, formatTime, jobWhen, sameDay, startOfWeek } from './schedule';
 import { contentLabel, videoLinks } from './videoStatus';
@@ -39,18 +39,24 @@ type Entry =
 const ExternalLinkTo: React.FC<{ url: string | null; label?: string }> = ({ url, label = 'Xem' }) =>
   url ? <> · <a href={url} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> {label}</a></> : null;
 
+// A channel worth a calendar: its Facebook Page is connected and could be read just now
+interface LiveChannel {
+  owner: string;
+  label: string;
+}
+
 interface PublishScheduleProps {
   initialDate?: Date | null; // opens on the week of this day
+  courseId?: string | null; // the course on screen: its channel is picked first when it has one
   onPickVideo: (jobId: string, at?: Date) => void; // a video of the library
   onClose: () => void;
 }
 
-export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, onPickVideo, onClose }) => {
+export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, courseId, onPickVideo, onClose }) => {
   const { busy, run } = useBusy();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(initialDate ?? new Date()));
-  const [genres, setGenres] = useState<VideoGenre[]>([]);
-  const [pages, setPages] = useState<CoursePage[]>([]);
-  const [genreId, setGenreId] = useState(DEFAULT_GENRE);
+  const [channels, setChannels] = useState<LiveChannel[]>([]);
+  const [genreId, setGenreId] = useState('');
   const [allJobs, setJobs] = useState<LessonJob[]>([]);
   const [allPosts, setPosts] = useState<PagePost[]>([]);
   const [offline, setOffline] = useState(false);
@@ -58,7 +64,7 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   const [composing, setComposing] = useState<Date | null>(null); // the day a text post is being written for
   const [postTime, setPostTime] = useState(POST_TIME);
   const [text, setText] = useState('');
-  const [facebook, setFacebook] = useState<{ owner: string; content: FacebookContent } | null>(null);
+  const [pageOf, setPageOf] = useState<Record<string, FacebookContent>>({});
   const [facebookError, setFacebookError] = useState<string | null>(null);
   const [facebookLoading, setFacebookLoading] = useState(false);
   // Board like Meta Business Suite by default; the choice is remembered on this browser only
@@ -75,10 +81,26 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
     try {
       // Posts Facebook no longer has (deleted there, or their Page is gone) are dropped before anything is shown
       await cleanFacebook().catch(() => undefined);
-      const [health, nextJobs, nextPosts, nextPages] = await Promise.all([workerHealth(), listJobs(), listPosts(), listPages().catch(() => [])]);
-      setGenres(health.genres ?? []);
-      setPages(nextPages.filter((page) => page.ownPage));
-      setJobs(nextJobs);
+      const [view, nextPosts] = await Promise.all([listChannels(), listPosts()]);
+      // Only channels whose Page answers now: a deleted Page, or one never connected, has nothing real to show
+      const read = await Promise.all(view.channels.filter((channel) => channel.facebook.configured).map(async (channel) => {
+        const content = await facebookContent(channel.genre).catch(() => null);
+        return content ? { channel, content } : null;
+      }));
+      const live = read.filter((item): item is NonNullable<typeof item> => !!item);
+      setChannels(live.map(({ channel }) => ({
+        owner: channel.genre,
+        label: `${channel.genre.startsWith('course-') ? `Khoá học ${channel.label}` : channel.label}${channel.facebook.name ? ` · page ${channel.facebook.name}` : ''}`
+      })));
+      setPageOf(Object.fromEntries(live.map(({ channel, content }) => [channel.genre, content])));
+      setGenreId((current) => {
+        const owners = live.map(({ channel }) => channel.genre);
+        if (owners.includes(current)) return current;
+        const course = courseId ? `course-${courseId}` : '';
+        return owners.includes(course) ? course : owners[0] ?? '';
+      });
+      // Read after the Pages: reading them brings the jobs in line with Facebook
+      setJobs(await listJobs());
       setPosts(nextPosts);
       setOffline(false);
     } catch {
@@ -86,7 +108,7 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [courseId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -96,28 +118,20 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
     setFacebookError(null);
     try {
       const content = await facebookContent(owner, fresh);
-      setFacebook({ owner, content });
+      setPageOf((current) => ({ ...current, [owner]: content }));
       setJobs(await listJobs());
     } catch (err) {
-      setFacebook(null);
       setFacebookError(shortError(err, 'Không đọc được page Facebook'));
     } finally {
       setFacebookLoading(false);
     }
   }, []);
 
-  const channelReady = genres.find((g) => g.id === genreId)?.facebook ?? pages.find((page) => page.channel.owner === genreId)?.channel.facebook ?? false;
-  useEffect(() => {
-    if (offline || loading) return;
-    if (channelReady) loadFacebook(genreId);
-    else { setFacebook(null); setFacebookError(null); }
-  }, [genreId, channelReady, offline, loading, loadFacebook]);
-
   // A course with a page of its own is a channel too; text posts only exist for a genre's page for now
-  const canPost = !(genreId.startsWith('course-') || genreId === 'comedy') && channelReady;
+  const canPost = !!genreId && !(genreId.startsWith('course-') || genreId === 'comedy');
   const jobs = allJobs.filter((job) => ownerOf(job) === genreId);
   const posts = allPosts.filter((post) => genreIdOf(post) === genreId);
-  const fromPage = facebook?.owner === genreId ? facebook.content : null;
+  const fromPage = pageOf[genreId] ?? null;
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const day = new Date(weekStart);
@@ -272,13 +286,14 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
             </>
           ) : (
             <>
-              {genres.length + pages.length > 0 && (
+              {!loading && channels.length === 0 && (
+                <p className="lg-meta">Chưa có kênh nào kết nối page Facebook đang hoạt động. Kết nối page ở Quản lý kênh rồi mở lại lịch.</p>
+              )}
+              {channels.length > 0 && (
                 <div className="form-group">
                   <label className="form-label">Kênh</label>
-                  <select className="form-input" value={genreId} onChange={(e) => { setGenreId(e.target.value); setComposing(null); }}>
-                    {genres.map((g) => <option key={g.id} value={g.id}>{g.label}: {g.channelName}</option>)}
-                    {pages.map((page) => <option key={page.courseId} value={page.channel.owner}>Khoá học: {page.title}</option>)}
-                    <option value="comedy">Hài ngắn</option>
+                  <select className="form-input" value={genreId} onChange={(e) => { setGenreId(e.target.value); setComposing(null); setFacebookError(null); }}>
+                    {channels.map((channel) => <option key={channel.owner} value={channel.owner}>{channel.label}</option>)}
                   </select>
                 </div>
               )}
@@ -296,23 +311,22 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
               <div className="sc-summary">
                 <span>Video trong tuần: <strong>{videoCount}</strong></span>
                 <span>Bài viết: <strong>{entries.length - videoCount}</strong></span>
-                {!channelReady && <span>Kênh này chưa kết nối page Facebook: chỉ hiện video đăng từ VDEV.</span>}
               </div>
 
-              {(channelReady || facebookError) && !loading && (
+              {!!genreId && !loading && (
                 <FacebookOverview content={fromPage} error={facebookError} loading={facebookLoading} onRefresh={() => loadFacebook(genreId, true)} onOpenVideo={(jobId) => onPickVideo(jobId)} />
               )}
 
               {loading && <div className="loading-container"><span className="spinner"></span></div>}
 
-              {!loading && view === 'list' && weekDays.map((day) => (
+              {!loading && genreId && view === 'list' && weekDays.map((day) => (
                 <div key={day.toISOString()} className="sc-row">
                   <div className="sc-when">{formatDay(day)}</div>
                   <div className="sc-list-day">{dayContent(day)}</div>
                 </div>
               ))}
 
-              {!loading && view === 'board' && (
+              {!loading && genreId && view === 'board' && (
                 <div className="sc-board">
                   {weekDays.map((day) => (
                     <div key={day.toISOString()} className={`sc-day${sameDay(day, new Date()) ? ' today' : ''}`}>

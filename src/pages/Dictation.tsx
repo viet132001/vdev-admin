@@ -549,6 +549,7 @@ export const Dictation: React.FC = () => {
       {scheduleOpen && (
         <PublishSchedule
           initialDate={scheduleDate}
+          courseId={sessionId}
           onPickVideo={(jobId, at) => { setScheduleOpen(false); setLibrary({ focus: { jobId, at } }); }}
           onClose={() => { setScheduleOpen(false); setScheduleDate(null); }}
         />
