@@ -4,7 +4,7 @@ import { api } from '../../services/api';
 import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
-import { WORKER_COMMAND, genreForJob, genreIdOf, jobAction, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
+import { WORKER_COMMAND, genreForJob, genreIdOf, isPublishing, jobAction, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
 import { formatWhen } from './schedule';
 import { VIDEO_FILTERS, VIDEO_STATE, contentLabel, isVideoJob, planVideos, videoLinks, videoState, type VideoState } from './videoStatus';
 
@@ -36,6 +36,8 @@ interface VideoLibraryProps {
   onChanged: () => void;
   onClose: () => void;
 }
+
+const PUBLISH_POLL_MS = 3000;
 
 export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, initialCourseId, channelsVersion, onManageChannels, onOpenLesson, onOpenSchedule, onChanged, onClose }) => {
   const [jobs, setJobs] = useState<LessonJob[]>([]);
@@ -77,6 +79,14 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
   useEffect(() => {
     if (channelsVersion) workerHealth().then((health) => setGenres(health.genres ?? [])).catch(() => undefined);
   }, [channelsVersion]);
+
+  // The worker uploads in the background: without asking again, a post that went through would spin here forever
+  const publishing = jobs.some(isPublishing);
+  useEffect(() => {
+    if (!publishing) return;
+    const timer = window.setInterval(() => { listJobs().then(setJobs).catch(() => undefined); }, PUBLISH_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [publishing]);
 
   const videoJobs = jobs.filter(isVideoJob);
   const lessonById = new Map(lessons.map((item) => [item.lesson.id, item]));

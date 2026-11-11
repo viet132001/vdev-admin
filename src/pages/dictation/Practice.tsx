@@ -3,6 +3,7 @@ import { api, getErrorMessage } from '../../services/api';
 import {
   Volume2, Snail, Lightbulb, Eye, SkipForward, RotateCcw, ArrowRight, CircleCheck, CircleX, Settings2, Repeat, X, Gamepad2
 } from 'lucide-react';
+import { errorSpots } from './errorSpots';
 import { grade, type DiffOp, type GradeResult } from './grading';
 import { englishVoices, loadSettings, playSentence, saveSettings, stopPlayback, type PracticeSettings } from './media';
 
@@ -167,7 +168,10 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
   const check = async () => {
     if (!sentence || !input.trim() || submitting) return;
     // Grade locally for instant feedback; the server re-grades and its result wins
-    setResult(grade(sentence.text, input));
+    const local = grade(sentence.text, input);
+    setResult(local);
+    // Straight to the first mistake, so it can be fixed without the mouse or typing the line again
+    if (!local.isCorrect) jumpToMistake(1, -1);
     setCheckedInput(input);
     setSubmitting(true);
     try {
@@ -241,7 +245,27 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
     setRound((r) => r + 1);
   };
 
+  // Selects the next (or previous) wrong or extra word, or puts the caret where a missing word goes.
+  // Graded again on the current text, so the spots follow the edits already made.
+  const jumpToMistake = (direction: 1 | -1, from?: number) => {
+    const box = inputRef.current;
+    if (!box || !sentence) return false;
+    const spots = errorSpots(sentence.text, box.value);
+    if (!spots.length) return false;
+    const caret = from ?? box.selectionStart;
+    const spot = direction === 1
+      ? spots.find((s) => s.start > caret) ?? spots[0]
+      : [...spots].reverse().find((s) => s.start < caret) ?? spots[spots.length - 1];
+    box.focus();
+    box.setSelectionRange(spot.start, spot.end);
+    return true;
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab' && result && !result.isCorrect && !revealed) {
+      if (jumpToMistake(e.shiftKey ? -1 : 1)) e.preventDefault();
+      return;
+    }
     if (e.key !== 'Enter' || e.shiftKey) return;
     e.preventDefault();
     if (result?.isCorrect || revealed) next();
@@ -473,7 +497,7 @@ export const Practice: React.FC<PracticeProps> = ({ lessonId, nextLesson, onOpen
 
       {navigator}
       <p className="dc-shortcuts" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-        Phím tắt: <span className="dc-kbd">Ctrl + Space</span> nghe lại · <span className="dc-kbd">Ctrl + Shift + Space</span> nghe chậm · <span className="dc-kbd">Enter</span> kiểm tra / câu tiếp
+        Phím tắt: <span className="dc-kbd">Ctrl + Space</span> nghe lại · <span className="dc-kbd">Ctrl + Shift + Space</span> nghe chậm · <span className="dc-kbd">Enter</span> kiểm tra / câu tiếp · <span className="dc-kbd">Tab</span> tới từ sai tiếp theo
       </p>
     </div>
   );

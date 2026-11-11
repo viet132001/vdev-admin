@@ -181,6 +181,38 @@ export const saveComedyScript = (id: string, script: ComedyScript): Promise<Less
 export const paintComedySet = (id: string, setId: string, description: string): Promise<ComedyCatalog> => call(`/comedy/${id}/set`, 'POST', { id: setId, description });
 export const previewComedyLine = async (id: string, line: number, script: ComedyScript) => `${WORKER_URL}${(await call(`/comedy/${id}/preview`, 'POST', { line, script })).url}`;
 export const listPosts = (): Promise<PagePost[]> => call('/posts');
+
+// What is on the channel's Facebook Page now, read by the worker with the Page token. Reading it also brings the
+// worker's own record in line: a Reel moved or posted from Meta Business Suite updates its job.
+export interface PageReel {
+  videoId: string;
+  jobId: string | null; // a video made in VDEV; null: posted another way
+  title: string;
+  picture: string | null;
+  permalink: string | null;
+  postedAt: string | null;
+  seconds: number | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  avgWatchSeconds: number | null;
+}
+export interface PageScheduled {
+  postId: string;
+  videoId: string | null;
+  jobId: string | null;
+  title: string | null;
+  text: string | null;
+  scheduledAt: string;
+  permalink: string | null;
+}
+export interface FacebookContent {
+  reels: PageReel[];
+  scheduled: PageScheduled[];
+  watchTime: boolean; // false: the token lacks read_insights
+  fetchedAt: string;
+}
+export const facebookContent = (owner: string): Promise<FacebookContent> => call(`/channels/${encodeURIComponent(owner)}/facebook-content`);
 export const suggestPost = (idea: string, genre: string): Promise<{ text: string }> => call('/posts/suggest', 'POST', { idea, genre });
 export const createPost = (text: string, scheduledAt: string, genre: string): Promise<PagePost> => call('/posts', 'POST', { text, scheduledAt, genre });
 export interface FacebookChoice {

@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
-import { DEFAULT_GENRE, WORKER_COMMAND, createPost, genreIdOf, listJobs, listPages, listPosts, ownerOf, suggestPost, workerHealth, type CoursePage, type LessonJob, type PagePost, type VideoGenre } from './lessonWorker';
+import { FacebookOverview } from './FacebookOverview';
+import { DEFAULT_GENRE, WORKER_COMMAND, createPost, facebookContent, genreIdOf, listJobs, listPages, listPosts, ownerOf, suggestPost, workerHealth, type CoursePage, type FacebookContent, type LessonJob, type PagePost, type PageScheduled, type VideoGenre } from './lessonWorker';
 import { formatDay, formatTime, jobWhen, postOnDay, sameDay, slotLabel, startOfWeek, weekSlots, type ContentType, type Slot } from './schedule';
 import { videoLinks, waitingFor } from './videoStatus';
 
@@ -25,6 +26,17 @@ const youtubeState = (job: LessonJob) => {
   return video.live === false ? <span>YouTube: đã hẹn</span> : <span className="ok">YouTube: đã đăng</span>;
 };
 
+// Something the Page will post that VDEV didn't schedule: shown so the slot isn't offered twice
+const OutsideItem: React.FC<{ item: PageScheduled }> = ({ item }) => (
+  <>
+    <div className="sc-title" style={{ whiteSpace: 'pre-wrap' }}>{item.title ?? item.text?.split('\n')[0] ?? 'Bài đã lên lịch'}</div>
+    <div className="sc-status">
+      Hẹn trên Facebook lúc {formatTime(new Date(item.scheduledAt))} (ngoài VDEV)
+      {item.permalink && <> · <a href={item.permalink} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> Xem</a></>}
+    </div>
+  </>
+);
+
 interface PublishScheduleProps {
   initialDate?: Date | null; // opens on the week of this day
   onPickVideo: (jobId: string, at?: Date) => void; // a video of the library, for this slot when given
@@ -43,6 +55,9 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   const [loading, setLoading] = useState(true);
   const [composing, setComposing] = useState<Date | null>(null);
   const [text, setText] = useState('');
+  const [facebook, setFacebook] = useState<{ owner: string; content: FacebookContent } | null>(null);
+  const [facebookError, setFacebookError] = useState<string | null>(null);
+  const [facebookLoading, setFacebookLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,6 +76,29 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Reading the Page also updates the worker's jobs (a Reel moved or posted on Facebook), so the jobs are read after
+  const loadFacebook = useCallback(async (owner: string) => {
+    setFacebookLoading(true);
+    setFacebookError(null);
+    try {
+      const content = await facebookContent(owner);
+      setFacebook({ owner, content });
+      setJobs(await listJobs());
+    } catch (err) {
+      setFacebook(null);
+      setFacebookError(shortError(err, 'Không đọc được page Facebook'));
+    } finally {
+      setFacebookLoading(false);
+    }
+  }, []);
+
+  const channelReady = genres.find((g) => g.id === genreId)?.facebook ?? pages.find((page) => page.channel.owner === genreId)?.channel.facebook ?? false;
+  useEffect(() => {
+    if (offline || loading) return;
+    if (channelReady) loadFacebook(genreId);
+    else { setFacebook(null); setFacebookError(null); }
+  }, [genreId, channelReady, offline, loading, loadFacebook]);
 
   // Each channel has its own week: what goes out on one channel doesn't fill a slot on another
   // A course with a page of its own is a channel too; text posts only exist for a genre's page for now
@@ -82,8 +120,13 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   });
   const videoSlots = slots.filter((slot) => slot.kind !== 'post');
   const postSlots = slots.filter((slot) => slot.kind === 'post');
-  const filledVideos = videoSlots.filter(jobOn).length;
-  const filledPosts = postSlots.filter((slot) => postOnDay(posts, slot.at)).length;
+  // Scheduled on the Page but not by VDEV (made in Meta Business Suite, or a video this machine doesn't have)
+  const fromPage = facebook?.owner === genreId ? facebook.content : null;
+  const outside = (fromPage?.scheduled ?? []).filter((item) => !item.jobId);
+  const outsideOn = (slot: Slot): PageScheduled | undefined => outside.find((item) => (slot.kind === 'post' ? !item.videoId : !!item.videoId) && sameDay(new Date(item.scheduledAt), slot.at));
+  const viewsOf = (job: LessonJob) => fromPage?.reels.find((reel) => reel.jobId === job.id)?.views ?? null;
+  const filledVideos = videoSlots.filter((slot) => jobOn(slot) || outsideOn(slot)).length;
+  const filledPosts = postSlots.filter((slot) => postOnDay(posts, slot.at) || outsideOn(slot)).length;
 
   const draft = () => run('suggest', async () => {
     try {
@@ -143,6 +186,10 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
                 <span>Bài tương tác: <strong>{filledPosts}/{postSlots.length}</strong></span>
               </div>
 
+              {(channelReady || facebookError) && !loading && (
+                <FacebookOverview content={fromPage} error={facebookError} loading={facebookLoading} onRefresh={() => loadFacebook(genreId)} onOpenVideo={(jobId) => onPickVideo(jobId)} />
+              )}
+
               {loading && <div className="loading-container"><span className="spinner"></span></div>}
 
               {!loading && slots.map((slot) => {
@@ -165,10 +212,11 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
                             </div>
                           </>
                         )}
-                        {!post && !open && (past || isCourse
+                        {!post && outsideOn(slot) && <OutsideItem item={outsideOn(slot)!} />}
+                        {!post && !outsideOn(slot) && !open && (past || isCourse
                           ? <div className="sc-empty">{isCourse && !past ? 'Bài chữ chỉ có ở page của thể loại' : 'Không có bài'}</div>
                           : <button className="btn btn-secondary btn-sm" style={{ marginTop: 4 }} onClick={() => { setComposing(slot.at); setText(''); }}>Soạn bài</button>)}
-                        {!post && open && (
+                        {!post && !outsideOn(slot) && open && (
                           <>
                             <textarea rows={4} maxLength={POST_LIMIT} autoFocus className="form-input" style={{ marginTop: 6, resize: 'vertical' }} placeholder="Viết bài, hoặc gõ ý tưởng rồi để Claude viết giúp" value={text} onChange={(e) => setText(e.target.value)} />
                             <div className="lg-facebook-actions">
@@ -183,8 +231,10 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
                   );
                 }
                 const job = jobOn(slot);
+                const elsewhere = job ? undefined : outsideOn(slot);
+                const views = job ? viewsOf(job) : null;
                 // Videos made and not yet out, of this slot's category on this channel: one click to put it here
-                const waiting = !job && !past ? waitingFor(jobs, slot.kind as ContentType) : [];
+                const waiting = !job && !elsewhere && !past ? waitingFor(jobs, slot.kind as ContentType) : [];
                 return (
                   <div key={key} className="sc-row">
                     <div className="sc-when">{formatDay(slot.at)}<span>{formatTime(slot.at)}</span></div>
@@ -194,10 +244,12 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
                         <>
                           <button className="lg-link sc-title" onClick={() => onPickVideo(job.id)}>{job.lesson?.title ?? job.request?.topic}</button>
                           <div className="sc-status">
-                            {facebookState(job)} · {youtubeState(job)}
+                            {facebookState(job)} · {youtubeState(job)}{views !== null && <> · {views.toLocaleString('vi-VN')} lượt xem</>}
                             {videoLinks(job).map((link) => <React.Fragment key={link.url}> · <a href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> {link.label}</a></React.Fragment>)}
                           </div>
                         </>
+                      ) : elsewhere ? (
+                        <OutsideItem item={elsewhere} />
                       ) : (
                         <>
                           <div className="sc-empty">{past ? 'Không có video' : waiting.length ? 'Trống. Video chờ đăng của chuyên mục này:' : 'Trống: tạo bài rồi hẹn giờ vào ngày này'}</div>

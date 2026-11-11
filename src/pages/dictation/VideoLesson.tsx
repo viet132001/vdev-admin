@@ -41,7 +41,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ lessonId, title, video
           <a className="btn btn-primary mt-4" href={video.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} /> Mở video</a>
         </div>
       ) : (
-        <div className={video.kind === 'file' ? 'dc-video-frame dc-video-frame-file' : 'dc-video-frame'}>
+        <div className={video.kind === 'file' ? 'dc-video-frame dc-video-frame-file' : video.kind === 'embed' && video.vertical ? 'dc-video-frame dc-video-frame-vertical' : 'dc-video-frame'}>
           {video.kind === 'embed' ? (
             // YouTube refuses to play without a referrer, so don't use no-referrer here
             <iframe
@@ -57,7 +57,11 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ lessonId, title, video
         </div>
       )}
       <div className="flex justify-between align-center" style={{ gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn btn-secondary btn-sm" onClick={onEdit}><Pencil size={14} /> Đổi video</button>
+        <div className="flex align-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-sm" onClick={onEdit}><Pencil size={14} /> Đổi video</button>
+          {/* A private or removed post shows Facebook's own error inside the player: the post itself is one click away */}
+          {video.kind === 'embed' && video.source && <a className="btn btn-secondary btn-sm" href={video.source} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Mở trên Facebook</a>}
+        </div>
         {hasSentences && (
           <button className="btn btn-primary btn-sm" onClick={onReading}><BookOpen size={14} /> Sang bài đọc <ArrowRight size={14} /></button>
         )}

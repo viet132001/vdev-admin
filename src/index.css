@@ -1045,6 +1045,7 @@ input[type='checkbox'], input[type='radio'], input[type='range'], progress { acc
 .dc-video-frame iframe, .dc-video-frame video { display: block; width: 100%; height: 100%; border: 0; }
 /* A video file may be vertical, so it keeps its own shape; only embeds need the fixed 16:9 box */
 .dc-video-frame-file { aspect-ratio: auto; }
+.dc-video-frame-vertical { aspect-ratio: 9 / 16; width: auto; height: min(78vh, 720px); max-width: 100%; margin: 0 auto; }
 .dc-video-frame-file video { height: auto; max-height: 75vh; }
 
 /* Lesson generator */
@@ -1455,6 +1456,14 @@ button.vl-row-open:hover { background-color: var(--bg-hover); }
 .vl-links a { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); }
 .vl-state-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sc-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.fb-overview { border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px; }
+.fb-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.fb-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.75rem; }
+.fb-stats strong { color: var(--text-main); font-size: 1.1rem; }
+.fb-reels { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin-top: 10px; }
+.fb-reel { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.85rem; }
+.fb-reel img, .fb-reel-thumb { width: 44px; height: 78px; object-fit: cover; border-radius: var(--radius-sm); background-color: var(--bg-hover); }
+.fb-reel .sc-status svg { vertical-align: -2px; }
 @media (max-width: 640px) {
   .vl-toolbar { flex-direction: column; }
   .vl-toolbar > select { max-width: none; width: 100%; }
