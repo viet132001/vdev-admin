@@ -1455,6 +1455,27 @@ button.vl-row-open:hover { background-color: var(--bg-hover); }
 .vl-links a { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); }
 .vl-state-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sc-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.sc-modal-wide { max-width: min(1180px, calc(100vw - 32px)); }
+.sc-toggle { display: inline-flex; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
+.sc-toggle button { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 0.75rem; background: transparent; color: var(--text-muted); border: 0; cursor: pointer; }
+.sc-toggle button + button { border-left: 1px solid var(--border-color); }
+.sc-toggle button.active { background-color: var(--bg-hover); color: var(--text-main); }
+/* Seven day columns like Meta Business Suite's planner; scrolls sideways when the screen is narrower than a week */
+.sc-board { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow-x: auto; }
+.sc-day { display: flex; flex-direction: column; gap: 8px; padding: 10px 8px; min-height: 260px; min-width: 0; font-size: 0.85rem; }
+.sc-day + .sc-day { border-left: 1px solid var(--border-color); }
+.sc-day.today { background-color: var(--bg-subtle); }
+.sc-day-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; color: var(--text-muted); font-size: 0.75rem; }
+.sc-day-num { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; border-radius: 50%; font-weight: 600; font-size: 0.85rem; color: var(--text-main); }
+.sc-day.today .sc-day-num { background-color: var(--primary); color: var(--primary-fg); }
+.sc-card { border: 1px dashed var(--border-color); border-radius: var(--radius-sm); padding: 8px; min-width: 0; overflow-wrap: anywhere; }
+.sc-card.filled { border-style: solid; background-color: var(--bg-card); }
+.sc-card-head { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.sc-card-head img { width: 28px; height: 50px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.sc-card .sc-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-align: left; }
+.sc-card .sc-pick .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sc-card .sc-text { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .fb-overview { border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px; }
 .fb-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .fb-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 0.75rem; }

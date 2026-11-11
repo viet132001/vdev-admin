@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, RotateCcw, Sparkles, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, LayoutGrid, List, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import { FacebookOverview } from './FacebookOverview';
 import { DEFAULT_GENRE, WORKER_COMMAND, createPost, facebookContent, genreIdOf, listJobs, listPages, listPosts, ownerOf, suggestPost, workerHealth, type CoursePage, type FacebookContent, type LessonJob, type PagePost, type PageScheduled, type VideoGenre } from './lessonWorker';
@@ -7,6 +7,7 @@ import { formatDay, formatTime, jobWhen, postOnDay, sameDay, slotLabel, startOfW
 import { videoLinks, waitingFor } from './videoStatus';
 
 const POST_LIMIT = 2000;
+const VIEW_KEY = 'vdev_schedule_view';
 const shortError = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
 const facebookState = (job: LessonJob) => {
@@ -58,6 +59,14 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   const [facebook, setFacebook] = useState<{ owner: string; content: FacebookContent } | null>(null);
   const [facebookError, setFacebookError] = useState<string | null>(null);
   const [facebookLoading, setFacebookLoading] = useState(false);
+  // Board like Meta Business Suite by default; the choice is remembered on this browser only
+  const [view, setView] = useState<'board' | 'list'>(() => {
+    try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'board'; } catch { return 'board'; }
+  });
+  const pickView = (next: 'board' | 'list') => {
+    setView(next);
+    try { localStorage.setItem(VIEW_KEY, next); } catch { /* private mode: just not remembered */ }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -147,12 +156,92 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
     }
   });
 
+  const slotKey = (slot: Slot) => `${slot.kind}-${slot.at.toISOString()}`;
+  const slotFilled = (slot: Slot) => !!(slot.kind === 'post' ? postOnDay(posts, slot.at) : jobOn(slot)) || !!outsideOn(slot);
+  // The Reel's cover from the Page, for a slot whose video is already there
+  const slotPicture = (slot: Slot) => {
+    if (slot.kind === 'post' || !fromPage) return null;
+    const job = jobOn(slot);
+    const outsideItem = job ? undefined : outsideOn(slot);
+    return fromPage.reels.find((reel) => (job ? reel.jobId === job.id : reel.videoId === outsideItem?.videoId))?.picture ?? null;
+  };
+
+  // What a slot holds, the same in the list and on the board
+  const slotBody = (slot: Slot) => {
+    const past = slot.at.getTime() < Date.now();
+    if (slot.kind === 'post') {
+      const post = postOnDay(posts, slot.at);
+      const open = composing?.getTime() === slot.at.getTime();
+      const elsewherePost = post ? undefined : outsideOn(slot);
+      return (
+        <>
+          {post && (
+            <>
+              <div className="sc-text">{post.text}</div>
+              <div className="sc-status">
+                {post.status === 'PUBLISHED' ? <span className="ok">Đã đăng</span> : 'Đã hẹn'}
+                {post.permalink && <> · <a href={post.permalink} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> Xem</a></>}
+              </div>
+            </>
+          )}
+          {elsewherePost && <OutsideItem item={elsewherePost} />}
+          {!post && !elsewherePost && !open && (past || isCourse
+            ? <div className="sc-empty">{isCourse && !past ? 'Bài chữ chỉ có ở page của thể loại' : 'Không có bài'}</div>
+            : <button className="btn btn-secondary btn-sm" style={{ marginTop: 4 }} onClick={() => { setComposing(slot.at); setText(''); }}>Soạn bài</button>)}
+          {!post && !elsewherePost && open && (
+            <>
+              <textarea rows={4} maxLength={POST_LIMIT} autoFocus className="form-input" style={{ marginTop: 6, resize: 'vertical' }} placeholder="Viết bài, hoặc gõ ý tưởng rồi để Claude viết giúp" value={text} onChange={(e) => setText(e.target.value)} />
+              <div className="lg-facebook-actions">
+                <button className="btn btn-secondary btn-sm" onClick={() => setComposing(null)}>Hủy</button>
+                <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={draft}><Sparkles size={14} /> {busy === 'suggest' ? 'Đang viết...' : 'Claude viết giúp'}</button>
+                <button className="btn btn-primary btn-sm" disabled={!!busy || !text.trim()} onClick={() => schedule(slot.at)}>Hẹn đăng</button>
+              </div>
+            </>
+          )}
+        </>
+      );
+    }
+    const job = jobOn(slot);
+    const elsewhere = job ? undefined : outsideOn(slot);
+    const views = job ? viewsOf(job) : null;
+    // Videos made and not yet out, of this slot's category on this channel: one click to put it here
+    const waiting = !job && !elsewhere && !past ? waitingFor(jobs, slot.kind as ContentType) : [];
+    if (job) {
+      return (
+        <>
+          <button className="lg-link sc-title" onClick={() => onPickVideo(job.id)}>{job.lesson?.title ?? job.request?.topic}</button>
+          <div className="sc-status">
+            {facebookState(job)} · {youtubeState(job)}{views !== null && <> · {views.toLocaleString('vi-VN')} lượt xem</>}
+            {videoLinks(job).map((link) => <React.Fragment key={link.url}> · <a href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> {link.label}</a></React.Fragment>)}
+          </div>
+        </>
+      );
+    }
+    if (elsewhere) return <OutsideItem item={elsewhere} />;
+    return (
+      <>
+        <div className="sc-empty">{past ? 'Không có video' : waiting.length ? 'Trống. Video chờ đăng của chuyên mục này:' : 'Trống: tạo bài rồi hẹn giờ vào ngày này'}</div>
+        {waiting.length > 0 && (
+          <div className="sc-pick">
+            {waiting.slice(0, 4).map((item) => <button key={item.id} className="btn btn-secondary btn-sm" onClick={() => onPickVideo(item.id, slot.at)}>{item.lesson?.title ?? item.request?.topic}</button>)}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(weekStart);
+    day.setDate(day.getDate() + i);
+    return day;
+  });
+
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content lg-modal">
+      <div className={`modal-content lg-modal${view === 'board' ? ' sc-modal-wide' : ''}`}>
         <div className="modal-header">
           <h3 style={{ margin: 0 }}>Lịch đăng</h3>
           <button className="hamburger-btn" title="Đóng" onClick={onClose}><X size={18} /></button>
@@ -178,7 +267,13 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
               )}
               <div className="flex justify-between align-center" style={{ marginBottom: 12 }}>
                 <button className="btn btn-secondary btn-sm" title="Tuần trước" onClick={() => moveWeek(-1)}><ChevronLeft size={16} /></button>
-                <strong style={{ fontSize: '0.9rem' }}>{formatDay(weekStart)} – {formatDay(weekEnd)}</strong>
+                <div className="flex align-center" style={{ gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <strong style={{ fontSize: '0.9rem' }}>{formatDay(weekStart)} – {formatDay(weekEnd)}</strong>
+                  <div className="sc-toggle" role="group" aria-label="Kiểu xem">
+                    <button className={view === 'board' ? 'active' : ''} title="Bảng theo ngày" onClick={() => pickView('board')}><LayoutGrid size={14} /> Bảng</button>
+                    <button className={view === 'list' ? 'active' : ''} title="Danh sách" onClick={() => pickView('list')}><List size={14} /> Danh sách</button>
+                  </div>
+                </div>
                 <button className="btn btn-secondary btn-sm" title="Tuần sau" onClick={() => moveWeek(1)}><ChevronRight size={16} /></button>
               </div>
               <div className="sc-summary">
@@ -192,78 +287,48 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
 
               {loading && <div className="loading-container"><span className="spinner"></span></div>}
 
-              {!loading && slots.map((slot) => {
-                const key = `${slot.kind}-${slot.at.toISOString()}`;
-                const past = slot.at.getTime() < Date.now();
-                if (slot.kind === 'post') {
-                  const post = postOnDay(posts, slot.at);
-                  const open = composing?.getTime() === slot.at.getTime();
-                  return (
-                    <div key={key} className="sc-row">
-                      <div className="sc-when">{formatDay(slot.at)}<span>{formatTime(slot.at)}</span></div>
-                      <div>
-                        <div className="sc-status" style={{ marginTop: 0 }}>{slotLabel(slot.kind)}</div>
-                        {post && (
-                          <>
-                            <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{post.text}</div>
-                            <div className="sc-status">
-                              {post.status === 'PUBLISHED' ? <span className="ok">Đã đăng</span> : 'Đã hẹn'}
-                              {post.permalink && <> · <a href={post.permalink} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> Xem</a></>}
-                            </div>
-                          </>
-                        )}
-                        {!post && outsideOn(slot) && <OutsideItem item={outsideOn(slot)!} />}
-                        {!post && !outsideOn(slot) && !open && (past || isCourse
-                          ? <div className="sc-empty">{isCourse && !past ? 'Bài chữ chỉ có ở page của thể loại' : 'Không có bài'}</div>
-                          : <button className="btn btn-secondary btn-sm" style={{ marginTop: 4 }} onClick={() => { setComposing(slot.at); setText(''); }}>Soạn bài</button>)}
-                        {!post && !outsideOn(slot) && open && (
-                          <>
-                            <textarea rows={4} maxLength={POST_LIMIT} autoFocus className="form-input" style={{ marginTop: 6, resize: 'vertical' }} placeholder="Viết bài, hoặc gõ ý tưởng rồi để Claude viết giúp" value={text} onChange={(e) => setText(e.target.value)} />
-                            <div className="lg-facebook-actions">
-                              <button className="btn btn-secondary btn-sm" onClick={() => setComposing(null)}>Hủy</button>
-                              <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={draft}><Sparkles size={14} /> {busy === 'suggest' ? 'Đang viết...' : 'Claude viết giúp'}</button>
-                              <button className="btn btn-primary btn-sm" disabled={!!busy || !text.trim()} onClick={() => schedule(slot.at)}>Hẹn đăng</button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-                const job = jobOn(slot);
-                const elsewhere = job ? undefined : outsideOn(slot);
-                const views = job ? viewsOf(job) : null;
-                // Videos made and not yet out, of this slot's category on this channel: one click to put it here
-                const waiting = !job && !elsewhere && !past ? waitingFor(jobs, slot.kind as ContentType) : [];
-                return (
-                  <div key={key} className="sc-row">
-                    <div className="sc-when">{formatDay(slot.at)}<span>{formatTime(slot.at)}</span></div>
-                    <div>
-                      <div className="sc-status" style={{ marginTop: 0 }}>{slotLabel(slot.kind)}</div>
-                      {job ? (
-                        <>
-                          <button className="lg-link sc-title" onClick={() => onPickVideo(job.id)}>{job.lesson?.title ?? job.request?.topic}</button>
-                          <div className="sc-status">
-                            {facebookState(job)} · {youtubeState(job)}{views !== null && <> · {views.toLocaleString('vi-VN')} lượt xem</>}
-                            {videoLinks(job).map((link) => <React.Fragment key={link.url}> · <a href={link.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> {link.label}</a></React.Fragment>)}
-                          </div>
-                        </>
-                      ) : elsewhere ? (
-                        <OutsideItem item={elsewhere} />
-                      ) : (
-                        <>
-                          <div className="sc-empty">{past ? 'Không có video' : waiting.length ? 'Trống. Video chờ đăng của chuyên mục này:' : 'Trống: tạo bài rồi hẹn giờ vào ngày này'}</div>
-                          {waiting.length > 0 && (
-                            <div className="sc-pick">
-                              {waiting.slice(0, 4).map((item) => <button key={item.id} className="btn btn-secondary btn-sm" onClick={() => onPickVideo(item.id, slot.at)}>{item.lesson?.title ?? item.request?.topic}</button>)}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
+              {!loading && view === 'list' && slots.map((slot) => (
+                <div key={slotKey(slot)} className="sc-row">
+                  <div className="sc-when">{formatDay(slot.at)}<span>{formatTime(slot.at)}</span></div>
+                  <div>
+                    <div className="sc-status" style={{ marginTop: 0 }}>{slotLabel(slot.kind)}</div>
+                    {slotBody(slot)}
                   </div>
-                );
-              })}
+                </div>
+              ))}
+
+              {!loading && view === 'board' && (
+                <div className="sc-board">
+                  {weekDays.map((day) => {
+                    const daySlots = slots.filter((slot) => sameDay(slot.at, day));
+                    const today = sameDay(day, new Date());
+                    return (
+                      <div key={day.toISOString()} className={`sc-day${today ? ' today' : ''}`}>
+                        <div className="sc-day-head">
+                          <span className="sc-day-name">{formatDay(day).split(' ')[0]}</span>
+                          <span className="sc-day-num">{day.getDate()}</span>
+                        </div>
+                        {daySlots.length === 0 && <div className="sc-empty" style={{ fontSize: '0.8rem' }}>Chưa có kế hoạch nào</div>}
+                        {daySlots.map((slot) => {
+                          const picture = slotPicture(slot);
+                          return (
+                            <div key={slotKey(slot)} className={`sc-card${slotFilled(slot) ? ' filled' : ''}`}>
+                              <div className="sc-card-head">
+                                {picture && <img src={picture} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+                                <div style={{ minWidth: 0 }}>
+                                  <strong>{formatTime(slot.at)}</strong>
+                                  <div className="sc-status" style={{ marginTop: 0 }}>{slotLabel(slot.kind)}</div>
+                                </div>
+                              </div>
+                              {slotBody(slot)}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
         </div>
