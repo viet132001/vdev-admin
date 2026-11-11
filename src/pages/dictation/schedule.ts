@@ -83,8 +83,9 @@ export const nextFreeSlot = (contentType: ContentType | undefined, jobs: LessonJ
 const BATCH_SEARCH_DAYS = 60;
 
 // One video a day from the start date at the page's hour, skipping days this channel already posts on
-export const planDays = (pending: LessonJob[], all: LessonJob[], start: string, time: string, now = new Date()): Map<string, Date> => {
-  const taken = all.filter((job) => !pending.includes(job)).map(jobWhen).filter((date): date is Date => !!date);
+// alsoTaken: days the channel's Facebook Page already posts on outside these jobs
+export const planDays = (pending: LessonJob[], all: LessonJob[], start: string, time: string, now = new Date(), alsoTaken: Date[] = []): Map<string, Date> => {
+  const taken = [...all.filter((job) => !pending.includes(job)).map(jobWhen).filter((date): date is Date => !!date), ...alsoTaken];
   const [hours, minutes] = time.split(':').map(Number);
   const day = new Date(`${start}T00:00`);
   const plan = new Map<string, Date>();

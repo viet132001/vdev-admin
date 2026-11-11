@@ -5,7 +5,7 @@ import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { BATCH_ACTIVE } from './batchRunner';
 import { defaultCaption, defaultTitle } from './lessonSave';
 import { CONTENT_TYPES, formatWhen, jobWhen, planDays, type ContentType } from './schedule';
-import { WORKER_COMMAND, batchOf, createBatch, jobAction, jobVideoUrl, listJobs, listPages, ownerOf, workerHealth, type CoursePage, type LessonJob, type VideoGenre } from './lessonWorker';
+import { WORKER_COMMAND, batchOf, createBatch, facebookTaken, jobAction, jobVideoUrl, listJobs, listPages, ownerOf, workerHealth, type CoursePage, type LessonJob, type VideoGenre } from './lessonWorker';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const DEFAULT_ROWS = 5;
@@ -52,6 +52,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
   const [form, setForm] = useState({ level: course.level || 'A2', contentType: 'conversation' as ContentType, words: 90, vocabulary: 5, note: '' });
   const [start, setStart] = useState(() => toDateInput(new Date()));
   const [time, setTime] = useState('');
+  const [onPage, setOnPage] = useState<Date[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -86,7 +87,14 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
   const genre = genres.find((g) => g.id === page?.genre);
   const pending = batch.filter((job) => job.status === 'DONE' && job.videoPath && !isScheduled(job));
   const owner = batch[0] ? ownerOf(batch[0]) : null;
-  const plan = time ? planDays(pending, jobs.filter((job) => owner && ownerOf(job) === owner), start, time) : new Map<string, Date>();
+  // The batch takes no day the Page already posts on, booked by VDEV or by hand in Meta Business Suite
+  useEffect(() => {
+    if (!owner) return;
+    let stale = false;
+    facebookTaken(owner).then((days) => { if (!stale) setOnPage(days); });
+    return () => { stale = true; };
+  }, [owner]);
+  const plan = time ? planDays(pending, jobs.filter((job) => owner && ownerOf(job) === owner), start, time, new Date(), onPage) : new Map<string, Date>();
   const tooFar = [...plan.values()].some((at) => at.getTime() - Date.now() > MAX_AHEAD_DAYS * 24 * 60 * 60 * 1000);
   const target = batch[0]?.target;
 

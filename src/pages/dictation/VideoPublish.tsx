@@ -3,7 +3,7 @@ import { CircleCheck, ExternalLink, Loader2, RotateCcw, Send } from 'lucide-reac
 import { api, getErrorMessage } from '../../services/api';
 import { useBusy } from '../tasks/agent';
 import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
-import { isFacebookBusy, isPublishing, jobAction, listJobs, ownerOf, type LessonJob, type VideoGenre, type YouTubePrivacy } from './lessonWorker';
+import { facebookTaken, isFacebookBusy, isPublishing, jobAction, listJobs, ownerOf, type LessonJob, type VideoGenre, type YouTubePrivacy } from './lessonWorker';
 import { CAPTION_LIMIT, TITLE_LIMIT, defaultCaption, defaultTitle, youtubeLinkOf } from './lessonSave';
 import { formatWhen, fromLocalInput, nextFreeSlot, toLocalInput } from './schedule';
 
@@ -70,8 +70,10 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
   const contentType = job.request?.contentType;
   const owner = ownerOf(job);
   useEffect(() => {
-    // Another channel posting that day doesn't take this channel's slot
-    listJobs().then((jobs) => setWhen((current) => current || toLocalInput(nextFreeSlot(contentType, jobs.filter((j) => j.id !== job.id && ownerOf(j) === owner))))).catch(() => undefined);
+    // Another channel posting that day doesn't take this channel's slot; what its Facebook Page already has does
+    Promise.all([listJobs(), facebookTaken(owner, job.id)])
+      .then(([jobs, onPage]) => setWhen((current) => current || toLocalInput(nextFreeSlot(contentType, jobs.filter((j) => j.id !== job.id && ownerOf(j) === owner), new Date(), onPage))))
+      .catch(() => undefined);
   }, [contentType, job.id, owner]);
 
   const askFacebook = () => setConfirm({

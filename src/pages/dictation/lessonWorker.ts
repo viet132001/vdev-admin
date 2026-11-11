@@ -212,7 +212,21 @@ export interface FacebookContent {
   watchTime: boolean; // false: the token lacks read_insights
   fetchedAt: string;
 }
-export const facebookContent = (owner: string): Promise<FacebookContent> => call(`/channels/${encodeURIComponent(owner)}/facebook-content`);
+export const facebookContent = (owner: string, fresh = false): Promise<FacebookContent> => call(`/channels/${encodeURIComponent(owner)}/facebook-content${fresh ? '?fresh=1' : ''}`);
+
+// When the channel's Page already has a video out or booked, by VDEV or by hand, so a suggested slot never lands on
+// one of those days. except: the video being placed, which doesn't block itself. A channel without a Page has none.
+export const facebookTaken = async (owner: string, except?: string): Promise<Date[]> => {
+  try {
+    const content = await facebookContent(owner);
+    return [
+      ...content.scheduled.filter((item) => item.videoId && item.jobId !== except).map((item) => new Date(item.scheduledAt)),
+      ...content.reels.filter((reel) => reel.postedAt && reel.jobId !== except).map((reel) => new Date(reel.postedAt!))
+    ];
+  } catch {
+    return [];
+  }
+};
 export const suggestPost = (idea: string, genre: string): Promise<{ text: string }> => call('/posts/suggest', 'POST', { idea, genre });
 export const createPost = (text: string, scheduledAt: string, genre: string): Promise<PagePost> => call('/posts', 'POST', { text, scheduledAt, genre });
 export interface FacebookChoice {

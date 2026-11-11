@@ -63,7 +63,8 @@ export interface Planned {
 
 // When each video goes out, or when the plan would put it. Waiting videos take the free slots of their category on
 // their channel in the order they were made, one each, so the suggestions can be followed as they are.
-export const planVideos = (jobs: LessonJob[], channelOf: (job: LessonJob) => string, now = new Date()) => {
+// takenOf: days a channel's Facebook Page already posts on, read from the Page
+export const planVideos = (jobs: LessonJob[], channelOf: (job: LessonJob) => string, now = new Date(), takenOf: (channel: string) => Date[] = () => []) => {
   const plan = new Map<string, Planned>();
   const promised = new Map<string, Date[]>();
   const waiting = jobs.filter((job) => videoState(job) === 'LOCAL' || videoState(job) === 'DRAFT').sort((a, b) => String(a.createdAt ?? '').localeCompare(String(b.createdAt ?? '')));
@@ -73,7 +74,7 @@ export const planVideos = (jobs: LessonJob[], channelOf: (job: LessonJob) => str
   }
   for (const job of waiting) {
     const channel = channelOf(job);
-    const taken = promised.get(channel) ?? [];
+    const taken = promised.get(channel) ?? takenOf(channel);
     // A job from before categories is a conversation everywhere else on this page, so it takes that slot here too
     const at = nextFreeSlot(job.request?.contentType ?? 'conversation', jobs.filter((other) => channelOf(other) === channel), now, taken);
     promised.set(channel, [...taken, at]);

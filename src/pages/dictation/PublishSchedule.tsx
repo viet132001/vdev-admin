@@ -78,11 +78,11 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
   useEffect(() => { load(); }, [load]);
 
   // Reading the Page also updates the worker's jobs (a Reel moved or posted on Facebook), so the jobs are read after
-  const loadFacebook = useCallback(async (owner: string) => {
+  const loadFacebook = useCallback(async (owner: string, fresh = false) => {
     setFacebookLoading(true);
     setFacebookError(null);
     try {
-      const content = await facebookContent(owner);
+      const content = await facebookContent(owner, fresh);
       setFacebook({ owner, content });
       setJobs(await listJobs());
     } catch (err) {
@@ -187,7 +187,7 @@ export const PublishSchedule: React.FC<PublishScheduleProps> = ({ initialDate, o
               </div>
 
               {(channelReady || facebookError) && !loading && (
-                <FacebookOverview content={fromPage} error={facebookError} loading={facebookLoading} onRefresh={() => loadFacebook(genreId)} onOpenVideo={(jobId) => onPickVideo(jobId)} />
+                <FacebookOverview content={fromPage} error={facebookError} loading={facebookLoading} onRefresh={() => loadFacebook(genreId, true)} onOpenVideo={(jobId) => onPickVideo(jobId)} />
               )}
 
               {loading && <div className="loading-container"><span className="spinner"></span></div>}

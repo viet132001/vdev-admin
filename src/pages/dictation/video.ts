@@ -1,9 +1,9 @@
 // Turns a lesson's video link into something playable. Only http(s) links ever reach an iframe, <video> or href.
 
 export type VideoSource =
-  | { kind: 'embed'; url: string; vertical?: boolean; source?: string }
+  | { kind: 'embed'; url: string }
   | { kind: 'file'; url: string }
-  | { kind: 'link'; url: string };
+  | { kind: 'link'; url: string; site?: 'facebook' };
 
 const FILE_EXTENSION = /\.(mp4|webm|ogv|ogg|mov|m4v)$/i;
 // Generated videos live in VDEV storage, whose links have no file extension
@@ -18,21 +18,9 @@ const youtubeId = (url: URL, host: string) => {
   return ['embed', 'shorts', 'live', 'v'].includes(prefix) ? id : null;
 };
 
+// Facebook's player refuses this channel's Reels outside Facebook ("Bạn không thể nhúng video này") even though the
+// Graph API calls them embeddable, so a Facebook link opens on Facebook instead of showing a broken player
 const FACEBOOK_HOSTS = ['facebook.com', 'm.facebook.com', 'web.facebook.com', 'fb.watch'];
-const FACEBOOK_ID = /^\d{6,}$/;
-
-// Facebook plays a public video inside its own player page. A Reel is vertical; its id is the video's id.
-const facebookEmbed = (url: URL, host: string): VideoSource | null => {
-  if (!FACEBOOK_HOSTS.includes(host)) return null;
-  const reel = url.pathname.match(/^\/reel\/(\d+)/);
-  if (reel && !FACEBOOK_ID.test(reel[1])) return null;
-  const href = reel ? `https://www.facebook.com/reel/${reel[1]}/` : url.href;
-  const isVideo = !!reel || host === 'fb.watch' || /\/videos\/|^\/watch\/?$|^\/share\/[vr]\//.test(url.pathname);
-  if (!isVideo) return null;
-  const vertical = !!reel || url.pathname.startsWith('/share/r/');
-  const player = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(href)}&show_text=false${vertical ? '&width=360&height=640' : ''}`;
-  return { kind: 'embed', url: player, vertical, source: url.href };
-};
 
 export const parseVideo = (raw: string | null | undefined): VideoSource | null => {
   let url: URL;
@@ -47,8 +35,7 @@ export const parseVideo = (raw: string | null | undefined): VideoSource | null =
   const id = youtubeId(url, host);
   if (id && YOUTUBE_ID.test(id)) return { kind: 'embed', url: `https://www.youtube-nocookie.com/embed/${id}` };
 
-  const facebook = facebookEmbed(url, host);
-  if (facebook) return facebook;
+  if (FACEBOOK_HOSTS.includes(host)) return { kind: 'link', url: url.href, site: 'facebook' };
 
   const drive = host === 'drive.google.com' && url.pathname.match(/^\/file\/d\/([\w-]+)/);
   if (drive) return { kind: 'embed', url: `https://drive.google.com/file/d/${drive[1]}/preview` };

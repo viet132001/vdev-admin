@@ -4,7 +4,7 @@ import { api } from '../../services/api';
 import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
-import { WORKER_COMMAND, genreForJob, genreIdOf, isPublishing, jobAction, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
+import { WORKER_COMMAND, facebookTaken, genreForJob, genreIdOf, isPublishing, jobAction, jobVideoUrl, ownerOf, listJobs, workerHealth, type LessonJob, type VideoGenre } from './lessonWorker';
 import { formatWhen } from './schedule';
 import { VIDEO_FILTERS, VIDEO_STATE, contentLabel, isVideoJob, planVideos, videoLinks, videoState, type VideoState } from './videoStatus';
 
@@ -51,6 +51,7 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(focus?.jobId ?? null);
   const [editingShots, setEditingShots] = useState(false);
+  const [onPage, setOnPage] = useState<Record<string, Date[]>>({});
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const load = useCallback(async () => {
@@ -126,7 +127,17 @@ export const VideoLibrary: React.FC<VideoLibraryProps> = ({ sessions, focus, ini
   const shown = matching.filter((row) => !states.length || states.includes(row.state));
   const counts = Object.fromEntries(VIDEO_FILTERS.map((f) => [f.id, matching.filter((row) => !f.states.length || f.states.includes(row.state)).length]));
   const courses = [...new Set(shown.map((row) => row.courseTitle))];
-  const plans = planVideos(videoJobs, ownerOf);
+  // Suggested slots skip the days each channel's Facebook Page already has a video, so they're read for the
+  // channels with videos waiting; the worker keeps the Page for a while, so this is cheap to repeat
+  const waitingOwners = [...new Set(videoJobs.filter((job) => !job.facebook && !job.youtube).map(ownerOf))].sort().join(',');
+  useEffect(() => {
+    if (!waitingOwners) return;
+    let stale = false;
+    Promise.all(waitingOwners.split(',').map(async (owner) => [owner, await facebookTaken(owner)] as const))
+      .then((entries) => { if (!stale) setOnPage(Object.fromEntries(entries)); });
+    return () => { stale = true; };
+  }, [waitingOwners]);
+  const plans = planVideos(videoJobs, ownerOf, new Date(), (owner) => onPage[owner] ?? []);
 
   const header = (title: string, back?: () => void) => (
     <div className="modal-header">
