@@ -145,6 +145,9 @@ const TaskCard: React.FC<{ task: any; onOpen: () => void; draggable?: boolean; s
     <div style={{ fontWeight: 500 }}>{task.title}</div>
     <div className="tw-card-meta">
       <Avatar name={task.assignee?.fullName} size={18} />
+      <span style={{ fontWeight: 500, color: task.assignee ? 'var(--text-main)' : 'var(--text-muted)' }}>
+        {task.assignee?.fullName || 'Chưa giao'}
+      </span>
       <PriorityBadge priority={task.priority} />
       {task.dueDate && <span className={task.isOverdue ? 'tw-overdue' : ''}>{formatDate(task.dueDate)}</span>}
       {task.milestone && <span>{task.milestone.name}</span>}

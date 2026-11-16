@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LogOut, X } from 'lucide-react';
 import { hasRole, useAuth } from '../context/AuthContext';
+import { api, getErrorMessage } from '../services/api';
 import { ThemeSwitch } from './ThemeToggle';
 import { initials } from './userInitials';
 
@@ -10,7 +11,32 @@ interface Props {
 }
 
 export const SettingsModal: React.FC<Props> = ({ onClose, onLogout }) => {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
+  const [name, setName] = useState(user?.fullName || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const trimmed = name.trim();
+  const dirty = !!user && trimmed !== user.fullName;
+
+  const saveName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dirty || saving) return;
+    if (!trimmed) return setError('Tên không được để trống');
+    if (trimmed.length > 100) return setError('Tên tối đa 100 ký tự');
+    setSaving(true);
+    setError('');
+    try {
+      await api.patch('/api/auth/profile', { fullName: trimmed });
+      await refreshProfile();
+      setSaved(true);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Không lưu được tên'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -29,7 +55,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onLogout }) => {
           {user && (
             <section>
               <div className="nav-section-label" style={{ padding: 0, marginBottom: 8 }}>Tài khoản</div>
-              <div className="user-card" style={{ padding: 0 }}>
+              <div className="user-card" style={{ padding: 0, marginBottom: 12 }}>
                 <div className="user-avatar">{initials(user.fullName, user.email)}</div>
                 <div className="user-meta">
                   <div className="name">{user.fullName}</div>
@@ -37,6 +63,23 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onLogout }) => {
                 </div>
                 {hasRole(user, 'ADMIN') && <span className="badge badge-info">Quản trị viên</span>}
               </div>
+              <form onSubmit={saveName}>
+                <label className="form-label" htmlFor="settings-name">Tên hiển thị</label>
+                <div className="flex gap-2">
+                  <input
+                    id="settings-name"
+                    className="form-input"
+                    value={name}
+                    maxLength={100}
+                    onChange={(e) => { setName(e.target.value); setSaved(false); setError(''); }}
+                  />
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={!dirty || saving}>
+                    {saving ? 'Đang lưu...' : 'Lưu'}
+                  </button>
+                </div>
+                {error && <div style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: 6 }}>{error}</div>}
+                {saved && !error && <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: 6 }}>Đã lưu. Mọi người sẽ thấy tên mới.</div>}
+              </form>
             </section>
           )}
 

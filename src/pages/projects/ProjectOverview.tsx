@@ -34,6 +34,9 @@ const TaskMini: React.FC<{ task: any; project: any; onOpen: () => void }> = ({ t
       <span className="pj-mini-title">{task.title}</span>
       {source && <span className="tw-tag neutral">{source.key}</span>}
       <Avatar name={task.assigneeId ? memberName(project, task.assigneeId) : null} size={20} />
+      <span style={{ fontSize: '0.78rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', color: task.assigneeId ? 'var(--text-main)' : 'var(--text-muted)' }}>
+        {task.assigneeId ? memberName(project, task.assigneeId) : 'Chưa giao'}
+      </span>
       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(task.dueDate)}</span>
     </button>
   );

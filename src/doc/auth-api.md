@@ -105,6 +105,16 @@ Tài liệu này cung cấp chi tiết đặc tả API của **Authentication Mo
 
 ---
 
+## 3b. Sửa thông tin của chính mình (Update Profile)
+
+* **Endpoint:** `PATCH /api/auth/profile`
+* **Xác thực:** mọi user đã đăng nhập (không cần `ADMIN`; `PATCH /api/users/:id` ở mục 6 chỉ dành cho admin).
+* **Body:** `{ "fullName": "Anh Long" }`
+* **Phản hồi (200):** profile như `GET /api/auth/profile`.
+* **400:** `fullName` rỗng hoặc dài quá 100 ký tự.
+
+---
+
 ## 4. Cách thức sử dụng Token trong các API tiếp theo
 
 Tất cả các API được bảo vệ bằng `JwtAuthGuard` (như Note, Learning, Finance) đều yêu cầu Client đính kèm Access Token vào Header:

@@ -16,10 +16,7 @@ index.html, src/main.tsx      entry: render <App/>, import src/index.css
 src/App.tsx                   router (basename "/vdev-admin"), ProtectedRoute / GuestRoute, "/" → "/tasks"
 src/context/ThemeContext.tsx  ThemeProvider + useTheme(): Sáng / Tối / Hệ thống, lưu localStorage vdev_theme, ghi <html data-theme>
 src/context/AuthContext.tsx   AuthProvider + useAuth(): login / register / logout / Google login, tải /api/auth/profile; hasRole(user, ...roles)
-src/services/api.ts           API client duy nhất: api.get/post/patch/delete, authFetch, getErrorMessage, cache, mock fallback
-src/services/*Mock.ts         mock localStorage khi BE không kết nối được:
-                                taskMock.ts (tasks, task-projects, task-tags) + taskAgentMock.ts (Task Agent),
-                                dictationMock.ts, liabilityMock.ts, userMock.ts; auth/finance/learning mock nằm thẳng trong api.ts
+src/services/api.ts           API client duy nhất: api.get/post/patch/delete, authFetch, getErrorMessage, cache, isNetworkError (không có mock: BE không chạy thì báo lỗi)
 src/components/               Layout.tsx (sidebar + mobile header), ThemeToggle.tsx (ThemeSwitch ở sidebar, ThemeToggleButton ở trang đăng nhập / header mobile), MoneyInput.tsx, GoogleLoginButton.tsx
 src/pages/*.tsx               một file / trang: Tasks, Dictation, Users, Finance, Liabilities, Learning, Dashboard, Login, Register, GoogleCallback
 src/pages/tasks/              màn Tasks: TaskBoard / TaskTable / TaskCalendar (view), TaskDetail, TaskReview (diff),
@@ -69,7 +66,7 @@ pnpm preview            # vite preview
 - **State trên URL**: trang dùng `useSearchParams` cho lựa chọn hiện tại (`?project=&task=` ở Tasks, `?session=&lesson=&tab=` ở Dictation).
 - **Sáng / Tối**: CSS tối viết dưới `:root[data-theme="dark"]` (không dùng `@media (prefers-color-scheme)`); script inline ở `index.html` áp theme trước khi vẽ, phải khớp `ThemeContext.tsx`.
 - **Style**: class trong `src/index.css` + inline style dùng biến CSS (`var(--primary)`, `var(--text-muted)`, `var(--radius-sm)`…). Không hard-code màu cho trạng thái; theo `DesignGuideline.md` (bảng màu zinc trung tính, không gradient/blur/emoji trang trí, viền 1px).
-- **Mock**: mỗi module mock export hàm `mockXxx(method, url, body?) => { handled, data? }`, lỗi ném `Error(JSON.stringify({ success:false, message, errorCode, errors: [] }))` giống BE (mẫu `src/services/taskMock.ts`). Mock bám theo `src/doc/*.md`; thêm endpoint mới mà muốn chạy offline thì thêm vào mock tương ứng.
+- **Mất kết nối BE**: `authFetch` bắn `vdev:network-error` / `vdev:network-ok`, `Layout` hiện banner "Không thể kết nối đến máy chủ, vui lòng thử lại sau."; lỗi ném ra có đúng message đó (`isNetworkError`). Không còn dữ liệu giả / mock.
 - **TypeScript** (`tsconfig.app.json`): `noUnusedLocals`, `noUnusedParameters` ⇒ biến/import thừa làm `pnpm build` lỗi; `verbatimModuleSyntax` ⇒ import kiểu phải ghi `type` (`import { ConfirmDialog, type ConfirmState } ...`); `erasableSyntaxOnly` ⇒ không dùng `enum`, namespace, parameter property. Dữ liệu từ API phần lớn để `any`.
 
 ## 5. Liên kết với repo khác
@@ -78,12 +75,12 @@ pnpm preview            # vite preview
 - Auth: JWT Bearer lưu `localStorage` (`vdev_token`, `vdev_refresh_token`); 401 ⇒ `authFetch` gọi `/api/auth/refresh` một lần rồi thử lại, thất bại ⇒ phát event `vdev:session-expired` để `AuthContext` đăng xuất.
 - **vdev-agent** (runner chạy trên máy người dùng, Claude Agent SDK + VDEV MCP tools): FE không gọi trực tiếp, chỉ đọc/ghi trạng thái plan / run / changeset / PR qua BE. Mô tả đầy đủ ở `src/doc/task-agent-mcp.md` (mục 15: git flow, workspace nhiều repo, `CLAUDE.md` của từng repo).
 - **vdev-video** (thư mục cạnh repo này, Remotion, chạy trên máy cá nhân): tạo video bài học từ các câu rồi gắn vào `videoUrl` của lesson. Mỗi thể loại (Giao tiếp, Stickman...) cấu hình trong `src/genres.ts` của vdev-video, gồm kiểu video, series và kênh đăng riêng; form và lịch đăng đọc danh sách từ `/health` của worker, không định nghĩa lại ở đây. Form "Tạo bài bằng Claude" gọi `pnpm worker` tại `http://localhost:4599` để lập kế hoạch, soạn bài, render; bài và task được trang lưu lên BE bằng phiên đăng nhập, video chỉ nằm trên máy. Đăng Reels và YouTube cũng đi qua worker, token nhập ở màn Quản lý kênh đi thẳng vào worker (không qua BE, không bao giờ đọc lại được), token chỉ nằm ở worker; đăng YouTube xong trang tự PATCH `videoUrl` của bài học.
-- **Dự án nhóm**: chưa có mock offline (gọi lỗi khi BE không chạy). Quyền theo vai trò dự án (`roleAtLeast` trong `src/pages/projects/shared.tsx`) chỉ để ẩn / hiện UI, BE kiểm tra lại. MCP là remote trên BE (`/api/mcp`), FE chỉ tạo token và hiển thị lệnh `claude mcp add`.
+- **Dự án nhóm**: Quyền theo vai trò dự án (`roleAtLeast` trong `src/pages/projects/shared.tsx`) chỉ để ẩn / hiện UI, BE kiểm tra lại. MCP là remote trên BE (`/api/mcp`), FE chỉ tạo token và hiển thị lệnh `claude mcp add`.
 - **Chấm câu Dictation**: `src/pages/dictation/grading.ts` phải khớp 1:1 với `dictation-grading.util.ts` của BE và quy tắc ở `src/doc/dictation-api.md` mục 4 — sửa một bên thì phải sửa bên kia và cập nhật tài liệu.
 
 ## 6. Điều cần tránh / bẫy
 
-- **Mock fallback âm thầm**: lỗi mạng (`TypeError` / "fetch" / "NetworkError") ở bất kỳ request nào sẽ bật `useMockFallback = true` cho đến khi tải lại trang ⇒ app chạy bằng dữ liệu localStorage giả (`mock_*`). Khi thấy dữ liệu "lạ", kiểm tra BE có chạy không trước khi sửa code.
+- **Lỗi mạng**: mọi request qua `authFetch` ném `Error(NETWORK_ERROR_MESSAGE)` khi không tới được BE. `AuthContext` giữ token trong trường hợp này (không đăng xuất). Trang gọi `fetch` riêng tới worker vdev-video (`lessonWorker.ts`, `storyWorker.ts`) tự xử lý lỗi của nó.
 - `base: '/vdev-admin/'` (`vite.config.ts`) và `basename="/vdev-admin"` (`src/App.tsx`) phải đổi cùng nhau. Dev server phục vụ ở `/vdev-admin/`.
 - Bước `cp dist/index.html dist/404.html` trong build là để GitHub Pages trả SPA cho mọi route — đừng bỏ.
 - `.github/workflows/.github/workflows/deploy.yml` nằm sai chỗ nên GitHub không chạy; workflow thật là `.github/workflows/main.yml`.

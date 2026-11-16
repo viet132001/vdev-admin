@@ -29,7 +29,7 @@ Tạo file `.env` nếu cần trỏ tới BE khác:
 VITE_API_URL=http://localhost:3000
 ```
 
-Khi không kết nối được BE, app tự chuyển sang dữ liệu giả lưu trong localStorage. Nếu thấy dữ liệu lạ, hãy kiểm tra BE có đang chạy không.
+Khi không kết nối được BE, app hiện thông báo "Không thể kết nối đến máy chủ, vui lòng thử lại sau." và giữ nguyên phiên đăng nhập.
 
 ## Lệnh
 

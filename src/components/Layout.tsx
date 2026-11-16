@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { NETWORK_ERROR_EVENT, NETWORK_OK_EVENT } from '../services/api';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { hasRole, useAuth } from '../context/AuthContext';
 import {
@@ -7,6 +8,7 @@ import {
   CheckSquare,
   Headphones,
   Settings,
+  TriangleAlert,
   Users, Clapperboard, FolderKanban, Rocket } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { initials } from './userInitials';
@@ -30,6 +32,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    const onError = () => setOffline(true);
+    const onOk = () => setOffline(false);
+    window.addEventListener(NETWORK_ERROR_EVENT, onError);
+    window.addEventListener(NETWORK_OK_EVENT, onOk);
+    return () => {
+      window.removeEventListener(NETWORK_ERROR_EVENT, onError);
+      window.removeEventListener(NETWORK_OK_EVENT, onOk);
+    };
+  }, []);
 
   const handleLogout = () => {
     setSettingsOpen(false);
@@ -135,6 +149,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </aside>
 
       <main className="main-content">
+        {offline && (
+          <div className="offline-banner" role="alert">
+            <TriangleAlert size={16} style={{ flexShrink: 0 }} />
+            <span>Không thể kết nối đến máy chủ, vui lòng thử lại sau.</span>
+            <button type="button" className="btn btn-sm" onClick={() => window.location.reload()}>Tải lại</button>
+          </div>
+        )}
         {children}
       </main>
 

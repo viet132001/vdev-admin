@@ -126,6 +126,9 @@ export const ProjectPlan: React.FC<ProjectTabProps> = ({ project, reloadProject,
                     {t.source && <span className="tw-tag neutral">{t.source.key}</span>}
                     <TeamStatusBadge status={t.status} />
                     <Avatar name={t.assignee?.fullName} size={20} />
+                    <span style={{ fontSize: '0.78rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', color: t.assignee ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                      {t.assignee?.fullName || 'Chưa giao'}
+                    </span>
                     <span className={t.isOverdue ? 'tw-overdue' : ''} style={{ fontSize: '0.75rem', whiteSpace: 'nowrap', minWidth: 72, textAlign: 'right' }}>{formatDate(t.dueDate) || '—'}</span>
                   </button>
                 ))}

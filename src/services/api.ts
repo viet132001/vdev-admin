@@ -1,9 +1,4 @@
-// Centralized API client with localStorage mock fallback
-import { mockLiabilities } from './liabilityMock';
-import { mockTasks } from './taskMock';
-import { mockDictation } from './dictationMock';
-import { mockUsers } from './userMock';
-
+// Centralized API client
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 // Public so pages can show absolute BE URLs (e.g. the remote MCP endpoint)
 export const API_BASE_URL = BASE_URL;
@@ -11,6 +6,14 @@ export const API_BASE_URL = BASE_URL;
 const TOKEN_KEY = 'vdev_token';
 const REFRESH_TOKEN_KEY = 'vdev_refresh_token';
 export const SESSION_EXPIRED_EVENT = 'vdev:session-expired';
+
+// Layout listens to these to show / hide the "cannot reach the server" banner
+export const NETWORK_ERROR_EVENT = 'vdev:network-error';
+export const NETWORK_OK_EVENT = 'vdev:network-ok';
+export const NETWORK_ERROR_MESSAGE = 'Không thể kết nối đến máy chủ, vui lòng thử lại sau.';
+
+// True when the request never reached the backend (offline, server down, CORS)
+export const isNetworkError = (err: any): boolean => err?.message === NETWORK_ERROR_MESSAGE;
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem(TOKEN_KEY);
@@ -62,7 +65,18 @@ const refreshAccessToken = (): Promise<boolean> => {
 // fetch against the backend with the access token; on 401 refreshes once and retries,
 // and if that fails clears the session so AuthContext sends the user back to login
 export const authFetch = async (path: string, init: RequestInit = {}): Promise<Response> => {
-  const send = () => fetch(`${BASE_URL}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), ...getAuthHeaders() } });
+  const send = async () => {
+    try {
+      const res = await fetch(`${BASE_URL}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), ...getAuthHeaders() } });
+      window.dispatchEvent(new Event(NETWORK_OK_EVENT));
+      return res;
+    } catch (err: any) {
+      // fetch only rejects with TypeError when nothing came back; aborts are the caller's own
+      if (err?.name === 'AbortError') throw err;
+      window.dispatchEvent(new Event(NETWORK_ERROR_EVENT));
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+  };
   const hadToken = !!localStorage.getItem(TOKEN_KEY);
   let response = await send();
   if (response.status !== 401 || !hadToken) return response;
@@ -74,59 +88,6 @@ export const authFetch = async (path: string, init: RequestInit = {}): Promise<R
   window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
   return response;
 };
-
-let useMockFallback = false;
-
-// --- MOCK DATABASE IMPLEMENTATION ---
-const initMockDB = () => {
-  if (!localStorage.getItem('mock_users')) {
-    localStorage.setItem('mock_users', JSON.stringify([]));
-  }
-  if (!localStorage.getItem('mock_wallets')) {
-    localStorage.setItem('mock_wallets', JSON.stringify([
-      { id: 'w1', name: 'Tài khoản Techcombank', type: 'BANK', currency: 'VND', initialBalance: 5000000, currentBalance: 5000000, icon: 'credit-card', color: '#1A73E8' },
-      { id: 'w2', name: 'Ví Tiền Mặt', type: 'CASH', currency: 'VND', initialBalance: 1000000, currentBalance: 950000, icon: 'wallet', color: '#34A853' }
-    ]));
-  }
-  if (!localStorage.getItem('mock_transactions')) {
-    localStorage.setItem('mock_transactions', JSON.stringify([
-      { id: 't1', walletId: 'w2', categoryId: 'c1', amount: 50000, type: 'EXPENSE', title: 'Mua giáo trình Tiếng Anh', note: 'Mua tại nhà sách', transactionDate: new Date().toISOString() }
-    ]));
-  }
-  if (!localStorage.getItem('mock_budgets')) {
-    localStorage.setItem('mock_budgets', JSON.stringify([
-      { id: 'bd1', name: 'Ngân Sách Học Tập Tháng 7', startDate: '2026-07-01T00:00:00.000Z', endDate: '2026-07-31T23:59:59.000Z', totalAmount: 2000000, items: [{ categoryId: 'c1', amount: 1000000 }] }
-    ]));
-  }
-  if (!localStorage.getItem('mock_courses')) {
-    localStorage.setItem('mock_courses', JSON.stringify([
-      {
-        id: 'course-1',
-        title: 'Tiếng Anh Giao Tiếp Cơ Bản',
-        description: 'Lộ trình học tiếng Anh từ con số 0 với 5 bài học thực tế',
-        coverFileId: null,
-        difficulty: 'BEGINNER',
-        language: 'vi',
-        estimatedMinutes: 180,
-        isPublished: true,
-        sections: [
-          {
-            id: 'sec-1',
-            title: 'Chương 1: Khởi động',
-            description: 'Các bài học nhập môn đầu tiên',
-            orderIndex: 1,
-            lessons: [
-              { id: 'les-1', title: 'Bài 1: Giới thiệu bản thân', summary: 'Học cách chào hỏi cơ bản', content: '# Bài 1: Giới thiệu bản thân\nChào bạn! Để bắt đầu giới thiệu bản thân bằng tiếng Anh, chúng ta sử dụng cấu trúc:\n- "Hello, my name is..."\n- "I am ... years old."\n- "I live in ..."', durationSeconds: 300, orderIndex: 1, isCompleted: true, completedAt: new Date().toISOString() },
-              { id: 'les-2', title: 'Bài 2: Giao tiếp công việc', summary: 'Chào hỏi đồng nghiệp và đối tác', content: '# Bài 2: Giao tiếp công việc\nTrong môi trường công sở:\n- "Nice to meet you."\n- "How are you doing today?"', durationSeconds: 400, orderIndex: 2, isCompleted: false, completedAt: null }
-            ]
-          }
-        ]
-      }
-    ]));
-  }
-};
-
-initMockDB();
 
 const cache = new Map<string, any>();
 
@@ -149,482 +110,43 @@ export const getErrorMessage = (err: any, fallback: string): string => {
   }
 };
 
+// Unwraps the `{ success, data }` envelope; errors carry the raw response body as message
+const request = async (url: string, init?: RequestInit) => {
+  const response = await authFetch(url, init);
+  if (!response.ok) throw new Error(await response.text() || 'API Error');
+  const json = await response.json();
+  return json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
+};
+
+const sendJson = (method: string, url: string, body: any) => {
+  cache.clear();
+  return request(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+};
+
 export const api = {
   async get(url: string, options: { noCache?: boolean } = {}) {
-    const token = localStorage.getItem('vdev_token') || '';
+    const token = localStorage.getItem(TOKEN_KEY) || '';
     const cacheKey = `${url}::${token}`;
-    if (!useMockFallback && !options.noCache && cache.has(cacheKey)) {
-      return cache.get(cacheKey);
-    }
-    if (!useMockFallback) {
-      try {
-        const response = await authFetch(url);
-        if (!response.ok) throw new Error(await response.text() || 'API Error');
-        const json = await response.json();
-        const data = json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
-        if (!options.noCache) cache.set(cacheKey, data);
-        return data;
-      } catch (err: any) {
-        if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('NetworkError')) {
-          useMockFallback = true;
-        } else {
-          throw err;
-        }
-      }
-    }
-    
-    // MOCK IMPLEMENTATION
-    if (url.includes('/api/auth/profile')) {
-      const token = localStorage.getItem('vdev_token');
-      if (!token) throw new Error('Unauthorized');
-      return {
-        id: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12',
-        email: localStorage.getItem('vdev_user_email') || 'user@vdev.local',
-        fullName: localStorage.getItem('vdev_user_name') || 'Nguyen Van A',
-        avatarFileId: null,
-        status: 'ACTIVE',
-        roles: ['ADMIN', 'USER']
-      };
-    }
-    const userRes = mockUsers('GET', url);
-    if (userRes.handled) return userRes.data;
-    const taskRes = mockTasks('GET', url);
-    if (taskRes.handled) return taskRes.data;
-    const dictationRes = mockDictation('GET', url);
-    if (dictationRes.handled) return dictationRes.data;
-    const liabilityRes = mockLiabilities('GET', url);
-    if (liabilityRes.handled) return liabilityRes.data;
-    if (url.includes('/api/finance/categories')) {
-      return [
-        { id: 'c1', name: 'Học tập & Giáo dục', type: 'EXPENSE', parentId: null, children: [] },
-        { id: 'c2', name: 'Trả nợ & Vay', type: 'EXPENSE', parentId: null, children: [] },
-        { id: 'c3', name: 'Lương', type: 'INCOME', parentId: null, children: [] }
-      ];
-    }
-    if (url.includes('/api/finance/wallets')) {
-      return JSON.parse(localStorage.getItem('mock_wallets') || '[]');
-    }
-    if (url.includes('/api/finance/transactions')) {
-      return JSON.parse(localStorage.getItem('mock_transactions') || '[]');
-    }
-    if (url.includes('/api/finance/budgets')) {
-      const budgets = JSON.parse(localStorage.getItem('mock_budgets') || '[]');
-      // Inject actualSpent
-      const txs = JSON.parse(localStorage.getItem('mock_transactions') || '[]');
-      const actualSpent = txs.reduce((sum: number, t: any) => t.type === 'EXPENSE' ? sum + t.amount : sum, 0);
-      return budgets.map((b: any) => ({
-        ...b,
-        totalBudgetAmount: b.totalAmount,
-        budgetItems: (b.items || []).map((item: any) => ({
-          ...item,
-          categoryName: 'Học tập & Giáo dục',
-          budgetAmount: item.amount,
-          actualSpent,
-          remaining: item.amount - actualSpent
-        }))
-      }));
-    }
-    if (url.includes('/api/learning/courses')) {
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      const courseId = url.split('/').pop();
-      if (courseId && courseId !== 'courses') {
-        const found = courses.find((c: any) => c.id === courseId);
-        if (found) return found;
-      }
-      return courses;
-    }
-    if (url.includes('/api/learning/lessons/')) {
-      const lessonId = url.split('/').pop();
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        for (const sec of (course.sections || [])) {
-          const les = (sec.lessons || []).find((l: any) => l.id === lessonId);
-          if (les) {
-            return {
-              ...les,
-              assets: les.assets || []
-            };
-          }
-        }
-      }
-    }
-    
-    throw new Error(`Endpoint not mocked or found: ${url}`);
+    if (!options.noCache && cache.has(cacheKey)) return cache.get(cacheKey);
+    const data = await request(url);
+    if (!options.noCache) cache.set(cacheKey, data);
+    return data;
   },
 
-  async post(url: string, body: any) {
-    cache.clear();
-    if (!useMockFallback) {
-      try {
-        const response = await authFetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        if (!response.ok) throw new Error(await response.text() || 'API Error');
-        const json = await response.json();
-        return json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
-      } catch (err: any) {
-        if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('NetworkError')) {
-          useMockFallback = true;
-        } else {
-          throw err;
-        }
-      }
-    }
-
-    // MOCK IMPLEMENTATION
-    const userRes = mockUsers('POST', url, body);
-    if (userRes.handled) return userRes.data;
-    const taskRes = mockTasks('POST', url, body);
-    if (taskRes.handled) return taskRes.data;
-    const dictationRes = mockDictation('POST', url, body);
-    if (dictationRes.handled) return dictationRes.data;
-    const liabilityRes = mockLiabilities('POST', url, body);
-    if (liabilityRes.handled) return liabilityRes.data;
-    if (url.includes('/api/auth/login')) {
-      localStorage.setItem('vdev_token', 'mock_jwt_token');
-      localStorage.setItem('vdev_user_email', body.email);
-      localStorage.setItem('vdev_user_name', body.email.split('@')[0].toUpperCase());
-      return {
-        user: { id: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12', email: body.email, fullName: body.email.split('@')[0].toUpperCase(), avatarFileId: null, roles: ['ADMIN', 'USER'] },
-        accessToken: 'mock_jwt_token'
-      };
-    }
-    if (url.includes('/api/auth/register')) {
-      return {
-        id: '7b2d5a3f-1d89-4e78-ba2e-3f890ad67a12',
-        email: body.email,
-        fullName: body.fullName,
-        status: 'ACTIVE'
-      };
-    }
-    if (url.includes('/api/finance/wallets')) {
-      const wallets = JSON.parse(localStorage.getItem('mock_wallets') || '[]');
-      const newWallet = {
-        id: Math.random().toString(36).substring(7),
-        ...body,
-        currentBalance: body.initialBalance
-      };
-      wallets.push(newWallet);
-      localStorage.setItem('mock_wallets', JSON.stringify(wallets));
-      return newWallet;
-    }
-    if (url.includes('/api/finance/transactions')) {
-      const txs = JSON.parse(localStorage.getItem('mock_transactions') || '[]');
-      const wallets = JSON.parse(localStorage.getItem('mock_wallets') || '[]');
-      
-      const newTx = {
-        id: Math.random().toString(36).substring(7),
-        ...body,
-        transactionDate: body.transactionDate || new Date().toISOString()
-      };
-      txs.unshift(newTx);
-      
-      // Update wallet balance
-      const walletIdx = wallets.findIndex((w: any) => w.id === body.walletId);
-      if (walletIdx !== -1) {
-        if (body.type === 'EXPENSE') {
-          wallets[walletIdx].currentBalance -= body.amount;
-        } else {
-          wallets[walletIdx].currentBalance += body.amount;
-        }
-      }
-      
-      localStorage.setItem('mock_transactions', JSON.stringify(txs));
-      localStorage.setItem('mock_wallets', JSON.stringify(wallets));
-      return newTx;
-    }
-    if (url.includes('/api/learning/courses') && url.includes('/sections')) {
-      // Create section
-      const match = url.match(/\/api\/learning\/courses\/([a-zA-Z0-9-]+)\/sections/);
-      const courseId = match ? match[1] : '';
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      const cIdx = courses.findIndex((c: any) => c.id === courseId);
-      if (cIdx !== -1) {
-        const newSec = {
-          id: Math.random().toString(36).substring(7),
-          title: body.title,
-          description: body.description || '',
-          orderIndex: body.orderIndex || 1,
-          lessons: []
-        };
-        if (!courses[cIdx].sections) courses[cIdx].sections = [];
-        courses[cIdx].sections.push(newSec);
-        localStorage.setItem('mock_courses', JSON.stringify(courses));
-        return newSec;
-      }
-    }
-    if (url.includes('/api/learning/sections') && url.includes('/lessons')) {
-      // Create lesson
-      const match = url.match(/\/api\/learning\/sections\/([a-zA-Z0-9-]+)\/lessons/);
-      const sectionId = match ? match[1] : '';
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        const sec = (course.sections || []).find((s: any) => s.id === sectionId);
-        if (sec) {
-          const newLes = {
-            id: Math.random().toString(36).substring(7),
-            title: body.title,
-            summary: body.summary || '',
-            content: body.content || '',
-            durationSeconds: body.durationSeconds || 300,
-            orderIndex: body.orderIndex || 1,
-            isCompleted: false,
-            completedAt: null
-          };
-          if (!sec.lessons) sec.lessons = [];
-          sec.lessons.push(newLes);
-          localStorage.setItem('mock_courses', JSON.stringify(courses));
-          return newLes;
-        }
-      }
-    }
-    if (url.includes('/progress')) {
-      // Update progress
-      const match = url.match(/\/api\/learning\/lessons\/([a-zA-Z0-9-]+)\/progress/);
-      const lessonId = match ? match[1] : '';
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        for (const sec of (course.sections || [])) {
-          const les = (sec.lessons || []).find((l: any) => l.id === lessonId);
-          if (les) {
-            les.isCompleted = body.progressPercent === 100;
-            les.completedAt = les.isCompleted ? new Date().toISOString() : null;
-            localStorage.setItem('mock_courses', JSON.stringify(courses));
-            return { success: true };
-          }
-        }
-      }
-    }
-    if (url.includes('/api/storage/upload')) {
-      return {
-        message: 'File uploaded successfully',
-        file: {
-          id: 'mock-file-id-' + Math.random().toString(36).substring(7),
-          originalName: body instanceof FormData ? (body.get('file') as File)?.name || 'audio.mp3' : 'audio.mp3',
-          storedName: 'mock_audio.mp3',
-          size: '102400',
-          mimeType: 'audio/mpeg',
-          provider: 'LOCAL',
-          path: '/uploads/mock_audio.mp3'
-        }
-      };
-    }
-    if (url.match(/\/api\/learning\/lessons\/([a-zA-Z0-9-]+)\/assets/)) {
-      const match = url.match(/\/api\/learning\/lessons\/([a-zA-Z0-9-]+)\/assets/);
-      const lessonId = match ? match[1] : '';
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        for (const sec of (course.sections || [])) {
-          const les = (sec.lessons || []).find((l: any) => l.id === lessonId);
-          if (les) {
-            if (!les.assets) les.assets = [];
-            const newAsset = {
-              id: 'mock-asset-id-' + Math.random().toString(36).substring(7),
-              lessonId,
-              fileId: body.fileId,
-              assetType: body.assetType,
-              orderIndex: body.orderIndex || 1,
-              file: {
-                id: body.fileId,
-                originalName: 'audio.mp3',
-                storedName: 'mock_audio.mp3',
-                size: '102400',
-                mimeType: 'audio/mpeg',
-                provider: 'LOCAL',
-                path: '/uploads/mock_audio.mp3'
-              }
-            };
-            les.assets.push(newAsset);
-            localStorage.setItem('mock_courses', JSON.stringify(courses));
-            return newAsset;
-          }
-        }
-      }
-    }
-
-    throw new Error(`Endpoint not mocked or found: ${url}`);
+  post(url: string, body: any) {
+    return sendJson('POST', url, body);
   },
 
-  async patch(url: string, body: any) {
-    cache.clear();
-    if (!useMockFallback) {
-      try {
-        const response = await authFetch(url, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        if (!response.ok) throw new Error(await response.text() || 'API Error');
-        const json = await response.json();
-        return json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
-      } catch (err: any) {
-        if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('NetworkError')) {
-          useMockFallback = true;
-        } else {
-          throw err;
-        }
-      }
-    }
-
-    // MOCK IMPLEMENTATION
-    const userRes = mockUsers('PATCH', url, body);
-    if (userRes.handled) return userRes.data;
-    const taskRes = mockTasks('PATCH', url, body);
-    if (taskRes.handled) return taskRes.data;
-    const dictationRes = mockDictation('PATCH', url, body);
-    if (dictationRes.handled) return dictationRes.data;
-    const liabilityRes = mockLiabilities('PATCH', url, body);
-    if (liabilityRes.handled) return liabilityRes.data;
-    if (url.includes('/api/learning/courses/')) {
-      const courseId = url.split('/').pop();
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      const cIdx = courses.findIndex((c: any) => c.id === courseId);
-      if (cIdx !== -1) {
-        Object.assign(courses[cIdx], body);
-        localStorage.setItem('mock_courses', JSON.stringify(courses));
-        return courses[cIdx];
-      }
-    }
-    if (url.includes('/api/learning/sections/')) {
-      const sectionId = url.split('/').pop();
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        const secIdx = (course.sections || []).findIndex((s: any) => s.id === sectionId);
-        if (secIdx !== -1) {
-          Object.assign(course.sections[secIdx], body);
-          localStorage.setItem('mock_courses', JSON.stringify(courses));
-          return course.sections[secIdx];
-        }
-      }
-    }
-    if (url.includes('/api/learning/lessons/')) {
-      const lessonId = url.split('/').pop();
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        for (const sec of (course.sections || [])) {
-          const lesIdx = (sec.lessons || []).findIndex((l: any) => l.id === lessonId);
-          if (lesIdx !== -1) {
-            Object.assign(sec.lessons[lesIdx], body);
-            localStorage.setItem('mock_courses', JSON.stringify(courses));
-            return sec.lessons[lesIdx];
-          }
-        }
-      }
-    }
-
-    throw new Error(`Endpoint not mocked or found: ${url}`);
+  patch(url: string, body: any) {
+    return sendJson('PATCH', url, body);
   },
 
-  async delete(url: string) {
+  delete(url: string) {
     cache.clear();
-    if (!useMockFallback) {
-      try {
-        const response = await authFetch(url, { method: 'DELETE' });
-        if (!response.ok) throw new Error(await response.text() || 'API Error');
-        const json = await response.json();
-        return json && typeof json === 'object' && 'success' in json && 'data' in json ? json.data : json;
-      } catch (err: any) {
-        if (err.name === 'TypeError' || err.message.includes('fetch') || err.message.includes('NetworkError')) {
-          useMockFallback = true;
-        } else {
-          throw err;
-        }
-      }
-    }
-
-    // MOCK IMPLEMENTATION
-    const userRes = mockUsers('DELETE', url);
-    if (userRes.handled) return userRes.data;
-    const taskRes = mockTasks('DELETE', url);
-    if (taskRes.handled) return taskRes.data;
-    const dictationRes = mockDictation('DELETE', url);
-    if (dictationRes.handled) return dictationRes.data;
-    const liabilityRes = mockLiabilities('DELETE', url);
-    if (liabilityRes.handled) return liabilityRes.data;
-    if (url.includes('/api/finance/wallets/')) {
-      const id = url.split('/').pop();
-      const wallets = JSON.parse(localStorage.getItem('mock_wallets') || '[]');
-      const filtered = wallets.filter((w: any) => w.id !== id);
-      localStorage.setItem('mock_wallets', JSON.stringify(filtered));
-      return { success: true };
-    }
-    if (url.includes('/api/finance/transactions/')) {
-      const id = url.split('/').pop();
-      const txs = JSON.parse(localStorage.getItem('mock_transactions') || '[]');
-      const wallets = JSON.parse(localStorage.getItem('mock_wallets') || '[]');
-      const tx = txs.find((t: any) => t.id === id);
-      if (tx) {
-        const walletIdx = wallets.findIndex((w: any) => w.id === tx.walletId);
-        if (walletIdx !== -1) {
-          if (tx.type === 'EXPENSE') {
-            wallets[walletIdx].currentBalance += tx.amount;
-          } else {
-            wallets[walletIdx].currentBalance -= tx.amount;
-          }
-        }
-        const filtered = txs.filter((t: any) => t.id !== id);
-        localStorage.setItem('mock_transactions', JSON.stringify(filtered));
-        localStorage.setItem('mock_wallets', JSON.stringify(wallets));
-      }
-      return { success: true };
-    }
-    if (url.includes('/api/learning/courses/')) {
-      const id = url.split('/').pop();
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      const filtered = courses.filter((c: any) => c.id !== id);
-      localStorage.setItem('mock_courses', JSON.stringify(filtered));
-      return { success: true };
-    }
-    if (url.includes('/api/learning/sections/')) {
-      const sectionId = url.split('/').pop();
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        const idx = (course.sections || []).findIndex((s: any) => s.id === sectionId);
-        if (idx !== -1) {
-          course.sections.splice(idx, 1);
-          localStorage.setItem('mock_courses', JSON.stringify(courses));
-          return { success: true };
-        }
-      }
-      return { success: true };
-    }
-    if (url.includes('/api/learning/lessons/') && !url.includes('/assets/')) {
-      const lessonId = url.split('/').pop();
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        for (const sec of (course.sections || [])) {
-          const idx = (sec.lessons || []).findIndex((l: any) => l.id === lessonId);
-          if (idx !== -1) {
-            sec.lessons.splice(idx, 1);
-            localStorage.setItem('mock_courses', JSON.stringify(courses));
-            return { success: true };
-          }
-        }
-      }
-      return { success: true };
-    }
-    if (url.includes('/api/learning/lessons/assets/')) {
-      const assetId = url.split('/').pop();
-      const courses = JSON.parse(localStorage.getItem('mock_courses') || '[]');
-      for (const course of courses) {
-        for (const sec of (course.sections || [])) {
-          for (const les of (sec.lessons || [])) {
-            if (les.assets) {
-              const idx = les.assets.findIndex((a: any) => a.id === assetId);
-              if (idx !== -1) {
-                les.assets.splice(idx, 1);
-                localStorage.setItem('mock_courses', JSON.stringify(courses));
-                return { success: true };
-              }
-            }
-          }
-        }
-      }
-      return { success: true };
-    }
-
-    throw new Error(`Endpoint not mocked or found: ${url}`);
+    return request(url, { method: 'DELETE' });
   }
 };

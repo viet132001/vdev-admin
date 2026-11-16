@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
-import { api, clearApiCache, getGoogleLoginUrl, setAuthTokens, clearAuthTokens, SESSION_EXPIRED_EVENT } from '../services/api';
+import { api, clearApiCache, isNetworkError, getGoogleLoginUrl, setAuthTokens, clearAuthTokens, SESSION_EXPIRED_EVENT } from '../services/api';
 
 const GOOGLE_STATE_KEY = 'vdev_google_oauth_state';
 
@@ -47,7 +47,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(toUser(res.data ? res.data : res));
     } catch (err) {
       setUser(null);
-      clearAuthTokens();
+      // Keep the session when the server is just unreachable: a reload once it is back signs in again
+      if (!isNetworkError(err)) clearAuthTokens();
     } finally {
       setLoading(false);
     }
@@ -116,8 +117,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     clearAuthTokens();
-    localStorage.removeItem('vdev_user_email');
-    localStorage.removeItem('vdev_user_name');
     clearApiCache();
     setUser(null);
   };
