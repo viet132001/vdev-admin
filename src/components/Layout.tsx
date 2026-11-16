@@ -9,7 +9,6 @@ import {
   Headphones,
   Users, Clapperboard, FolderKanban, Rocket } from 'lucide-react';
 import { ThemeSwitch, ThemeToggleButton } from './ThemeToggle';
-import { SproutBuddy } from './SproutBuddy';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -139,7 +138,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <main className="main-content">
         {children}
       </main>
-      <SproutBuddy />
     </div>
   );
 };
