@@ -9,7 +9,7 @@ import {
   Headphones,
   Settings,
   TriangleAlert,
-  Users, Clapperboard, FolderKanban, Rocket } from 'lucide-react';
+  Users, Clapperboard, FolderKanban } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { initials } from './userInitials';
 
@@ -58,8 +58,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { path: '/projects', label: 'Dự án nhóm', icon: FolderKanban },
     ...(hasRole(user, 'ADMIN') ? [
       { path: '/dictation', label: 'Quản lý page', icon: Headphones },
-      { path: '/studio', label: 'Studio', icon: Clapperboard },
-      { path: '/story', label: 'Truyện viễn tưởng', icon: Rocket },
+      // /studio and /story stay routable but are replaced in the menu by the asset-driven studio
+      { path: '/animation', label: 'Xưởng hoạt hình', icon: Clapperboard },
       { path: '/users', label: 'Người dùng', icon: Users }
     ] : []),
   ];

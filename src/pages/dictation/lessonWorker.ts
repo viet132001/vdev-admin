@@ -79,6 +79,7 @@ export interface LessonJob {
   updatedAt?: string;
   target?: JobTarget;
   comedy?: { script: ComedyScript };
+  animation?: { seriesId: string; script: unknown };
   room?: WritersRoom;
 }
 
@@ -136,7 +137,13 @@ export const COMEDY_GENRE: VideoGenre = {
   id: 'comedy', label: 'Hài ngắn', description: 'Video hài ngắn người que', series: 'Hài ngắn', channelName: 'Hài ngắn', titleSuffix: 'Hài ngắn',
   hashtags: '#haihuoc #stickman #tienganh', formats: ['dialogue'], styles: [], facebook: false, youtube: false, env: { facebook: [], youtube: '' }
 };
-export const genreForJob = (job: LessonJob, genres: VideoGenre[]) => (isComedyJob(job) ? COMEDY_GENRE : genres.find((g) => g.id === genreIdOf(job.request)));
+export const isAnimationJob = (job: LessonJob) => job.request?.kind === 'animation';
+// Asset-driven animations (the animation studio) post to a channel of their own too
+export const ANIMATION_GENRE: VideoGenre = {
+  id: 'animation', label: 'Hoạt hình', description: 'Video hoạt hình dựng từ ảnh asset', series: 'Hoạt hình', channelName: 'Hoạt hình', titleSuffix: 'Hoạt hình',
+  hashtags: '#hoathinh', formats: ['dialogue'], styles: [], facebook: false, youtube: false, env: { facebook: [], youtube: '' }
+};
+export const genreForJob = (job: LessonJob, genres: VideoGenre[]) => (isComedyJob(job) ? COMEDY_GENRE : isAnimationJob(job) ? ANIMATION_GENRE : genres.find((g) => g.id === genreIdOf(job.request)));
 
 // Where a job's video goes: its course's page, or its genre's when the course has no page of its own
 export interface JobTarget {
@@ -167,7 +174,7 @@ export const ownerOf = (job: LessonJob) => job.target?.owner ?? genreIdOf(job.re
 export const isFacebookBusy = (job: LessonJob) => job.facebook?.status === 'UPLOADING' || job.facebook?.status === 'PROCESSING';
 export const isPublishing = (job: LessonJob) => isFacebookBusy(job) || job.youtube?.status === 'UPLOADING';
 
-const call = async (path: string, method = 'GET', body?: unknown) => {
+export const call = async (path: string, method = 'GET', body?: unknown) => {
   const response = await fetch(`${WORKER_URL}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json' },

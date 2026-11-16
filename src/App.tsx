@@ -11,6 +11,7 @@ import { Tasks } from './pages/Tasks';
 import { Dictation } from './pages/Dictation';
 import { Studio } from './pages/Studio';
 import { Story } from './pages/Story';
+import { Animation } from './pages/Animation';
 import { Users } from './pages/Users';
 import { Projects } from './pages/Projects';
 import { Invite } from './pages/Invite';
@@ -97,6 +98,7 @@ function App() {
           <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
           <Route path="/studio" element={<ProtectedRoute roles={['ADMIN']}><Studio /></ProtectedRoute>} />
           <Route path="/story" element={<ProtectedRoute roles={['ADMIN']}><Story /></ProtectedRoute>} />
+          <Route path="/animation" element={<ProtectedRoute roles={['ADMIN']}><Animation /></ProtectedRoute>} />
           <Route path="/dictation" element={<ProtectedRoute roles={['ADMIN']}><Dictation /></ProtectedRoute>} />
 
           <Route path="/users" element={<ProtectedRoute roles={['ADMIN']}><Users /></ProtectedRoute>} />
