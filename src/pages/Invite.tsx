@@ -17,7 +17,7 @@ const STATE_TEXT: Record<string, { title: string; message: string }> = {
 
 const Brand: React.FC = () => (
   <span className="flex align-center gap-2" style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
-    <FolderKanban size={18} /> VDEV
+    <FolderKanban size={18} /> Workspace
   </span>
 );
 
@@ -130,7 +130,7 @@ export const Invite: React.FC = () => {
             Cùng theo dõi task, kế hoạch và tài liệu của dự án với các thành viên khác.
           </p>
         </div>
-        <span style={{ fontSize: '0.75rem', color: '#71717a' }}>© {new Date().getFullYear()} VDEV</span>
+        <span style={{ fontSize: '0.75rem', color: '#71717a' }}>© {new Date().getFullYear()} Workspace</span>
       </aside>
 
       <main className="auth-main">

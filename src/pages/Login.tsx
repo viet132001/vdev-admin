@@ -40,12 +40,12 @@ export const Login: React.FC = () => {
   return (
     <div className="auth-shell">
       <aside className="auth-aside">
-        <span style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>VDEV</span>
+        <span style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>Workspace</span>
         <div>
-          <h1 style={{ fontSize: '2rem', margin: 0, fontWeight: 600, letterSpacing: '-0.03em' }}>Workspace cá nhân</h1>
-          <p style={{ color: '#a1a1aa', marginTop: 8, maxWidth: 360 }}>Quản lý công việc và luyện chính tả tiếng Anh ở cùng một nơi.</p>
+          <h1 style={{ fontSize: '2rem', margin: 0, fontWeight: 600, letterSpacing: '-0.03em' }}>Workspace của team</h1>
+          <p style={{ color: '#a1a1aa', marginTop: 8, maxWidth: 360 }}>Quản lý công việc, dự án và nội dung của team ở cùng một nơi.</p>
         </div>
-        <span style={{ fontSize: '0.75rem', color: '#71717a' }}>© {new Date().getFullYear()} VDEV</span>
+        <span style={{ fontSize: '0.75rem', color: '#71717a' }}>© {new Date().getFullYear()} Workspace</span>
       </aside>
 
       <main className="auth-main">

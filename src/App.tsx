@@ -14,6 +14,7 @@ import { Story } from './pages/Story';
 import { Users } from './pages/Users';
 import { Projects } from './pages/Projects';
 import { Invite } from './pages/Invite';
+import { NotFound } from './pages/NotFound';
 import { GoogleCallback } from './pages/GoogleCallback';
 import './App.css';
 
@@ -100,8 +101,7 @@ function App() {
 
           <Route path="/users" element={<ProtectedRoute roles={['ADMIN']}><Users /></ProtectedRoute>} />
 
-          {/* Catch-all Redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
     </AuthProvider>

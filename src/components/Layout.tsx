@@ -2,32 +2,24 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { hasRole, useAuth } from '../context/AuthContext';
 import {
-  LogOut,
   Menu,
   X,
   CheckSquare,
   Headphones,
+  Settings,
   Users, Clapperboard, FolderKanban, Rocket } from 'lucide-react';
-import { ThemeSwitch, ThemeToggleButton } from './ThemeToggle';
+import { SettingsModal } from './SettingsModal';
+import { initials } from './userInitials';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-// Up to two initials from the full name (falls back to the email)
-const initials = (name?: string, email?: string) => {
-  const src = (name || email || '?').trim();
-  const parts = src.split(/\s+/).filter(Boolean);
-  const pick = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : src.slice(0, 2);
-  return pick.toUpperCase();
-};
-
 const Brand: React.FC = () => (
   <div className="brand">
-    <div className="brand-mark">V</div>
+    <div className="brand-mark">W</div>
     <div style={{ minWidth: 0 }}>
-      <h2 className="brand-name">VDEV Admin</h2>
-      <div className="brand-sub">Workspace</div>
+      <h2 className="brand-name">Workspace</h2>
     </div>
   </div>
 );
@@ -37,8 +29,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleLogout = () => {
+    setSettingsOpen(false);
     logout();
     navigate('/login');
   };
@@ -68,7 +62,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Menu size={22} />
         </button>
         <Brand />
-        <ThemeToggleButton />
+        {user ? (
+          <button
+            type="button"
+            className="user-avatar user-avatar-btn"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Mở cài đặt"
+            title="Cài đặt"
+          >
+            {initials(user.fullName, user.email)}
+          </button>
+        ) : <span style={{ width: 34 }} />}
       </div>
 
       {/* Backdrop overlay for Mobile */}
@@ -111,26 +115,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
 
         <div className="sidebar-foot">
-          <ThemeSwitch />
           {user && (
-            <>
-              <div className="user-card">
-                <div className="user-avatar">{initials(user.fullName, user.email)}</div>
-                <div className="user-meta">
-                  <div className="name">{user.fullName}</div>
-                  <div className="email">{user.email}</div>
-                </div>
+            <button
+              type="button"
+              className="user-card user-card-btn"
+              onClick={() => { setSettingsOpen(true); setIsSidebarOpen(false); }}
+              aria-label="Mở cài đặt"
+              title="Cài đặt"
+            >
+              <div className="user-avatar">{initials(user.fullName, user.email)}</div>
+              <div className="user-meta">
+                <div className="name">{user.fullName}</div>
+                <div className="email">{user.email}</div>
               </div>
-              {hasRole(user, 'ADMIN') && <span className="badge badge-info" style={{ alignSelf: 'flex-start', marginLeft: 8 }}>Quản trị viên</span>}
-              <button
-                onClick={handleLogout}
-                className="btn btn-ghost btn-sm"
-                style={{ width: '100%', justifyContent: 'flex-start' }}
-              >
-                <LogOut size={16} />
-                <span>Đăng xuất</span>
-              </button>
-            </>
+              <Settings size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            </button>
           )}
         </div>
       </aside>
@@ -138,6 +137,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <main className="main-content">
         {children}
       </main>
+
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} onLogout={handleLogout} />}
     </div>
   );
 };
