@@ -255,3 +255,20 @@ Bỏ chặn. **404** nếu không tồn tại. Token runner đã thu hồi khôn
 
 * Danh sách chặn được giữ trong RAM của BE: sửa trực tiếp trong DB thì phải khởi động lại BE, và BE chỉ chạy đúng với một instance.
 * Lấy IP thật cần nginx gửi `X-Forwarded-For` (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`).
+
+---
+
+## 8. Ảnh đại diện (Cloudflare R2)
+
+Khoá R2 (Access Key / Secret) chỉ nằm ở BE, FE không giữ. Luồng: BE ký URL PUT ngắn hạn → trình duyệt PUT thẳng lên R2 → PATCH profile bằng URL công khai.
+
+### `POST /api/auth/avatar/upload-url`
+* Body: `{ "contentType": "image/png", "size": 123456 }` — chỉ `image/jpeg | image/png | image/webp`, tối đa 2MB (BE kiểm tra lại).
+* Trả `{ "uploadUrl": "<presigned PUT, hết hạn ~5 phút>", "publicUrl": "https://<domain công khai của bucket>/avatars/<userId>/<uuid>.png" }`.
+* Key nên cố định theo user (`avatars/<userId>/...`); `publicUrl` phải là domain public của bucket (r2.dev hoặc custom domain), KHÔNG phải `*.r2.cloudflarestorage.com` (endpoint S3, cần chữ ký).
+
+### `PATCH /api/auth/avatar`
+* Body: `{ "avatarUrl": "https://..." }` — BE chỉ nhận URL thuộc domain public của bucket. `GET /api/auth/profile` trả URL này ở `avatarFileId`.
+
+### Cấu hình R2
+* CORS của bucket: `AllowedOrigins` gồm origin FE (`http://localhost:5173`, domain GitHub Pages), `AllowedMethods: ["PUT"]`, `AllowedHeaders: ["Content-Type"]`.

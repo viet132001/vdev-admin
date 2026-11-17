@@ -11,7 +11,7 @@ import {
   TriangleAlert,
   Users, Clapperboard, FolderKanban } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
-import { initials } from './userInitials';
+import { UserAvatar } from './UserAvatar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -84,7 +84,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             aria-label="Mở cài đặt"
             title="Cài đặt"
           >
-            {initials(user.fullName, user.email)}
+            <UserAvatar user={user} />
           </button>
         ) : <span style={{ width: 34 }} />}
       </div>
@@ -137,7 +137,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               aria-label="Mở cài đặt"
               title="Cài đặt"
             >
-              <div className="user-avatar">{initials(user.fullName, user.email)}</div>
+              <div className="user-avatar"><UserAvatar user={user} /></div>
               <div className="user-meta">
                 <div className="name">{user.fullName}</div>
                 <div className="email">{user.email}</div>

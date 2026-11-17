@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LogOut, X } from 'lucide-react';
 import { hasRole, useAuth } from '../context/AuthContext';
 import { api, getErrorMessage } from '../services/api';
 import { ThemeSwitch } from './ThemeToggle';
-import { initials } from './userInitials';
+import { UserAvatar } from './UserAvatar';
+import { uploadAvatar } from '../services/avatar';
 
 interface Props {
   onClose: () => void;
@@ -16,6 +17,25 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onLogout }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const onPickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || uploading) return;
+    setUploading(true);
+    setError('');
+    try {
+      await uploadAvatar(file);
+      await refreshProfile();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Không đổi được ảnh đại diện'));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const trimmed = name.trim();
   const dirty = !!user && trimmed !== user.fullName;
@@ -56,7 +76,18 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onLogout }) => {
             <section>
               <div className="nav-section-label" style={{ padding: 0, marginBottom: 8 }}>Tài khoản</div>
               <div className="user-card" style={{ padding: 0, marginBottom: 12 }}>
-                <div className="user-avatar">{initials(user.fullName, user.email)}</div>
+                <button
+                  type="button"
+                  className="user-avatar"
+                  title="Đổi ảnh đại diện (JPG, PNG, WebP, tối đa 2MB)"
+                  aria-label="Đổi ảnh đại diện"
+                  disabled={uploading}
+                  onClick={() => fileInput.current?.click()}
+                  style={{ cursor: 'pointer', padding: 0, overflow: 'hidden' }}
+                >
+                  {uploading ? '…' : <UserAvatar user={user} />}
+                </button>
+                <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={onPickAvatar} />
                 <div className="user-meta">
                   <div className="name">{user.fullName}</div>
                   <div className="email">{user.email}</div>
