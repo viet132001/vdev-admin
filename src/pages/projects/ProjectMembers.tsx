@@ -125,7 +125,7 @@ export const ProjectMembers: React.FC<ProjectTabProps> = ({ project, reloadProje
           const roleChoices = TEAM_ROLES.filter((r) => myRole === 'OWNER' || r.value !== 'OWNER');
           return (
             <div key={m.userId} className="pj-row">
-              <Avatar name={m.fullName} size={30} />
+              <Avatar name={m.fullName} src={m.avatarFileId} size={30} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{m.fullName}{m.userId === user?.id && <span style={{ color: 'var(--text-muted)' }}> (bạn)</span>}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{m.email} · tham gia {formatDate(m.joinedAt)}</div>

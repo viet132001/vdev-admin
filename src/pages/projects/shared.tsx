@@ -1,5 +1,6 @@
 import React from 'react';
 import { api, getErrorMessage } from '../../services/api';
+import { avatarSrc } from '../../services/avatar';
 
 // Team project ("Dự án nhóm") constants — mirrors TeamTaskStatus / TeamRole in vdev-be (src/doc/team-projects-api.md)
 export const TEAM_STATUS = [
@@ -40,11 +41,15 @@ export const TeamStatusBadge: React.FC<{ status: string }> = ({ status }) => {
 export const initials = (name: string | null | undefined) =>
   (name || '?').trim().split(/\s+/).slice(-2).map((p) => p[0]?.toUpperCase() || '').join('') || '?';
 
-export const Avatar: React.FC<{ name?: string | null; size?: number; title?: string }> = ({ name, size = 22, title }) => (
-  <span className="pj-avatar" style={{ width: size, height: size, fontSize: size * 0.42 }} title={title || name || 'Chưa giao'}>
-    {name ? initials(name) : '–'}
-  </span>
-);
+// `src` is the user's avatarFileId: shows the picture when it is an uploaded URL, otherwise initials
+export const Avatar: React.FC<{ name?: string | null; src?: string | null; size?: number; title?: string }> = ({ name, src, size = 22, title }) => {
+  const url = avatarSrc(src);
+  return (
+    <span className="pj-avatar" style={{ width: size, height: size, fontSize: size * 0.42, overflow: 'hidden' }} title={title || name || 'Chưa giao'}>
+      {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : name ? initials(name) : '–'}
+    </span>
+  );
+};
 
 export const ProgressBar: React.FC<{ value: number; height?: number }> = ({ value, height = 6 }) => (
   <div className="progress-bar-container" style={{ height }}>
@@ -105,6 +110,9 @@ export const useTasks = (projectId: string, version: number) => {
   React.useEffect(() => { reload(); }, [reload, version]);
   return { tasks, reload, setTasks };
 };
+
+export const memberAvatar = (project: any, userId: string | null | undefined) =>
+  project.members.find((m: any) => m.userId === userId)?.avatarFileId || null;
 
 export const memberName = (project: any, userId: string | null | undefined) =>
   project.members.find((m: any) => m.userId === userId)?.fullName || 'Chưa giao';

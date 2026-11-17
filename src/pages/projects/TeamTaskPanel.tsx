@@ -41,6 +41,7 @@ export const TeamTaskPanel: React.FC<{
   const [copied, setCopied] = useState('');
   const { busy, run } = useBusy();
 
+  const done: string[] = task?.doneCriteria || [];
   const canEdit = roleAtLeast(task?.myRole ?? project.myRole, 'MEMBER');
   const assignable = project.members.filter((m: any) => roleAtLeast(m.role, 'MEMBER'));
 
@@ -265,13 +266,22 @@ export const TeamTaskPanel: React.FC<{
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Chưa có mô tả. Mô tả càng chi tiết thì AI càng làm đúng.</span>
               )}
 
-              <div className="tw-section-title">Tiêu chí nghiệm thu</div>
+              <div className="tw-section-title">
+                Tiêu chí nghiệm thu{criteria.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {criteria.filter((c) => done.includes(c)).length}/{criteria.length}</span>}
+              </div>
               <div className="flex flex-col gap-1">
                 {criteria.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Chưa có tiêu chí.</span>}
                 {criteria.map((c, i) => (
                   <div key={i} className="pj-row" style={{ fontSize: '0.85rem' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>{i + 1}.</span>
-                    <span style={{ flex: 1 }}>{c}</span>
+                    <input
+                      type="checkbox"
+                      checked={done.includes(c)}
+                      disabled={!canEdit}
+                      aria-label={`Đánh dấu hoàn thành tiêu chí ${i + 1}`}
+                      onChange={() => patch({ doneCriteria: done.includes(c) ? done.filter((d) => d !== c) : [...done, c] })}
+                      style={{ flexShrink: 0, cursor: canEdit ? 'pointer' : 'default' }}
+                    />
+                    <span style={{ flex: 1, ...(done.includes(c) ? { textDecoration: 'line-through', color: 'var(--text-muted)' } : {}) }}>{c}</span>
                     {canEdit && <button className="icon-btn danger" onClick={() => patch({ acceptanceCriteria: criteria.filter((_, j) => j !== i) })}><X size={14} /></button>}
                   </div>
                 ))}
@@ -325,7 +335,7 @@ export const TeamTaskPanel: React.FC<{
               <div className="flex flex-col gap-2">
                 {task.comments.map((c: any) => (
                   <div key={c.id} className="pj-comment">
-                    <Avatar name={c.author.fullName} size={24} />
+                    <Avatar name={c.author.fullName} src={c.author.avatarFileId} size={24} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                         <b style={{ color: 'var(--text-main)' }}>{c.author.fullName}</b>

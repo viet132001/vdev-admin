@@ -125,7 +125,7 @@ export const ProjectPlan: React.FC<ProjectTabProps> = ({ project, reloadProject,
                     <span className="pj-mini-title">{t.title}</span>
                     {t.source && <span className="tw-tag neutral">{t.source.key}</span>}
                     <TeamStatusBadge status={t.status} />
-                    <Avatar name={t.assignee?.fullName} size={20} />
+                    <Avatar name={t.assignee?.fullName} src={t.assignee?.avatarFileId} size={20} />
                     <span style={{ fontSize: '0.78rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', color: t.assignee ? 'var(--text-main)' : 'var(--text-muted)' }}>
                       {t.assignee?.fullName || 'Chưa giao'}
                     </span>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, getErrorMessage } from '../../services/api';
 import { Markdown } from '../tasks/PlanPanel';
 import { formatDate } from '../tasks/shared';
-import { Avatar, ProgressBar, TEAM_STATUS, TeamStatusBadge, memberName, type ProjectTabProps } from './shared';
+import { Avatar, ProgressBar, TEAM_STATUS, TeamStatusBadge, memberAvatar, memberName, type ProjectTabProps } from './shared';
 
 const Stat: React.FC<{ label: string; value: React.ReactNode; tone?: string; hint?: string }> = ({ label, value, tone, hint }) => (
   <div className="card pj-stat">
@@ -33,7 +33,7 @@ const TaskMini: React.FC<{ task: any; project: any; onOpen: () => void }> = ({ t
       <span className="pj-task-key">{task.key}</span>
       <span className="pj-mini-title">{task.title}</span>
       {source && <span className="tw-tag neutral">{source.key}</span>}
-      <Avatar name={task.assigneeId ? memberName(project, task.assigneeId) : null} size={20} />
+      <Avatar name={task.assigneeId ? memberName(project, task.assigneeId) : null} src={memberAvatar(project, task.assigneeId)} size={20} />
       <span style={{ fontSize: '0.78rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', color: task.assigneeId ? 'var(--text-main)' : 'var(--text-muted)' }}>
         {task.assigneeId ? memberName(project, task.assigneeId) : 'Chưa giao'}
       </span>
@@ -86,7 +86,7 @@ export const ProjectOverview: React.FC<ProjectTabProps> = ({ project, openTask, 
             <thead>
               <tr>
                 <th>Source</th><th>Phụ trách</th><th style={{ minWidth: 140 }}>Tiến độ</th>
-                {members.map((m) => <th key={m.userId} title={m.email} style={{ textAlign: 'center' }}><Avatar name={m.fullName} size={22} /></th>)}
+                {members.map((m) => <th key={m.userId} title={m.email} style={{ textAlign: 'center' }}><Avatar name={m.fullName} src={m.avatarFileId} size={22} /></th>)}
                 <th style={{ textAlign: 'center' }}>Chưa giao</th><th style={{ textAlign: 'center' }}>Trễ</th>
               </tr>
             </thead>
@@ -123,7 +123,7 @@ export const ProjectOverview: React.FC<ProjectTabProps> = ({ project, openTask, 
             const openCount = m.byStatus.TODO + m.byStatus.IN_PROGRESS + m.byStatus.IN_REVIEW + m.byStatus.BLOCKED;
             return (
               <div key={m.userId || 'none'} className="pj-row">
-                <Avatar name={m.userId ? m.fullName : null} />
+                <Avatar name={m.userId ? m.fullName : null} src={m.avatarFileId} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{m.fullName}</div>
                   <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>

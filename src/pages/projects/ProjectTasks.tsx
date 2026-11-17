@@ -144,7 +144,7 @@ const TaskCard: React.FC<{ task: any; onOpen: () => void; draggable?: boolean; s
     </div>
     <div style={{ fontWeight: 500 }}>{task.title}</div>
     <div className="tw-card-meta">
-      <Avatar name={task.assignee?.fullName} size={18} />
+      <Avatar name={task.assignee?.fullName} src={task.assignee?.avatarFileId} size={18} />
       <span style={{ fontWeight: 500, color: task.assignee ? 'var(--text-main)' : 'var(--text-muted)' }}>
         {task.assignee?.fullName || 'Chưa giao'}
       </span>
@@ -281,7 +281,7 @@ export const ProjectTasks: React.FC<ProjectTabProps> = ({ project, openTask, ver
                 {[...byAssignee.entries()].map(([assigneeId, items]) => (
                   <div key={assigneeId || 'none'} className="pj-assignee-group">
                     <div className="flex align-center gap-2" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                      <Avatar name={items[0].assignee?.fullName} size={20} /> {items[0].assignee?.fullName || 'Chưa giao'}
+                      <Avatar name={items[0].assignee?.fullName} src={items[0].assignee?.avatarFileId} size={20} /> {items[0].assignee?.fullName || 'Chưa giao'}
                       <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>{items.filter((t) => OPEN_STATUSES.includes(t.status)).length} đang mở</span>
                     </div>
                     <div className="pj-card-grid">

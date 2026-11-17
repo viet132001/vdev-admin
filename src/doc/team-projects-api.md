@@ -32,7 +32,7 @@ Mọi API kiểm tra **thành viên dự án**. Không phải thành viên ⇒ `
 | `TeamInvite` | `email` (chữ thường), `role`, `tokenHash` (SHA-256), `expiresAt` (7 ngày), `acceptedAt`, `revokedAt`, `emailSentAt`, `emailError` |
 | `TeamSource` | `key` (`A-Z0-9_-`, ≤ 16, duy nhất trong dự án), `name`, `description` (ghi chú cho AI), `repoUrl`, `techStack`, `leadId` |
 | `TeamMilestone` | `name`, `description`, `startDate`, `dueDate` |
-| `TeamTask` | `number` (mã `KEY-number`), `title`, `description` (Markdown), `acceptanceCriteria[]`, `status`, `priority`, `sourceId`, `milestoneId`, `assigneeId`, `reporterId`, `startDate`, `dueDate`, `estimateHours`, `completedAt`, `blockedReason` |
+| `TeamTask` | `number` (mã `KEY-number`), `title`, `description` (Markdown), `acceptanceCriteria[]`, `doneCriteria[]` (nội dung các tiêu chí đã tích xong; PATCH gửi mảng mới, BE tự bỏ mục không còn trong `acceptanceCriteria`), `status`, `priority`, `sourceId`, `milestoneId`, `assigneeId`, `reporterId`, `startDate`, `dueDate`, `estimateHours`, `completedAt`, `blockedReason` |
 | `TeamTaskComment` | `content` (Markdown), `via` (`WEB` / `MCP`) |
 | `TeamTaskActivity` | Lịch sử: `action` (`CREATED`, `STATUS`, `ASSIGNEEID`, `PRIORITY`, `SOURCEID`, `MILESTONEID`, `DUEDATE`, `STARTDATE`, `TITLE`), `fromValue`, `toValue`, `via` |
 | `TeamDoc` | Tài liệu Markdown: `title`, `content`, `url`, gắn `taskId` và/hoặc `sourceId` (không gắn = tài liệu chung) |
@@ -206,3 +206,6 @@ Mọi tool chạy với quyền của chủ token (cùng luật mục 1), thay �
 | `create_milestone` | `project`, `name`, `description?`, `start_date?`, `due_date?` | Cần MANAGER |
 
 Giá trị dễ đọc: `project` = mã dự án; `task` = mã task; `source` = mã source (`BE`); `assignee` = email, `me` hoặc `none`; `milestone` = tên hoặc id; ngày `YYYY-MM-DD`, `none` để xoá.
+
+
+* `assignee`, `reporter`, tác giả bình luận và `members[]` có thêm `avatarFileId` (URL ảnh đại diện trên R2, `null` nếu chưa đặt).
