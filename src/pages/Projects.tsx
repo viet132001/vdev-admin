@@ -13,6 +13,8 @@ import { TeamDocs } from './projects/TeamDocs';
 import { ProjectMembers } from './projects/ProjectMembers';
 import { ProjectSettings } from './projects/ProjectSettings';
 import { TeamTaskPanel } from './projects/TeamTaskPanel';
+import { LiveBadge } from './projects/LiveBadge';
+import { useProjectLive } from './projects/live';
 import { McpConnectModal } from './projects/McpConnectModal';
 
 const TABS = [
@@ -246,6 +248,16 @@ export const Projects: React.FC = () => {
   const openTask = useCallback((ref: string | null) => setParam({ task: ref }), [setParam]);
   const refresh = useCallback(() => { loadProject(); setVersion((v) => v + 1); }, [loadProject]);
 
+  // Changes made elsewhere (Claude over MCP, other members, integrations) arrive over SSE, or by polling until the BE has it
+  const [liveTick, setLiveTick] = useState(0);
+  const liveMode = useProjectLive(project?.id, (event) => {
+    setVersion((v) => v + 1);
+    // Reload the open task panel only when the event is about that task (or we can't tell)
+    if (!event.taskKey || event.taskKey === taskRef) setLiveTick((t) => t + 1);
+    // Members, sources and milestones live on the project object
+    if (event.type === 'reset' || event.type.startsWith('member.') || event.type.startsWith('milestone.')) loadProject();
+  });
+
   if (!projectKey) {
     return (
       <>
@@ -278,7 +290,10 @@ export const Projects: React.FC = () => {
           <span className="badge">{roleLabel(project.myRole)}</span>
           {project.isArchived && <span className="badge badge-warning">Đã lưu trữ</span>}
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => setMcpOpen(true)}><Plug size={14} /> Kết nối MCP</button>
+        <div className="flex align-center gap-2">
+          <LiveBadge mode={liveMode} />
+          <button className="btn btn-secondary btn-sm" onClick={() => setMcpOpen(true)}><Plug size={14} /> Kết nối MCP</button>
+        </div>
       </div>
 
       <div className="tabs pj-tabs">
@@ -301,6 +316,7 @@ export const Projects: React.FC = () => {
           project={project}
           onClose={() => openTask(null)}
           onChanged={() => setVersion((v) => v + 1)}
+          liveTick={liveTick}
         />
       )}
       {mcpOpen && <McpConnectModal onClose={() => setMcpOpen(false)} projectKey={project.key} />}

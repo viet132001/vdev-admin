@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Copy, FileText, Plus, Trash2, X } from 'lucide-react';
 import { api, getErrorMessage } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -24,7 +24,9 @@ export const TeamTaskPanel: React.FC<{
   project: any;
   onClose: () => void;
   onChanged: () => void;
-}> = ({ taskRef, project, onClose, onChanged }) => {
+  /** Bumped when this task changed elsewhere (live event): reload without losing unsaved edits */
+  liveTick?: number;
+}> = ({ taskRef, project, onClose, onChanged, liveTick = 0 }) => {
   const { user } = useAuth();
   const [task, setTask] = useState<any>(null);
   const [error, setError] = useState('');
@@ -59,6 +61,23 @@ export const TeamTaskPanel: React.FC<{
   }, [taskRef]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Quiet reload: refresh server data but keep a draft the user has started typing
+  const latest = useRef<any>(null);
+  latest.current = task;
+  useEffect(() => {
+    if (!liveTick) return;
+    api.get(`/api/team-tasks/${taskRef}`, { noCache: true }).then((data) => {
+      const prev = latest.current;
+      if (!prev) return;
+      setTask(data);
+      setTitle((d) => (d === prev.title ? data.title : d));
+      setDesc((d) => (editingDesc && d !== (prev.description || '') ? d : data.description || ''));
+      setBlockedReason((d) => (d === (prev.blockedReason || '') ? data.blockedReason || '' : d));
+      setCriteria(data.acceptanceCriteria || []);
+    }).catch(() => { /* a failed background refresh is not worth an alert */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTick]);
 
   const patch = (body: Record<string, any>, key = 'patch') =>
     run(key, async () => {

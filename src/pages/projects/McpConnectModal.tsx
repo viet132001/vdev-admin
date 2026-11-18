@@ -7,7 +7,7 @@ import { copyText } from './shared';
 
 const MCP_URL = `${API_BASE_URL.replace(/\/+$/, '')}/api/mcp`;
 
-const CopyBlock: React.FC<{ text: string }> = ({ text }) => {
+export const CopyBlock: React.FC<{ text: string }> = ({ text }) => {
   const [done, setDone] = useState(false);
   return (
     <div className="pj-copy-block">

@@ -4,6 +4,7 @@ import { api, getErrorMessage } from '../../services/api';
 import { useBusy } from '../tasks/agent';
 import { ConfirmDialog, toDateInput, type ConfirmState } from '../tasks/shared';
 import { roleAtLeast, type ProjectTabProps } from './shared';
+import { IntegrationSettings } from './IntegrationSettings';
 
 const EMPTY_SOURCE = { key: '', name: '', description: '', repoUrl: '', techStack: '', leadId: '' };
 
@@ -161,6 +162,8 @@ export const ProjectSettings: React.FC<ProjectTabProps & { onDeleted: () => void
           </div>
         ))}
       </div>
+
+      <IntegrationSettings project={project} />
 
       <div className="card flex flex-col gap-2">
         <b>Lưu trữ & xoá</b>
