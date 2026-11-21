@@ -161,7 +161,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
     });
   };
 
-  const act = (job: LessonJob, action: 'retry' | 'cancel' | 'meta' | 'resume', body: unknown = {}) => run(`${action}-${job.id}`, async () => {
+  const act = (job: LessonJob, action: 'retry' | 'cancel' | 'meta' | 'resume' | 'rerender', body: unknown = {}) => run(`${action}-${job.id}`, async () => {
     try {
       await jobAction(job.id, action, body);
       setJobs(await listJobs());
@@ -383,6 +383,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
                 {job.status === 'FAILED' && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => act(job, 'retry')}><RotateCcw size={14} /> Thử lại</button>}
                 {job.meta?.saveError && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => act(job, 'meta', { meta: { saveError: null } })}><RotateCcw size={14} /> Lưu lại</button>}
                 {job.meta?.linkError && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => act(job, 'meta', { meta: { linkError: null } })}><RotateCcw size={14} /> Gắn link lại</button>}
+                {job.status === 'DONE' && job.videoPath && !isScheduled(job) && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => act(job, 'rerender')}><RotateCcw size={14} /> Tạo lại video</button>}
                 {job.status === 'CANCELLED' && job.lesson && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => act(job, 'resume')}><RotateCcw size={14} /> Tạo video lại</button>}
                 {!['DONE', 'CANCELLED'].includes(job.status) && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => act(job, 'cancel')}>Huỷ bài này</button>}
               </div>
