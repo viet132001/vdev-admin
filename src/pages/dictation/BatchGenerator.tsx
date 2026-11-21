@@ -235,10 +235,12 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
                   <input type="number" required min={30} max={600} step={10} className="form-input" value={form.words} onChange={(e) => setForm({ ...form, words: Number(e.target.value) })} />
                   {form.words > 95 && <p className="lg-meta">Trên khoảng 95 từ, video có thể dài hơn 90 giây và Facebook Reels sẽ không nhận.</p>}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Số từ vựng mỗi bài</label>
-                  <input type="number" required min={0} max={40} className="form-input" value={form.vocabulary} onChange={(e) => setForm({ ...form, vocabulary: Number(e.target.value) })} />
-                </div>
+                {!genre?.noVocabulary && (
+                  <div className="form-group">
+                    <label className="form-label">Số từ vựng mỗi bài</label>
+                    <input type="number" required min={0} max={40} className="form-input" value={form.vocabulary} onChange={(e) => setForm({ ...form, vocabulary: Number(e.target.value) })} />
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Yêu cầu chung cho cả lô</label>

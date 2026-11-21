@@ -52,6 +52,7 @@ export interface VideoGenre {
   hashtags: string;
   formats: ('dialogue' | 'reading')[];
   narrated?: boolean; // one reader for the whole lesson (Shadowing); older workers don't send it
+  noVocabulary?: boolean; // the lines are the whole lesson: no vocabulary list or grammar notes (Shadowing)
   styles: { id: string; label: string; aspects: ('9:16' | '16:9')[] }[];
   facebook: boolean;
   youtube: boolean;

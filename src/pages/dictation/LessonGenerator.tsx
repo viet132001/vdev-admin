@@ -420,10 +420,12 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
                 <input type="number" required min={WORDS.min} max={WORDS.max} step={10} className="form-input" value={form.words} onChange={(e) => update({ words: Number(e.target.value) })} />
                 {form.video && form.words > REELS_SAFE_WORDS && <p className="lg-meta">Video có thể dài hơn 90 giây, Facebook Reels sẽ không nhận. YouTube vẫn đăng được.</p>}
               </div>
-              <div className="form-group">
-                <label className="form-label">Số từ vựng</label>
-                <input type="number" required min={VOCABULARY.min} max={VOCABULARY.max} className="form-input" value={form.vocabulary} onChange={(e) => update({ vocabulary: Number(e.target.value) })} />
-              </div>
+              {!currentGenre?.noVocabulary && (
+                <div className="form-group">
+                  <label className="form-label">Số từ vựng</label>
+                  <input type="number" required min={VOCABULARY.min} max={VOCABULARY.max} className="form-input" value={form.vocabulary} onChange={(e) => update({ vocabulary: Number(e.target.value) })} />
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Yêu cầu thêm</label>
