@@ -135,11 +135,14 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
     });
   };
 
-  const roadmapTotal = counts.reduce((sum, n) => sum + n, 0);
+  // Roadmap topics already made for this course (any batch, cancelled ones excepted) are skipped, so a new roadmap batch carries on
+  const usedTopics = new Set(jobs.filter((job) => job.meta?.courseId === course.id && job.status !== 'CANCELLED').map((job) => `${job.request.level}|${job.request.topic}`));
+  const freshTopics = ROADMAP.map((stage) => stage.topics.filter((topic) => !usedTopics.has(`${stage.level}|${topic}`)));
+  const roadmapTotal = counts.reduce((sum, n, i) => sum + Math.min(n, freshTopics[i].length), 0);
   const submitRoadmap = (e: React.FormEvent) => {
     e.preventDefault();
     run('create', async () => {
-      const items = ROADMAP.flatMap((stage, i) => stage.topics.slice(0, counts[i]).map((topic) => ({ topic, level: stage.level, note: [stage.note, form.note.trim()].filter(Boolean).join('\n') })));
+      const items = ROADMAP.flatMap((stage, i) => freshTopics[i].slice(0, counts[i]).map((topic) => ({ topic, level: stage.level, note: [stage.note, form.note.trim()].filter(Boolean).join('\n') })));
       if (!items.length) return alert('Chọn ít nhất một bài');
       try {
         const format = CONTENT_TYPES[form.contentType].format;
@@ -243,9 +246,11 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
               {ROADMAP.map((stage, i) => (
                 <div key={stage.level} className="form-group">
                   <label className="form-label">{stage.level} · số bài</label>
-                  <input type="number" min={0} max={stage.topics.length} className="form-input" value={counts[i]} onChange={(e) => setCounts(counts.map((n, j) => (j === i ? Math.max(0, Math.min(stage.topics.length, Number(e.target.value) || 0)) : n)))} />
+                  <input type="number" min={0} max={freshTopics[i].length} className="form-input" value={Math.min(counts[i], freshTopics[i].length)} onChange={(e) => setCounts(counts.map((n, j) => (j === i ? Math.max(0, Math.min(freshTopics[i].length, Number(e.target.value) || 0)) : n)))} />
                   <p className="lg-meta">{stage.note}</p>
-                  {counts[i] > 0 && <p className="lg-meta">Chủ đề: {stage.topics.slice(0, counts[i]).join(' · ')}</p>}
+                  {freshTopics[i].length === 0
+                    ? <p className="lg-meta">Đã dùng hết chủ đề gợi ý của chặng này, tạo lô thường để tự nhập thêm.</p>
+                    : counts[i] > 0 && <p className="lg-meta">Chủ đề: {freshTopics[i].slice(0, counts[i]).join(' · ')}</p>}
                 </div>
               ))}
               <div className="grid grid-cols-2 gap-4">
