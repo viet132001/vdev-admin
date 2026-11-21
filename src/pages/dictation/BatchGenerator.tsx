@@ -7,7 +7,20 @@ import { defaultCaption, defaultTitle } from './lessonSave';
 import { CONTENT_TYPES, formatWhen, jobWhen, planDays, type ContentType } from './schedule';
 import { WORKER_COMMAND, batchOf, createBatch, facebookTaken, jobAction, jobVideoUrl, listJobs, listPages, ownerOf, workerHealth, type CoursePage, type LessonJob, type VideoGenre } from './lessonWorker';
 
-const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+// B1+ only exists for the worker's prompts (the roadmap); the BE level enum has no such value, and no session is created here
+const LEVELS = ['A1', 'A2', 'B1', 'B1+', 'B2', 'C1', 'C2'];
+
+// English4ME roadmap: stages in order, each with a ready note and a pool of topics (the first N are used)
+const ROADMAP = [
+  { level: 'A2', note: 'Chặng A2: câu 5 đến 8 từ, thì đơn và quá khứ đơn, chunk đời thường (stuck in traffic...). Khung Point và Example.',
+    topics: ['Buổi sáng của tôi', 'Đi chợ cuối tuần', 'Kẹt xe giờ tan tầm', 'Gọi món ở quán cà phê', 'Hỏi đường', 'Làm quen hàng xóm', 'Một ngày ở văn phòng', 'Nấu bữa tối', 'Đi khám bệnh', 'Kế hoạch cuối tuần'] },
+  { level: 'B1', note: 'Chặng B1: câu 7 đến 11 từ, có because / but / so, hiện tại hoàn thành, cụm động từ (figure out, make a decision). Bắt đầu khung PREP.',
+    topics: ['Học cách quản lý thời gian', 'Một quyết định khó', 'Thói quen mới tôi đang tập', 'Chuyến đi đáng nhớ', 'Làm việc từ xa', 'Học một kỹ năng mới', 'Khi kế hoạch thay đổi', 'Bạn bè thay đổi theo thời gian', 'Tiền và những lựa chọn hằng ngày', 'Sức khoẻ và giấc ngủ'] },
+  { level: 'B1+', note: 'Chặng B1+: câu 8 đến 12 từ, có mệnh đề phụ, câu điều kiện, bị động nhẹ, collocation. PREP đầy đủ, 1 đến 2 từ đệm (Well, let me think...).',
+    topics: ['Nếu tôi có thể làm lại', 'Áp lực công việc', 'Mạng xã hội và thời gian', 'Học từ sai lầm', 'Thay đổi nghề nghiệp', 'Sống một mình hay cùng gia đình', 'Điều tôi mong ở tương lai', 'Giao tiếp với đồng nghiệp khó tính', 'Du lịch một mình', 'Khi nào nên nói không'] },
+  { level: 'B2', note: 'Chặng B2: câu 9 đến 14 từ, ý trừu tượng, nêu quan điểm và nhượng bộ (To be honest, That said, What matters is). Từ đệm tự nhiên, có diễn đạt vòng khi quên từ.',
+    topics: ['Thành công là gì', 'Công nghệ và các mối quan hệ', 'Cân bằng công việc và cuộc sống', 'Học cả đời', 'Áp lực phải hoàn hảo', 'Tiền có mua được hạnh phúc không', 'Văn hoá và định kiến', 'Trí tuệ nhân tạo và việc làm', 'Sống chậm trong thế giới nhanh', 'Điều thật sự quan trọng'] }
+];
 const DEFAULT_ROWS = 5;
 const MAX_ROWS = 10;
 const POLL_MS = 3000;
@@ -50,6 +63,8 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [rows, setRows] = useState(() => Array.from({ length: DEFAULT_ROWS }, () => ({ topic: '', note: '' })));
   const [form, setForm] = useState({ level: course.level || 'A2', contentType: 'conversation' as ContentType, words: 90, vocabulary: 5, note: '' });
+  const [roadmap, setRoadmap] = useState(false);
+  const [counts, setCounts] = useState<number[]>(() => ROADMAP.map(() => 3));
   const [start, setStart] = useState(() => toDateInput(new Date()));
   const [time, setTime] = useState('');
   const [onPage, setOnPage] = useState<Date[]>([]);
@@ -113,6 +128,29 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
         setBatchId(batchOf(created[0])!.id);
         setCreating(false);
         setRows(Array.from({ length: DEFAULT_ROWS }, () => ({ topic: '', note: '' })));
+        onStarted();
+      } catch (err) {
+        alert(err instanceof Error && err.message ? err.message : 'Không tạo được các bài');
+      }
+    });
+  };
+
+  const roadmapTotal = counts.reduce((sum, n) => sum + n, 0);
+  const submitRoadmap = (e: React.FormEvent) => {
+    e.preventDefault();
+    run('create', async () => {
+      const items = ROADMAP.flatMap((stage, i) => stage.topics.slice(0, counts[i]).map((topic) => ({ topic, level: stage.level, note: [stage.note, form.note.trim()].filter(Boolean).join('\n') })));
+      if (!items.length) return alert('Chọn ít nhất một bài');
+      try {
+        const format = CONTENT_TYPES[form.contentType].format;
+        const created = await createBatch(course.id, items, {
+          courseTitle: course.title, level: ROADMAP[0].level, contentType: form.contentType, format: genre?.formats.includes(format) ? format : genre?.formats[0],
+          words: form.words, vocabulary: form.vocabulary, video: true
+        });
+        setJobs(await listJobs());
+        setBatchId(batchOf(created[0])!.id);
+        setCreating(false);
+        setRoadmap(false);
         onStarted();
       } catch (err) {
         alert(err instanceof Error && err.message ? err.message : 'Không tạo được các bài');
@@ -191,6 +229,47 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
     );
   }
 
+  // ---------- roadmap form ----------
+  if (roadmap && (creating || !batch.length)) {
+    return (
+      <div className="modal-overlay">
+        <div className="modal-content lg-modal">
+          {header}
+          <form onSubmit={submitRoadmap}>
+            <div className="modal-body">
+              <p className="lg-meta" style={{ marginTop: 0 }}>
+                Một lô đi từ A2 đến B2, Claude soạn lần lượt từng bài theo thứ tự chặng. Mỗi chặng có chủ đề và yêu cầu gợi ý sẵn theo lộ trình của series; số bài là 0 thì bỏ chặng đó.
+              </p>
+              {ROADMAP.map((stage, i) => (
+                <div key={stage.level} className="form-group">
+                  <label className="form-label">{stage.level} · số bài</label>
+                  <input type="number" min={0} max={stage.topics.length} className="form-input" value={counts[i]} onChange={(e) => setCounts(counts.map((n, j) => (j === i ? Math.max(0, Math.min(stage.topics.length, Number(e.target.value) || 0)) : n)))} />
+                  <p className="lg-meta">{stage.note}</p>
+                  {counts[i] > 0 && <p className="lg-meta">Chủ đề: {stage.topics.slice(0, counts[i]).join(' · ')}</p>}
+                </div>
+              ))}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="form-label">Độ dài mỗi bài (số từ)</label>
+                  <input type="number" required min={30} max={600} step={10} className="form-input" value={form.words} onChange={(e) => setForm({ ...form, words: Number(e.target.value) })} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Yêu cầu chung thêm cho cả lô</label>
+                <textarea rows={2} maxLength={300} className="form-input" style={{ resize: 'none' }} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setRoadmap(false)}>Tạo lô thường</button>
+              <button type="submit" className="btn btn-primary" disabled={!!busy || !roadmapTotal || roadmapTotal > 40}><Layers size={16} /> {busy ? 'Đang gửi...' : `Tạo ${roadmapTotal} bài theo lộ trình`}</button>
+            </div>
+          </form>
+        </div>
+        <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
+      </div>
+    );
+  }
+
   // ---------- form ----------
   if (creating || !batch.length) {
     const filled = rows.filter((row) => row.topic.trim()).length;
@@ -249,6 +328,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
             </div>
             <div className="modal-footer">
               {batch.length > 0 && <button type="button" className="btn btn-secondary" onClick={() => setCreating(false)}>Xem lô đang làm</button>}
+              <button type="button" className="btn btn-secondary" onClick={() => setRoadmap(true)}>Tạo theo lộ trình</button>
               <button type="submit" className="btn btn-primary" disabled={!!busy || !filled}><Layers size={16} /> {busy ? 'Đang gửi...' : `Tạo ${filled} bài`}</button>
             </div>
           </form>
