@@ -371,7 +371,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
                   {job.videoPath ? (openVideo === job.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : <span style={{ width: 14 }} />}
                   <span className="vl-title">{job.episode ? `Tập ${job.episode}: ` : ''}{job.lesson?.title ?? job.request.topic}</span>
                 </button>
-                <span className={`badge badge-${step.tone}`}>{step.label}</span>
+                <span className={`badge badge-${step.tone}`}>{step.label}{job.status === 'RENDERING' && job.progress != null ? ` ${job.progress}%` : ''}</span>
               </div>
               <div className="vl-row-meta">
                 {job.request.topic}

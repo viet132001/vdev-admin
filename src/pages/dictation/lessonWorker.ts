@@ -78,6 +78,7 @@ export interface LessonJob {
   failedStage: 'plan' | 'write' | 'render' | null;
   createdAt?: string;
   updatedAt?: string;
+  progress?: number; // percent of the video rendered, only while it renders; older workers don't send it
   target?: JobTarget;
   comedy?: { script: ComedyScript };
   animation?: { seriesId: string; script: unknown };
