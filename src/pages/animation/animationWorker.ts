@@ -54,6 +54,8 @@ export const NARRATOR = 'narrator';
 export interface VoiceInfo { id: string; name: string; description: string; preview: string | null }
 export const listVoices = (): Promise<VoiceInfo[]> => call('/assets/voices');
 export const setVoices = (id: string, voices: Record<string, string>): Promise<AssetSeries> => call(`/assets/series/${id}/voices`, 'POST', { voices });
+// The line read in that voice (cached by the worker, so the same line again costs nothing); returns a playable URL
+export const sampleVoice = async (voice: string, text: string): Promise<string> => `${WORKER_URL}${(await call('/assets/voices/sample', 'POST', { voice, text })).url}`;
 export const suggestVoices = (id: string): Promise<AssetSeries> => call(`/assets/series/${id}/suggest-voices`, 'POST', {});
 // The task to paste into Claude Desktop: it draws the missing pictures (or the ones named) in ChatGPT and hands each to the worker
 export const assetBrief = async (id: string, items: string[] = []): Promise<string> => (await call(`/assets/series/${id}/brief`, 'POST', { items })).text;

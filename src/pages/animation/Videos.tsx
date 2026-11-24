@@ -6,10 +6,11 @@ import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { VideoPublish } from '../dictation/VideoPublish';
 import { ANIMATION_GENRE, WORKER_COMMAND, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, type LessonJob } from '../dictation/lessonWorker';
 import {
-  animationCatalog, createAnimationJob, isAnimation, listAssetSeries, normalizeShot, previewAnimationShot, saveAnimationScript,
-  type AnimationCatalog, type AnimationJob, type AnimationScript, type AssetSummary, type ScriptShot
+  NARRATOR, animationCatalog, createAnimationJob, getAssetSeries, isAnimation, listAssetSeries, normalizeShot, previewAnimationShot, saveAnimationScript,
+  type AnimationCatalog, type AnimationJob, type AnimationScript, type AssetSeries, type AssetSummary, type ScriptShot
 } from './animationWorker';
 import { ShotEditor } from './ShotEditor';
+import { VoicePanel } from './VoicePanel';
 
 const POLL_MS = 2500;
 const MOVING = ['PLANNING', 'RENDERING'];
@@ -39,6 +40,7 @@ export const Videos: React.FC = () => {
   const [jobs, setJobs] = useState<AnimationJob[]>([]);
   const [seriesList, setSeriesList] = useState<AssetSummary[]>([]);
   const [catalog, setCatalog] = useState<AnimationCatalog | null>(null);
+  const [series, setSeries] = useState<AssetSeries | null>(null); // for its voices
   const [script, setScript] = useState<AnimationScript | null>(null);
   const [dirty, setDirty] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -73,6 +75,11 @@ export const Videos: React.FC = () => {
     setDirty(false);
     if (selectedId) animationCatalog(selectedId).then(setCatalog).catch(() => undefined);
   }, [selectedId]);
+  const seriesId = jobs.find((j) => j.id === selectedId)?.animation?.seriesId ?? null;
+  useEffect(() => {
+    setSeries(null);
+    if (seriesId) getAssetSeries(seriesId).then(setSeries).catch(() => undefined);
+  }, [seriesId]);
 
   const moving = !!job && (MOVING.includes(job.status) || isPublishing(job as LessonJob));
   useEffect(() => {
@@ -169,6 +176,10 @@ export const Videos: React.FC = () => {
   const posted = !!job && (!!(job.facebook && job.facebook.status !== 'FAILED') || !!(job.youtube && job.youtube.status !== 'FAILED'));
   const editable = !!job && !!script && !!catalog && ['PLAN_READY', 'DONE', 'FAILED'].includes(job.status) && !(job.status === 'FAILED' && job.failedStage !== 'render');
   const readySeries = seriesList.filter((s) => s.ready > 0);
+  // Who speaks in this script, and the first line of each: what the voices are tried on before the render
+  const lines: Record<string, string> = {};
+  for (const shot of script?.shots ?? []) if (shot.speaker && shot.text.trim() && !lines[shot.speaker]) lines[shot.speaker] = shot.text.trim();
+  const speakers = Object.keys(lines).sort((a, b) => (a === NARRATOR ? -1 : b === NARRATOR ? 1 : 0));
 
   return (
     <div className="st-shell">
@@ -266,6 +277,7 @@ export const Videos: React.FC = () => {
                   <button className="btn btn-secondary btn-sm" disabled={posted} onClick={() => edit({ ...script, shots: [...script.shots, blankShot(script.shots[script.shots.length - 1], catalog.backgrounds[0]?.id ?? '')] })}><Plus size={14} /> Thêm shot</button>
                 </div>
                 {errors.length > 0 && <ul className="lg-error" style={{ margin: 0, paddingLeft: 18 }}>{errors.map((e) => <li key={e}>{e}</li>)}</ul>}
+                {!posted && series && speakers.length > 0 && <VoicePanel series={series} onChange={setSeries} only={speakers} lines={lines} startOpen={job.status === 'PLAN_READY'} />}
                 {!posted && (
                   <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
                     <button className="btn btn-secondary" disabled={!!busy || !dirty} onClick={() => run('save', async () => { await save(); })}><Save size={16} /> Lưu kịch bản</button>
