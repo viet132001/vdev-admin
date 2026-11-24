@@ -7,7 +7,8 @@ import { WORKER_COMMAND } from './dictation/lessonWorker';
 import { AssetBoard } from './animation/AssetBoard';
 import { Videos } from './animation/Videos';
 import { VoicePanel } from './animation/VoicePanel';
-import { addAsset, copyBrief, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, type AssetSeries, type AssetSummary } from './animation/animationWorker';
+import { BriefDialog } from './animation/BriefDialog';
+import { addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, type AssetSeries, type AssetSummary } from './animation/animationWorker';
 
 const WATCH_EVERY = 6000;
 const WATCH_FOR = 45 * 60 * 1000;
@@ -80,7 +81,7 @@ export const Animation: React.FC = () => {
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   // While Claude Desktop is drawing, the pictures arrive through the worker: re-read the series until then
   const [watchUntil, setWatchUntil] = useState(0);
-  const { busy, run } = useBusy();
+  const [brief, setBrief] = useState<string[] | null>(null); // the items to hand over; [] = everything missing
 
   const load = useCallback(async () => {
     try {
@@ -169,8 +170,8 @@ export const Animation: React.FC = () => {
                   <div className="flex align-center gap-2">
                     <span className={`badge ${ready === series.items.length ? 'badge-success' : 'badge-info'}`}>{ready}/{series.items.length} ảnh</span>
                     {ready < series.items.length && (
-                      <button className="btn btn-primary btn-sm" disabled={!!busy} title="Chép việc vẽ mọi ảnh còn thiếu cho Claude Code Desktop" onClick={() => run('brief', async () => { try { await copyBrief(series.id, [], handed); } catch (err) { alert(message(err, 'Không tạo được việc cho Claude')); } })}>
-                        {busy ? <Loader2 size={14} className="spin" /> : <Bot size={14} />} Giao Claude vẽ phần còn thiếu
+                      <button className="btn btn-primary btn-sm" title="Giao Claude Code Desktop vẽ mọi ảnh còn thiếu" onClick={() => setBrief([])}>
+                        <Bot size={14} /> Giao Claude vẽ phần còn thiếu
                       </button>
                     )}
                     <button className="icon-btn" title="Xoá series" onClick={() => setConfirm({ title: 'Xoá series', message: `Xoá "${series.title}" cùng toàn bộ ảnh đã tải lên?`, confirmLabel: 'Xoá', action: async () => { setConfirm(null); try { await deleteAssetSeries(series.id); setSeries(null); setList((all) => all.filter((s) => s.id !== series.id)); setParams({}); } catch (err) { alert(message(err, 'Không xoá được series')); } } })}><Trash2 size={16} /></button>
@@ -192,7 +193,8 @@ export const Animation: React.FC = () => {
               </div>
               <VoicePanel series={series} onChange={changed} />
               {Date.now() < watchUntil && <p className="lg-meta" style={{ margin: 0 }}>Đang chờ Claude đưa ảnh vào, trang tự cập nhật.</p>}
-              <AssetBoard series={series} onChange={changed} onHanded={handed} />
+              <AssetBoard series={series} onChange={changed} onBrief={setBrief} />
+              <BriefDialog seriesId={series.id} items={brief} onClose={() => setBrief(null)} onHanded={handed} />
               <AddAsset seriesId={series.id} onChange={changed} />
             </>
           )}
