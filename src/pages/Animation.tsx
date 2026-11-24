@@ -6,6 +6,7 @@ import { useBusy } from './tasks/agent';
 import { WORKER_COMMAND } from './dictation/lessonWorker';
 import { AssetBoard } from './animation/AssetBoard';
 import { Videos } from './animation/Videos';
+import { VoicePanel } from './animation/VoicePanel';
 import { addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, type AssetSeries, type AssetSummary } from './animation/animationWorker';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
@@ -166,8 +167,9 @@ export const Animation: React.FC = () => {
                     ))}
                   </div>
                 </details>
-                <p className="lg-meta" style={{ margin: 0 }}>Làm theo thứ tự: nhân vật trước, rồi biểu cảm (đính kèm ảnh nhân vật khi nhờ ChatGPT), bối cảnh, đạo cụ. Mỗi thẻ: chép prompt sang ChatGPT, vẽ xong thì dán ảnh (Ctrl+V), kéo thả hoặc bấm vào khung.</p>
+                <p className="lg-meta" style={{ margin: 0 }}>Làm theo thứ tự: ảnh toàn thân nhân vật trước, rồi bảng bộ phận, bảng đầu và hình miệng (đính kèm ảnh toàn thân khi nhờ ChatGPT); bối cảnh rồi tiền cảnh của nó (đính kèm ảnh bối cảnh); đạo cụ. Có bảng bộ phận và bảng đầu thì nhân vật cử động được tay chân, quỳ, ngồi, đi, cầm đồ; ráp khớp ở thẻ bộ phận. Mỗi thẻ: chép prompt sang ChatGPT, vẽ xong thì dán ảnh (Ctrl+V), kéo thả hoặc bấm vào khung.</p>
               </div>
+              <VoicePanel series={series} onChange={changed} />
               <AssetBoard series={series} onChange={changed} />
               <AddAsset seriesId={series.id} onChange={changed} />
             </>

@@ -6,7 +6,7 @@ import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { VideoPublish } from '../dictation/VideoPublish';
 import { ANIMATION_GENRE, WORKER_COMMAND, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, type LessonJob } from '../dictation/lessonWorker';
 import {
-  animationCatalog, createAnimationJob, isAnimation, listAssetSeries, previewAnimationShot, saveAnimationScript,
+  animationCatalog, createAnimationJob, isAnimation, listAssetSeries, normalizeShot, previewAnimationShot, saveAnimationScript,
   type AnimationCatalog, type AnimationJob, type AnimationScript, type AssetSummary, type ScriptShot
 } from './animationWorker';
 import { ShotEditor } from './ShotEditor';
@@ -24,9 +24,11 @@ const STATUS: Record<string, { label: string; tone: string }> = {
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 const titleOf = (job: AnimationJob) => job.animation?.script.title || job.request.topic;
 
-// A new shot starts like the last one: same room and people, nobody talking yet
+// A new shot starts like the last one: same room, people where they ended up, same air; nobody talking yet
 const blankShot = (after: ScriptShot | undefined, background: string): ScriptShot => ({
-  background: after?.background ?? background, camera: 'wide', move: 'hold', cast: after ? structuredClone(after.cast) : [], props: [], speaker: null, text: '', expression: 'neutral', reactions: [], action: 'none'
+  background: after?.background ?? background, camera: 'wide', subject: null, move: 'hold', transition: 'cut',
+  cast: after ? structuredClone(after.cast).map((m) => ({ ...m, x: m.toX ?? m.x, toX: null })) : [], props: [], speaker: null, text: '', expression: 'neutral', reactions: [], action: 'none',
+  effects: after ? [...after.effects] : [], tone: after?.tone ?? 'none', light: after?.light ? { ...after.light } : null
 });
 
 export const Videos: React.FC = () => {
@@ -61,7 +63,7 @@ export const Videos: React.FC = () => {
   const job = jobs.find((j) => j.id === selectedId) ?? null;
   // The editor works on its own copy of the script until it is saved
   useEffect(() => {
-    if (job && !dirty) setScript(job.animation?.script.shots.length ? structuredClone(job.animation.script) : null);
+    if (job && !dirty) setScript(job.animation?.script.shots.length ? { ...structuredClone(job.animation.script), shots: job.animation.script.shots.map(normalizeShot) } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, jobs]);
   useEffect(() => {
@@ -189,7 +191,7 @@ export const Videos: React.FC = () => {
           <form className="card flex flex-col gap-4" onSubmit={create}>
             <div>
               <h2 style={{ fontSize: '1.15rem', margin: 0, fontWeight: 600 }}>Video mới</h2>
-              <p className="lg-meta" style={{ margin: '4px 0 0' }}>Chọn series, nhập ý tưởng: Claude viết kịch bản chỉ dùng nhân vật, biểu cảm, bối cảnh và đạo cụ series đã có ảnh. Bạn sửa từng shot, xem thử rồi render (giọng ElevenLabs).</p>
+              <p className="lg-meta" style={{ margin: '4px 0 0' }}>Chọn series, nhập ý tưởng: Claude viết kịch bản phim kể chuyện 16:9 (người kể dẫn truyện, nhân vật đối thoại, tư thế, cử chỉ, máy quay, ánh sáng, không khí) chỉ từ asset series đã có ảnh. Bạn sửa từng shot, xem thử rồi render bằng giọng ElevenLabs đã chọn cho series.</p>
             </div>
             {readySeries.length === 0 ? (
               <p className="lg-meta" style={{ margin: 0 }}>Chưa series nào có ảnh. Qua tab Asset, tải ít nhất một nhân vật và một bối cảnh.</p>
@@ -207,7 +209,7 @@ export const Videos: React.FC = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Ghi chú thêm</label>
-                  <input className="form-input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Giọng điệu, độ dài, kết thúc mong muốn…" />
+                  <input className="form-input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Độ dài (mặc định 2–4 phút, tối đa 20), giọng điệu, kết thúc mong muốn…" />
                 </div>
                 <div><button className="btn btn-primary" type="submit" disabled={!!busy || !form.idea.trim() || !form.seriesId}>{busy === 'create' ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />} Claude viết kịch bản</button></div>
               </>

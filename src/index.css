@@ -1711,8 +1711,15 @@ button.vl-row-open:hover { background-color: var(--bg-hover); }
 .an-checker { background-color: var(--bg-card, transparent); background-image: linear-gradient(45deg, var(--bg-hover) 25%, transparent 25%, transparent 75%, var(--bg-hover) 75%), linear-gradient(45deg, var(--bg-hover) 25%, transparent 25%, transparent 75%, var(--bg-hover) 75%); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
 .an-parts { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
 .an-part { margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.an-pivot { position: relative; display: flex; align-items: center; justify-content: center; min-height: 80px; max-height: 220px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: crosshair; overflow: hidden; }
+.an-pivot { position: relative; display: inline-flex; align-self: flex-start; max-width: 100%; max-height: 220px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: crosshair; overflow: hidden; }
 .an-pivot.busy { opacity: 0.6; }
 .an-pivot img { display: block; max-width: 100%; max-height: 220px; object-fit: contain; }
 .an-dot { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--primary); pointer-events: none; }
 .an-mouth-preview { position: absolute; height: auto !important; max-width: none !important; max-height: none !important; transform: translate(-50%, -50%); pointer-events: none; }
+.an-joint { position: relative; align-self: flex-start; line-height: 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: crosshair; }
+.an-joint.busy { opacity: 0.6; }
+.an-joint img { display: block; max-width: 100%; max-height: 300px; }
+.an-rig { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: start; }
+.an-rig-stage { position: relative; overflow: hidden; border: 1px solid var(--border-color); border-radius: var(--radius-sm); max-width: 100%; }
+.an-voices { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .an-rig { grid-template-columns: 1fr; } }

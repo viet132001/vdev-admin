@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import { DEFAULT_RIG, DEFAULT_TOLERANCE, PART_LABEL, fileUrl, reprocessAsset, setAssetPivot, setMouthRig, type AssetItem, type AssetPart, type AssetSeries } from './animationWorker';
+import { RigTuner } from './RigTuner';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
@@ -27,14 +28,16 @@ const PivotPicker: React.FC<{ seriesId: string; item: AssetItem; part: AssetPart
   );
 };
 
-// Where the mouth goes on the character: click the face, size with the slider. The engine puts the mouth pictures there while the character talks.
-const MouthRigger: React.FC<{ seriesId: string; item: AssetItem; character: AssetItem; onChange: (series: AssetSeries) => void }> = ({ seriesId, item, character, onChange }) => {
+// Where the mouth goes on the face: click it, size with the slider. The engine puts the mouth pictures there while the
+// character talks. The face is the neutral head when the character has a rig, else the whole character.
+export interface Face { part: AssetPart | undefined; name: string }
+const MouthRigger: React.FC<{ seriesId: string; item: AssetItem; face: Face; onChange: (series: AssetSeries) => void }> = ({ seriesId, item, face, onChange }) => {
   const { busy, run } = useBusy();
   const rig = item.rig ?? DEFAULT_RIG;
   const [scale, setScale] = useState(rig.scale);
-  const body = character.parts[0];
+  const body = face.part;
   const sample = item.parts.find((part) => part.name === 'wide') ?? item.parts[0];
-  if (!body || !sample) return <p className="lg-meta" style={{ margin: 0 }}>Cần ảnh nhân vật "{character.name}" đã tách nền để đặt miệng.</p>;
+  if (!body || !sample) return <p className="lg-meta" style={{ margin: 0 }}>Cần ảnh "{face.name}" đã tách nền để đặt miệng.</p>;
   const save = (x: number, y: number, s: number) => run('rig', async () => {
     try { onChange(await setMouthRig(seriesId, item.id, x, y, s)); } catch (err) { alert(message(err, 'Không lưu được vị trí miệng')); }
   });
@@ -44,9 +47,9 @@ const MouthRigger: React.FC<{ seriesId: string; item: AssetItem; character: Asse
   };
   return (
     <div className="flex flex-col gap-2">
-      <p className="lg-meta" style={{ margin: 0 }}>Bấm vào mặt nhân vật để đặt miệng, kéo thanh để chỉnh cỡ (theo bề ngang nhân vật).</p>
+      <p className="lg-meta" style={{ margin: 0 }}>Bấm vào chỗ miệng trên "{face.name}" để đặt miệng, kéo thanh để chỉnh cỡ (theo bề ngang ảnh đó).</p>
       <div className={`an-pivot an-checker${busy ? ' busy' : ''}`} onClick={place} style={{ alignSelf: 'flex-start' }}>
-        <img src={fileUrl(seriesId, body.file)} alt={character.name} draggable={false} />
+        <img src={fileUrl(seriesId, body.file)} alt={face.name} draggable={false} />
         <img src={fileUrl(seriesId, sample.file)} alt="" draggable={false} className="an-mouth-preview" style={{ left: `${rig.x * 100}%`, top: `${rig.y * 100}%`, width: `${scale * 100}%` }} />
       </div>
       <label className="flex flex-col gap-2 lg-meta">
@@ -58,7 +61,7 @@ const MouthRigger: React.FC<{ seriesId: string; item: AssetItem; character: Asse
   );
 };
 
-export const AssetTuner: React.FC<{ seriesId: string; item: AssetItem; character?: AssetItem; onChange: (series: AssetSeries) => void }> = ({ seriesId, item, character, onChange }) => {
+export const AssetTuner: React.FC<{ seriesId: string; item: AssetItem; face?: Face; heads?: AssetItem; onChange: (series: AssetSeries) => void }> = ({ seriesId, item, face, heads, onChange }) => {
   const [tolerance, setTolerance] = useState(item.tolerance ?? DEFAULT_TOLERANCE);
   const { busy, run } = useBusy();
   if (!item.file || item.kind === 'background') return null;
@@ -69,7 +72,7 @@ export const AssetTuner: React.FC<{ seriesId: string; item: AssetItem; character
 
   return (
     <details open={!!item.problem}>
-      <summary className="lg-meta" style={{ cursor: 'pointer' }}>Tách nền và pivot</summary>
+      <summary className="lg-meta" style={{ cursor: 'pointer' }}>{item.kind === 'body' ? 'Tách nền, ráp khớp và pivot' : 'Tách nền và pivot'}</summary>
       <div className="flex flex-col gap-3" style={{ marginTop: 8 }}>
         {item.problem && <p className="lg-error" style={{ margin: 0 }}>{item.problem}</p>}
         <label className="flex flex-col gap-2 lg-meta">
@@ -77,10 +80,11 @@ export const AssetTuner: React.FC<{ seriesId: string; item: AssetItem; character
           <input type="range" min={10} max={200} value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))} />
         </label>
         <div><button className="btn btn-secondary btn-sm" disabled={!!busy || tolerance === (item.tolerance ?? DEFAULT_TOLERANCE) && !item.problem} onClick={apply}><RefreshCw size={14} className={busy === 'process' ? 'spin' : ''} /> Tách lại</button></div>
-        {item.kind === 'mouths' && character && item.parts.length > 0 && <MouthRigger seriesId={seriesId} item={item} character={character} onChange={onChange} />}
-        {item.parts.length > 0 && (
+        {item.kind === 'mouths' && face && item.parts.length > 0 && <MouthRigger seriesId={seriesId} item={item} face={face} onChange={onChange} />}
+        {item.kind === 'body' && item.parts.length > 0 && <RigTuner key={`${item.rev}-${item.skeleton?.headScale ?? 0}`} seriesId={seriesId} item={item} heads={heads} onChange={onChange} />}
+        {item.kind !== 'foreground' && item.parts.length > 0 && (
           <>
-            <p className="lg-meta" style={{ margin: 0 }}>Chấm tròn là pivot: nơi bộ phận đứng hoặc xoay. Nhân vật mặc định ở chân, miệng và đạo cụ ở giữa. Bấm vào ảnh để dời.</p>
+            <p className="lg-meta" style={{ margin: 0 }}>Chấm tròn là pivot: nơi bộ phận đứng hoặc xoay. Nhân vật ở chân; thân ở hông; tay, chân ở đầu trên (vai, hông, khuỷu, gối); đầu ở cổ; miệng và đạo cụ ở giữa. Bấm vào ảnh để dời.</p>
             <div className="an-parts">
               {item.parts.map((part) => <PivotPicker key={part.file} seriesId={seriesId} item={item} part={part} onChange={onChange} />)}
             </div>

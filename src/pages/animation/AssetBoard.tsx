@@ -1,13 +1,15 @@
 import React, { useRef, useState } from 'react';
 import { Check, Copy, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
-import { AssetTuner } from './AssetTuner';
+import { AssetTuner, type Face } from './AssetTuner';
 import { KIND_LABEL, assetUrl, clearAsset, readImage, uploadAsset, type AssetItem, type AssetKind, type AssetSeries } from './animationWorker';
 
-const ORDER: AssetKind[] = ['character', 'expression', 'mouths', 'background', 'prop'];
+const ORDER: AssetKind[] = ['character', 'body', 'heads', 'mouths', 'expression', 'background', 'foreground', 'prop'];
+// What to attach as the reference when asking for the picture
+const REFERENCE: Partial<Record<AssetKind, string>> = { body: 'nhân vật', heads: 'nhân vật', expression: 'nhân vật', mouths: 'nhân vật', foreground: 'bối cảnh' };
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
-const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string | null; character?: AssetItem; onChange: (series: AssetSeries) => void }> = ({ seriesId, item, refName, character, onChange }) => {
+const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string | null; face?: Face; heads?: AssetItem; onChange: (series: AssetSeries) => void }> = ({ seriesId, item, refName, face, heads, onChange }) => {
   const { busy, run } = useBusy();
   const [copied, setCopied] = useState(false);
   const [over, setOver] = useState(false);
@@ -46,9 +48,9 @@ const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string |
           <strong className="vl-title">{item.name}</strong>
           <span className={`badge ${item.file ? 'badge-success' : 'badge-warning'}`}>{item.file ? 'Đã có' : 'Chưa có'}</span>
         </div>
-        {refName && !item.file && <p className="lg-meta" style={{ margin: 0 }}>Đính kèm ảnh nhân vật "{refName}" khi nhờ ChatGPT vẽ.</p>}
+        {refName && !item.file && <p className="lg-meta" style={{ margin: 0 }}>Đính kèm ảnh {REFERENCE[item.kind]} "{refName}" khi nhờ ChatGPT vẽ.</p>}
         {/* key on rev: the slider restarts from the saved sensitivity after each processing */}
-        <AssetTuner key={`${item.id}-${item.rev}-${item.version}-${item.rig?.scale ?? 0}`} seriesId={seriesId} item={item} character={character} onChange={onChange} />
+        <AssetTuner key={`${item.id}-${item.rev}-${item.version}-${item.rig?.scale ?? 0}`} seriesId={seriesId} item={item} face={face} heads={heads} onChange={onChange} />
         <details>
           <summary className="lg-meta" style={{ cursor: 'pointer' }}>Prompt cho ChatGPT</summary>
           <pre className="an-prompt">{item.prompt}</pre>
@@ -64,6 +66,13 @@ const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string |
 
 export const AssetBoard: React.FC<{ series: AssetSeries; onChange: (series: AssetSeries) => void }> = ({ series, onChange }) => {
   const nameOf = (id: string | null) => series.items.find((item) => item.id === id)?.name ?? null;
+  const headsOf = (character: string | null) => series.items.find((entry) => entry.kind === 'heads' && entry.of === character);
+  // The mouth is placed on the neutral head of a rigged character, else on the whole character
+  const faceOf = (character: string | null): Face => {
+    const head = headsOf(character)?.parts.find((part) => part.name === 'neutral');
+    const whole = series.items.find((entry) => entry.id === character);
+    return head ? { part: head, name: `${whole?.name ?? character}: đầu bình thường` } : { part: whole?.parts[0], name: whole?.name ?? String(character) };
+  };
   return (
     <div className="flex flex-col gap-4">
       {ORDER.map((kind) => {
@@ -73,8 +82,8 @@ export const AssetBoard: React.FC<{ series: AssetSeries; onChange: (series: Asse
           <section key={kind}>
             <h2 style={{ fontSize: '1.05rem', margin: '0 0 8px', fontWeight: 600 }}>{KIND_LABEL[kind]} <span className="lg-meta">{items.filter((i) => i.file).length}/{items.length}</span></h2>
             <div className="an-grid">
-              {items.map((item) => <AssetCard key={item.id} seriesId={series.id} item={item} refName={item.kind === 'character' || item.kind === 'background' || item.kind === 'prop' ? null : nameOf(item.of)}
-                character={item.kind === 'mouths' ? series.items.find((entry) => entry.id === item.of) : undefined} onChange={onChange} />)}
+              {items.map((item) => <AssetCard key={item.id} seriesId={series.id} item={item} refName={REFERENCE[item.kind] ? nameOf(item.of) : null}
+                face={item.kind === 'mouths' ? faceOf(item.of) : undefined} heads={item.kind === 'body' ? headsOf(item.of) : undefined} onChange={onChange} />)}
             </div>
           </section>
         );
