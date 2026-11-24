@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Bot, Loader2, Plus, Trash2 } from 'lucide-react';
 import { ConfirmDialog, type ConfirmState } from './tasks/shared';
 import { useBusy } from './tasks/agent';
 import { WORKER_COMMAND } from './dictation/lessonWorker';
 import { AssetBoard } from './animation/AssetBoard';
 import { Videos } from './animation/Videos';
 import { VoicePanel } from './animation/VoicePanel';
-import { addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, type AssetSeries, type AssetSummary } from './animation/animationWorker';
+import { addAsset, copyBrief, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, type AssetSeries, type AssetSummary } from './animation/animationWorker';
 
+const WATCH_EVERY = 6000;
+const WATCH_FOR = 45 * 60 * 1000;
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
 const NewSeries: React.FC<{ onCreated: (series: AssetSeries) => void }> = ({ onCreated }) => {
@@ -76,6 +78,9 @@ export const Animation: React.FC = () => {
   const [list, setList] = useState<AssetSummary[]>([]);
   const [series, setSeries] = useState<AssetSeries | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  // While Claude Desktop is drawing, the pictures arrive through the worker: re-read the series until then
+  const [watchUntil, setWatchUntil] = useState(0);
+  const { busy, run } = useBusy();
 
   const load = useCallback(async () => {
     try {
@@ -92,6 +97,17 @@ export const Animation: React.FC = () => {
     if (!activeId || activeId === 'new') { setSeries(null); return; }
     getAssetSeries(activeId).then(setSeries).catch(() => setSeries(null));
   }, [activeId]);
+
+  useEffect(() => {
+    if (!series || Date.now() > watchUntil) return;
+    const timer = window.setInterval(() => {
+      if (Date.now() > watchUntil) { window.clearInterval(timer); return; }
+      if (!document.hidden) getAssetSeries(series.id).then(changed).catch(() => undefined);
+    }, WATCH_EVERY);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [series?.id, watchUntil]);
+  const handed = () => setWatchUntil(Date.now() + WATCH_FOR);
 
   const open = (id: string) => setParams(id === 'new' ? { series: 'new' } : { series: id });
   const changed = (next: AssetSeries) => {
@@ -152,6 +168,11 @@ export const Animation: React.FC = () => {
                   </div>
                   <div className="flex align-center gap-2">
                     <span className={`badge ${ready === series.items.length ? 'badge-success' : 'badge-info'}`}>{ready}/{series.items.length} ảnh</span>
+                    {ready < series.items.length && (
+                      <button className="btn btn-primary btn-sm" disabled={!!busy} title="Chép việc vẽ mọi ảnh còn thiếu cho Claude Code Desktop" onClick={() => run('brief', async () => { try { await copyBrief(series.id, [], handed); } catch (err) { alert(message(err, 'Không tạo được việc cho Claude')); } })}>
+                        {busy ? <Loader2 size={14} className="spin" /> : <Bot size={14} />} Giao Claude vẽ phần còn thiếu
+                      </button>
+                    )}
                     <button className="icon-btn" title="Xoá series" onClick={() => setConfirm({ title: 'Xoá series', message: `Xoá "${series.title}" cùng toàn bộ ảnh đã tải lên?`, confirmLabel: 'Xoá', action: async () => { setConfirm(null); try { await deleteAssetSeries(series.id); setSeries(null); setList((all) => all.filter((s) => s.id !== series.id)); setParams({}); } catch (err) { alert(message(err, 'Không xoá được series')); } } })}><Trash2 size={16} /></button>
                   </div>
                 </div>
@@ -170,7 +191,8 @@ export const Animation: React.FC = () => {
                 <p className="lg-meta" style={{ margin: 0 }}>Làm theo thứ tự: ảnh toàn thân nhân vật trước, rồi bảng bộ phận, bảng đầu và hình miệng (đính kèm ảnh toàn thân khi nhờ ChatGPT); bối cảnh rồi tiền cảnh của nó (đính kèm ảnh bối cảnh); đạo cụ. Có bảng bộ phận và bảng đầu thì nhân vật cử động được tay chân, quỳ, ngồi, đi, cầm đồ; ráp khớp ở thẻ bộ phận. Mỗi thẻ: chép prompt sang ChatGPT, vẽ xong thì dán ảnh (Ctrl+V), kéo thả hoặc bấm vào khung.</p>
               </div>
               <VoicePanel series={series} onChange={changed} />
-              <AssetBoard series={series} onChange={changed} />
+              {Date.now() < watchUntil && <p className="lg-meta" style={{ margin: 0 }}>Đang chờ Claude đưa ảnh vào, trang tự cập nhật.</p>}
+              <AssetBoard series={series} onChange={changed} onHanded={handed} />
               <AddAsset seriesId={series.id} onChange={changed} />
             </>
           )}

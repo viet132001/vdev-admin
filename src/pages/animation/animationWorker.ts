@@ -55,6 +55,17 @@ export interface VoiceInfo { id: string; name: string; description: string; prev
 export const listVoices = (): Promise<VoiceInfo[]> => call('/assets/voices');
 export const setVoices = (id: string, voices: Record<string, string>): Promise<AssetSeries> => call(`/assets/series/${id}/voices`, 'POST', { voices });
 export const suggestVoices = (id: string): Promise<AssetSeries> => call(`/assets/series/${id}/suggest-voices`, 'POST', {});
+// The task to paste into Claude Desktop: it draws the missing pictures (or the ones named) in ChatGPT and hands each to the worker
+export const assetBrief = async (id: string, items: string[] = []): Promise<string> => (await call(`/assets/series/${id}/brief`, 'POST', { items })).text;
+// Copies the task for Claude Desktop to the clipboard; the page then watches for the pictures to arrive
+export const copyBrief = async (seriesId: string, items: string[], onHanded: () => void) => {
+  const text = await assetBrief(seriesId, items);
+  if (!text) { alert('Không còn ảnh nào thiếu.'); return; }
+  try { await navigator.clipboard.writeText(text); } catch { alert('Không chép được vào clipboard.'); return; }
+  onHanded();
+  alert('Đã chép việc cần làm. Dán vào Claude Code Desktop: Claude sẽ mở ChatGPT, vẽ, tải ảnh và đưa vào xưởng. Trang này tự cập nhật khi ảnh về.');
+};
+
 export const clearAsset = (id: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/clear`, 'POST', { item });
 export const addAsset = (id: string, kind: 'background' | 'prop', name: string, description: string): Promise<AssetSeries> => call(`/assets/series/${id}/add`, 'POST', { kind, name, description });
 export const deleteAssetSeries = (id: string): Promise<{ ok: true }> => call(`/assets/series/${id}/delete`, 'POST', {});
