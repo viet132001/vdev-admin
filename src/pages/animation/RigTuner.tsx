@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useBusy } from '../tasks/agent';
 import {
-  DEFAULT_SKELETON, JOINT_INFO, PART_LABEL, fileUrl, setHeadScale, setJoint,
-  type AssetItem, type AssetPart, type AssetSeries, type JointName
+  DEFAULT_SKELETON, JOINT_INFO, PART_LABEL, fileUrl, setHeadScale, setJoint, setLimbs,
+  type AssetItem, type AssetPart, type AssetSeries, type JointName, type Limbs
 } from './animationWorker';
 import { POSE_NAMES, PREVIEW_POSES, placePieces } from './rigPreview';
 
@@ -10,9 +10,9 @@ const message = (err: unknown, fallback: string) => (err instanceof Error && err
 const STAGE = { width: 260, height: 340 };
 
 // The character put together from its sheets, in a pose: what the video will show
-const RigStage: React.FC<{ seriesId: string; parts: Record<string, AssetPart>; head: AssetPart | undefined; body: AssetItem; headScale: number; pose: string }> = ({ seriesId, parts, head, body, headScale, pose }) => {
+const RigStage: React.FC<{ seriesId: string; parts: Record<string, AssetPart>; head: AssetPart | undefined; body: AssetItem; headScale: number; limbs: Limbs; pose: string }> = ({ seriesId, parts, head, body, headScale, limbs, pose }) => {
   const skeleton = body.skeleton ?? DEFAULT_SKELETON;
-  const placed = placePieces(parts, head, skeleton.joints, headScale, PREVIEW_POSES[pose]);
+  const placed = placePieces(parts, head, skeleton.joints, headScale, PREVIEW_POSES[pose], limbs);
   if (!placed) return <p className="lg-meta" style={{ margin: 0 }}>Cần đủ thân, bắp tay, cẳng tay, đùi, cẳng chân và ảnh đầu bình thường để ráp thử.</p>;
   const k = (STAGE.height - 30) / -placed.top;
   return (
@@ -41,6 +41,7 @@ export const RigTuner: React.FC<{ seriesId: string; item: AssetItem; heads: Asse
   const [pose, setPose] = useState('stand');
   const skeleton = item.skeleton ?? DEFAULT_SKELETON;
   const [headScale, setScale] = useState(skeleton.headScale);
+  const [limbs, setLimbsDraft] = useState<Limbs>(skeleton.limbs ?? { arms: 1, legs: 1 });
   const parts = Object.fromEntries(item.parts.map((part) => [part.name, part]));
   const head = heads?.parts.find((part) => part.name === 'neutral');
   const parent = parts[JOINT_INFO[joint].part];
@@ -54,6 +55,9 @@ export const RigTuner: React.FC<{ seriesId: string; item: AssetItem; heads: Asse
       try { onChange(await setJoint(seriesId, item.id, joint, x, y)); } catch (err) { alert(message(err, 'Không lưu được khớp')); }
     });
   };
+  const saveLimbs = () => run('limbs', async () => {
+    try { onChange(await setLimbs(seriesId, item.id, limbs.arms, limbs.legs)); } catch (err) { alert(message(err, 'Không lưu được độ dài tay chân')); }
+  });
   const saveScale = () => run('scale', async () => {
     try { onChange(await setHeadScale(seriesId, item.id, headScale)); } catch (err) { alert(message(err, 'Không lưu được cỡ đầu')); }
   });
@@ -70,11 +74,18 @@ export const RigTuner: React.FC<{ seriesId: string; item: AssetItem; heads: Asse
               <button key={id} className={`btn btn-sm ${pose === id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPose(id)}>{label}</button>
             ))}
           </div>
-          <RigStage seriesId={seriesId} parts={parts} head={head} body={item} headScale={headScale} pose={pose} />
+          <RigStage seriesId={seriesId} parts={parts} head={head} body={item} headScale={headScale} limbs={limbs} pose={pose} />
           <label className="flex flex-col gap-2 lg-meta">
             Cỡ đầu: {Math.round(headScale * 100)}% chiều cao thân
             <input type="range" min={15} max={150} value={Math.round(headScale * 100)} onChange={(e) => setScale(Number(e.target.value) / 100)} onPointerUp={saveScale} onKeyUp={saveScale} />
           </label>
+          <p className="lg-meta" style={{ margin: 0 }}>Tay chân tự co về tỉ lệ người thật so với thân. Kéo để dài hoặc ngắn hơn theo phong cách.</p>
+          {(['arms', 'legs'] as const).map((key) => (
+            <label key={key} className="flex flex-col gap-2 lg-meta">
+              {key === 'arms' ? 'Dài tay' : 'Dài chân'}: {Math.round(limbs[key] * 100)}%
+              <input type="range" min={60} max={150} value={Math.round(limbs[key] * 100)} onChange={(e) => setLimbsDraft({ ...limbs, [key]: Number(e.target.value) / 100 })} onPointerUp={saveLimbs} onKeyUp={saveLimbs} />
+            </label>
+          ))}
         </div>
         <div className="flex flex-col gap-2" style={{ minWidth: 0 }}>
           <select className="form-input" value={joint} onChange={(e) => setActive(e.target.value as JointName)} aria-label="Khớp">

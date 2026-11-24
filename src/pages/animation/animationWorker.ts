@@ -2,9 +2,9 @@
 // ChatGPT makes the images, the user brings them back here; nothing goes through the BE.
 import { WORKER_URL, call, type LessonJob } from '../dictation/lessonWorker';
 
-export type AssetKind = 'character' | 'body' | 'heads' | 'expression' | 'mouths' | 'background' | 'foreground' | 'prop';
+export type AssetKind = 'character' | 'body' | 'heads' | 'expression' | 'mouths' | 'background' | 'foreground' | 'prop' | 'plant';
 export const KIND_LABEL: Record<AssetKind, string> = {
-  character: 'Nhân vật', body: 'Bộ phận cơ thể', heads: 'Đầu và biểu cảm', expression: 'Biểu cảm (kiểu cũ)', mouths: 'Hình miệng', background: 'Bối cảnh', foreground: 'Tiền cảnh', prop: 'Đạo cụ'
+  character: 'Nhân vật', body: 'Bộ phận cơ thể', heads: 'Đầu và biểu cảm', expression: 'Biểu cảm (kiểu cũ)', mouths: 'Hình miệng', background: 'Bối cảnh', foreground: 'Tiền cảnh', prop: 'Đạo cụ', plant: 'Cây cỏ chuyển động'
 };
 
 export interface AssetPart { name: string; file: string; width: number; height: number; pivot: { x: number; y: number } }
@@ -12,12 +12,15 @@ export interface AssetItem {
   id: string; kind: AssetKind; name: string; description: string; prompt: string; of: string | null; file: string | null; version: number;
   parts: AssetPart[]; rev: number; tolerance: number | null; problem: string | null; rig: { x: number; y: number; scale: number } | null;
   skeleton: Skeleton | null; // body sheets only
+  decor: DecorSpot[] | null; // backgrounds only: the plants in it
 }
+export interface DecorSpot { id: string; x: number; y: number; scale: number; layer: 'back' | 'front'; phase: number }
 // Must match JOINTS / DEFAULT_JOINTS / DEFAULT_HEAD_SCALE in vdev-video src/asset/rig.ts
 export type JointName = 'neck' | 'shoulder' | 'hip' | 'elbow' | 'knee' | 'hand' | 'foot';
-export interface Skeleton { joints: Record<JointName, { x: number; y: number }>; headScale: number }
+export interface Limbs { arms: number; legs: number }
+export interface Skeleton { joints: Record<JointName, { x: number; y: number }>; headScale: number; limbs?: Limbs }
 export const DEFAULT_SKELETON: Skeleton = {
-  joints: { neck: { x: 0.5, y: 0.03 }, shoulder: { x: 0.5, y: 0.13 }, hip: { x: 0.5, y: 0.94 }, elbow: { x: 0.5, y: 0.93 }, knee: { x: 0.5, y: 0.93 }, hand: { x: 0.5, y: 0.9 }, foot: { x: 0.5, y: 0.97 } },
+  joints: { neck: { x: 0.5, y: 0.08 }, shoulder: { x: 0.5, y: 0.13 }, hip: { x: 0.5, y: 0.94 }, elbow: { x: 0.5, y: 0.93 }, knee: { x: 0.5, y: 0.93 }, hand: { x: 0.5, y: 0.9 }, foot: { x: 0.5, y: 0.97 } },
   headScale: 0.42
 };
 // Which picture each joint is set on, and what it is in words
@@ -47,6 +50,9 @@ export const setAssetPivot = (id: string, item: string, part: string, x: number,
 export const setMouthRig = (id: string, item: string, x: number, y: number, scale: number): Promise<AssetSeries> => call(`/assets/series/${id}/rig`, 'POST', { item, x, y, scale });
 export const DEFAULT_RIG = { x: 0.5, y: 0.17, scale: 0.12 };
 export const setJoint = (id: string, item: string, joint: JointName, x: number, y: number): Promise<AssetSeries> => call(`/assets/series/${id}/joint`, 'POST', { item, joint, x, y });
+export const setLimbs = (id: string, item: string, arms: number, legs: number): Promise<AssetSeries> => call(`/assets/series/${id}/limbs`, 'POST', { item, arms, legs });
+// The plants growing in a background; a new seed lays them out again
+export const setDecor = (id: string, item: string, plants: string[], seed: number): Promise<AssetSeries> => call(`/assets/series/${id}/decor`, 'POST', { item, plants, seed });
 export const setHeadScale = (id: string, item: string, scale: number): Promise<AssetSeries> => call(`/assets/series/${id}/head-scale`, 'POST', { item, scale });
 
 // ElevenLabs voices of the account (read by the worker, the key never leaves it); NARRATOR is the storyteller's slot
@@ -60,7 +66,7 @@ export const suggestVoices = (id: string): Promise<AssetSeries> => call(`/assets
 // The task to paste into Claude Desktop: it draws the missing pictures (or the ones named) in ChatGPT and hands each to the worker
 export const assetBrief = async (id: string, items: string[] = []): Promise<string> => (await call(`/assets/series/${id}/brief`, 'POST', { items })).text;
 export const clearAsset = (id: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/clear`, 'POST', { item });
-export const addAsset = (id: string, kind: 'background' | 'prop', name: string, description: string): Promise<AssetSeries> => call(`/assets/series/${id}/add`, 'POST', { kind, name, description });
+export const addAsset = (id: string, kind: 'background' | 'prop' | 'plant', name: string, description: string): Promise<AssetSeries> => call(`/assets/series/${id}/add`, 'POST', { kind, name, description });
 export const deleteAssetSeries = (id: string): Promise<{ ok: true }> => call(`/assets/series/${id}/delete`, 'POST', {});
 
 export const fileUrl = (seriesId: string, file: string) => `${WORKER_URL}/assets/files/${seriesId}/${file}`;
@@ -87,7 +93,7 @@ export const POSE_LABEL: Record<string, string> = { stand: 'Đứng', kneel: 'Qu
 export const GESTURE_LABEL: Record<string, string> = {
   none: 'Tay buông', point: 'Chỉ tay', wave: 'Vẫy tay', offer: 'Đưa / mời', drink: 'Uống', bow: 'Chắp tay cúi chào', chest: 'Tay lên ngực', think: 'Chống cằm', open: 'Giang tay', cover: 'Ôm mặt'
 };
-export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals: 'Cánh hoa', snow: 'Tuyết', rain: 'Mưa', fireflies: 'Đom đóm', dust: 'Bụi nắng', mist: 'Sương', embers: 'Tàn lửa', fluff: 'Bông lau bay' };
+export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals: 'Cánh hoa', snow: 'Tuyết', rain: 'Mưa', fireflies: 'Đom đóm', dust: 'Bụi nắng', mist: 'Sương', embers: 'Tàn lửa', fluff: 'Bông lau bay', wind: 'Gió mạnh' };
 export const TONE_LABEL: Record<string, string> = { none: 'Tự nhiên', warm: 'Ấm', cool: 'Lạnh', dusk: 'Hoàng hôn', night: 'Đêm' };
 export const LIGHT_LABEL: Record<string, string> = { lamp: 'Đèn dầu', fire: 'Bếp lửa', sun: 'Mặt trời', moon: 'Trăng' };
 

@@ -1,6 +1,6 @@
 // Where the pieces of a rigged character go, for the live preview of the rig tuner. Same maths as forwardKinematics in
 // vdev-video src/asset/rig.ts (the engine): change one, change the other, or the preview no longer shows the video.
-import type { AssetPart, JointName } from './animationWorker';
+import type { AssetPart, JointName, Limbs } from './animationWorker';
 
 export interface Point { x: number; y: number }
 export interface Angles { torso: number; head: number; armF: number; foreF: number; armB: number; foreB: number; thighF: number; shinF: number; thighB: number; shinB: number }
@@ -20,10 +20,22 @@ const turn = (p: Point, deg: number): Point => { const c = Math.cos(rad(deg)), s
 const add = (a: Point, b: Point): Point => ({ x: a.x + b.x, y: a.y + b.y });
 const fromPivot = (sprite: AssetPart, at: Point): Point => ({ x: (at.x - sprite.pivot.x) * sprite.width, y: (at.y - sprite.pivot.y) * sprite.height });
 
+// Limbs at a real body's length against the torso (neck to hip), as proportioned() in rig.ts does
+const PROPORTION = { arm: 0.6, forearm: 0.62, thigh: 0.82, shin: 0.86 };
+const fit = (sprite: AssetPart, end: Point, target: number, torso: number): AssetPart => {
+  const now = Math.abs(end.y - sprite.pivot.y) * sprite.height;
+  if (!(now > 0)) return sprite;
+  const k = Math.min(1.6, Math.max(0.35, (target * torso) / now));
+  return { ...sprite, width: sprite.width * k, height: sprite.height * k };
+};
+
 // Pieces back to front, lifted so the lowest knee or foot sits at y = 0; null until the sheets have the parts
-export const placePieces = (parts: Record<string, AssetPart>, head: AssetPart | undefined, joints: Record<JointName, Point>, headScale: number, a: Angles): { pieces: Piece[]; top: number } | null => {
-  const { torso, arm, forearm, thigh, shin } = parts;
-  if (!torso || !arm || !forearm || !thigh || !shin || !head) return null;
+export const placePieces = (drawn: Record<string, AssetPart>, head: AssetPart | undefined, joints: Record<JointName, Point>, headScale: number, a: Angles, limbs: Limbs = { arms: 1, legs: 1 }): { pieces: Piece[]; top: number } | null => {
+  if (!drawn.torso || !drawn.arm || !drawn.forearm || !drawn.thigh || !drawn.shin || !head) return null;
+  const torsoLength = Math.abs(joints.hip.y - joints.neck.y) * drawn.torso.height;
+  const torso = drawn.torso;
+  const arm = fit(drawn.arm, joints.elbow, PROPORTION.arm * limbs.arms, torsoLength), forearm = fit(drawn.forearm, joints.hand, PROPORTION.forearm * limbs.arms, torsoLength);
+  const thigh = fit(drawn.thigh, joints.knee, PROPORTION.thigh * limbs.legs, torsoLength), shin = fit(drawn.shin, joints.foot, PROPORTION.shin * limbs.legs, torsoLength);
   const onTorso = (j: Point) => turn(fromPivot(torso, j), a.torso);
   const back = turn({ x: -BACK_OFFSET * torso.width, y: 0 }, a.torso);
   const shoulderF = onTorso(joints.shoulder), shoulderB = add(shoulderF, back);

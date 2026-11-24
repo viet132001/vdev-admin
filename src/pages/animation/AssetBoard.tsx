@@ -2,14 +2,15 @@ import React, { useRef, useState } from 'react';
 import { Bot, Check, Copy, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import { AssetTuner, type Face } from './AssetTuner';
+import { DecorPicker } from './DecorPicker';
 import { KIND_LABEL, assetUrl, clearAsset, readImage, uploadAsset, type AssetItem, type AssetKind, type AssetSeries } from './animationWorker';
 
-const ORDER: AssetKind[] = ['character', 'body', 'heads', 'mouths', 'expression', 'background', 'foreground', 'prop'];
+const ORDER: AssetKind[] = ['character', 'body', 'heads', 'mouths', 'expression', 'background', 'foreground', 'plant', 'prop'];
 // What to attach as the reference when asking for the picture
 const REFERENCE: Partial<Record<AssetKind, string>> = { body: 'nhân vật', heads: 'nhân vật', expression: 'nhân vật', mouths: 'nhân vật', foreground: 'bối cảnh' };
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
-const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string | null; face?: Face; heads?: AssetItem; onChange: (series: AssetSeries) => void; onBrief: (items: string[]) => void }> = ({ seriesId, item, refName, face, heads, onChange, onBrief }) => {
+const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string | null; face?: Face; heads?: AssetItem; onChange: (series: AssetSeries) => void; onBrief: (items: string[]) => void; series: AssetSeries }> = ({ seriesId, item, refName, face, heads, onChange, onBrief, series }) => {
   const { busy, run } = useBusy();
   const [copied, setCopied] = useState(false);
   const [over, setOver] = useState(false);
@@ -51,6 +52,7 @@ const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string |
         {refName && !item.file && <p className="lg-meta" style={{ margin: 0 }}>Đính kèm ảnh {REFERENCE[item.kind]} "{refName}" khi nhờ ChatGPT vẽ.</p>}
         {/* key on rev: the slider restarts from the saved sensitivity after each processing */}
         <AssetTuner key={`${item.id}-${item.rev}-${item.version}-${item.rig?.scale ?? 0}`} seriesId={seriesId} item={item} face={face} heads={heads} onChange={onChange} />
+        {item.kind === 'background' && <DecorPicker series={series} background={item} onChange={onChange} />}
         <details>
           <summary className="lg-meta" style={{ cursor: 'pointer' }}>Prompt cho ChatGPT</summary>
           <pre className="an-prompt">{item.prompt}</pre>
@@ -84,7 +86,7 @@ export const AssetBoard: React.FC<{ series: AssetSeries; onChange: (series: Asse
             <h2 style={{ fontSize: '1.05rem', margin: '0 0 8px', fontWeight: 600 }}>{KIND_LABEL[kind]} <span className="lg-meta">{items.filter((i) => i.file).length}/{items.length}</span></h2>
             <div className="an-grid">
               {items.map((item) => <AssetCard key={item.id} seriesId={series.id} item={item} refName={REFERENCE[item.kind] ? nameOf(item.of) : null}
-                face={item.kind === 'mouths' ? faceOf(item.of) : undefined} heads={item.kind === 'body' ? headsOf(item.of) : undefined} onChange={onChange} onBrief={onBrief} />)}
+                face={item.kind === 'mouths' ? faceOf(item.of) : undefined} heads={item.kind === 'body' ? headsOf(item.of) : undefined} onChange={onChange} onBrief={onBrief} series={series} />)}
             </div>
           </section>
         );
