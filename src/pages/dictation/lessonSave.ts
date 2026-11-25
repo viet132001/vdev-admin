@@ -64,5 +64,24 @@ const vocabularyList = (job: LessonJob) => {
   return items.length ? ['Từ vựng trong bài:', ...items.map((v: any) => `• ${v.term.trim()}: ${String(v.meaning ?? '').trim()}`)].join('\n') : '';
 };
 
-export const defaultCaption = (job: LessonJob, genre: VideoGenre) => [job.lesson?.description, vocabularyList(job), genre.hashtags].filter(Boolean).join('\n\n').slice(0, CAPTION_LIMIT);
+// Shadowing posts: a short invitation, the phrases worth keeping, one way to practise, the level. Older lessons have no
+// key phrases and a long description that may carry study advice, so they keep only its first sentence.
+const SHADOWING_TIP = 'Cách luyện: nghe cả bài một lần, rồi nói đuổi theo từng câu, bám giọng và nhịp của người đọc. Ghi âm lại, nghe và so sánh với bản gốc.';
+const shadowingCaption = (job: LessonJob, genre: VideoGenre) => {
+  const phrases = (job.lesson?.keyPhrases ?? []).filter((k: any) => k?.phrase?.trim() && k?.meaning?.trim());
+  const description = String(job.lesson?.description ?? '').trim();
+  const intro = phrases.length ? description : description.split(/(?<=[.!?])\s+/)[0];
+  return [
+    intro,
+    phrases.length ? ['Cụm đáng nhớ trong bài:', ...phrases.map((k: any) => `• ${k.phrase.trim()}: ${k.meaning.trim()}`)].join('\n') : '',
+    SHADOWING_TIP,
+    job.request.level ? `Trình độ: ${job.request.level}` : '',
+    'Bạn thích câu nào nhất? Nói thử và để lại bình luận nhé!',
+    genre.hashtags
+  ].filter(Boolean).join('\n\n');
+};
+
+export const defaultCaption = (job: LessonJob, genre: VideoGenre) => (genre.noVocabulary
+  ? shadowingCaption(job, genre)
+  : [job.lesson?.description, vocabularyList(job), genre.hashtags].filter(Boolean).join('\n\n')).slice(0, CAPTION_LIMIT);
 export const defaultTitle = (job: LessonJob, genre: VideoGenre) => `${job.lesson?.title ?? job.request.topic} | ${genre.titleSuffix}`.slice(0, TITLE_LIMIT);
