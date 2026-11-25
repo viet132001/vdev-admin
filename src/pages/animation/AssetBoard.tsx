@@ -53,6 +53,7 @@ const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string |
         {refName && !item.file && <p className="lg-meta" style={{ margin: 0 }}>Đính kèm ảnh {REFERENCE[item.kind]} "{refName}" khi nhờ ChatGPT vẽ.</p>}
         {/* key on rev: the slider restarts from the saved sensitivity after each processing */}
         <AssetTuner key={`${item.id}-${item.rev}-${item.version}-${item.rig?.scale ?? 0}`} seriesId={seriesId} item={item} face={face} heads={heads} onChange={onChange} />
+        {item.grounded && <p className="lg-meta" style={{ margin: 0 }}>Ảnh này vẽ cả mặt đất nên đang được đặt sau nhân vật. Vẽ lại chỉ cỏ hoặc cành ở mép khung thì sẽ nằm trước.</p>}
         {item.from && <p className="lg-meta" style={{ margin: 0 }}>Lấy từ kho, phong cách: {item.style}</p>}
         <ScaleFields seriesId={seriesId} item={item} onChange={onChange} />
         {item.kind === 'background' && <DecorPicker series={series} background={item} onChange={onChange} />}

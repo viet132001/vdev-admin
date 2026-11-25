@@ -18,6 +18,7 @@ export interface AssetItem {
   style: string | null; // borrowed items: the style they were drawn in
   from: { series: string; item: string } | null;
   tags: string[];
+  grounded?: boolean | null; // foregrounds: it painted the ground, the engine puts it behind the characters
 }
 export interface DecorSpot { id: string; x: number; y: number; scale: number; layer: 'back' | 'front'; phase: number }
 // Must match JOINTS / DEFAULT_JOINTS / DEFAULT_HEAD_SCALE in vdev-video src/asset/rig.ts
@@ -41,7 +42,7 @@ export const PART_LABEL: Record<string, string> = {
 };
 export interface BibleCharacter { id: string; name: string; role: string; look: string; voice: string }
 export interface AssetBible { styleTag?: string; style: string; characters: BibleCharacter[]; backgrounds: { id: string; name: string; description: string }[]; props: { id: string; name: string; description: string }[] }
-export interface AssetSeries { id: string; title: string; premise: string; createdAt: string; bible: AssetBible; items: AssetItem[]; voices: Record<string, string> }
+export interface AssetSeries { id: string; title: string; premise: string; createdAt: string; bible: AssetBible; items: AssetItem[]; voices: Record<string, string>; practice?: Record<string, Record<string, 'ok' | 'bad'>> }
 export interface AssetSummary { id: string; title: string; premise: string; ready: number; total: number; createdAt: string }
 
 export const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
@@ -74,6 +75,15 @@ export const listShared = (): Promise<SharedAsset[]> => call('/assets/shared');
 export const setAssetMeta = (id: string, item: string, meta: { style?: string; tags?: string[] }): Promise<AssetSeries> => call(`/assets/series/${id}/meta`, 'POST', { item, ...meta });
 export const setStyleTag = (id: string, styleTag: string): Promise<AssetSeries> => call(`/assets/series/${id}/style-tag`, 'POST', { styleTag });
 export const borrowAsset = (id: string, from: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/borrow`, 'POST', { from, item });
+
+// The practice room: a silent video of one character doing every movement, and the user's verdicts
+export interface PracticeState {
+  status: 'none' | 'rendering' | 'done' | 'failed'; progress: number; url: string | null; error: string | null;
+  motions: { id: string; label: string; start: number }[]; marks: Record<string, 'ok' | 'bad'>;
+}
+export const practiceStatus = (id: string, character: string): Promise<PracticeState> => call(`/assets/series/${id}/practice-status`, 'POST', { character });
+export const startPractice = (id: string, character: string): Promise<PracticeState> => call(`/assets/series/${id}/practice`, 'POST', { character });
+export const setPracticeMark = (id: string, character: string, motion: string, mark: 'ok' | 'bad' | null): Promise<AssetSeries> => call(`/assets/series/${id}/practice-mark`, 'POST', { character, motion, mark });
 
 // ElevenLabs voices of the account (read by the worker, the key never leaves it); NARRATOR is the storyteller's slot
 export const NARRATOR = 'narrator';

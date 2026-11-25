@@ -10,6 +10,7 @@ import { VoicePanel } from './animation/VoicePanel';
 import { BriefDialog } from './animation/BriefDialog';
 import { SharedLibrary } from './animation/SharedLibrary';
 import { LibraryTab } from './animation/LibraryTab';
+import { PracticeRoom } from './animation/PracticeRoom';
 import { SIZED_KINDS, addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, setStyleTag, suggestSizes, type AssetSeries, type AssetSummary } from './animation/animationWorker';
 
 const WATCH_EVERY = 6000;
@@ -158,7 +159,7 @@ export const Animation: React.FC = () => {
     setList((all) => (all.some((s) => s.id === next.id) ? all : [{ id: next.id, title: next.title, premise: next.premise, ready: 0, total: next.items.length, createdAt: next.createdAt }, ...all]).map((s) => (s.id === next.id ? { ...s, ready: next.items.filter((i) => i.file).length, total: next.items.length } : s)));
   };
 
-  const tab = params.get('tab') === 'video' ? 'video' : params.get('tab') === 'library' ? 'library' : 'assets';
+  const tab = ['video', 'library', 'practice'].find((name) => name === params.get('tab')) ?? 'assets';
   const header = (
     <div className="flex flex-col gap-3">
       <div>
@@ -169,10 +170,12 @@ export const Animation: React.FC = () => {
         <button className={`tab${tab === 'assets' ? ' active' : ''}`} onClick={() => setParams({})}>Asset</button>
         <button className={`tab${tab === 'video' ? ' active' : ''}`} onClick={() => setParams({ tab: 'video' })}>Video</button>
         <button className={`tab${tab === 'library' ? ' active' : ''}`} onClick={() => setParams({ tab: 'library' })}>Kho asset</button>
+        <button className={`tab${tab === 'practice' ? ' active' : ''}`} onClick={() => setParams({ tab: 'practice' })}>Phòng tập</button>
       </div>
     </div>
   );
   if (tab === 'video') return <div className="flex flex-col gap-4">{header}<Videos /></div>;
+  if (tab === 'practice') return <div className="flex flex-col gap-4">{header}<PracticeRoom /></div>;
   if (tab === 'library') return <div className="flex flex-col gap-4">{header}<LibraryTab /></div>;
 
   if (state === 'loading') return <div className="loading-container"><div className="spinner" /></div>;

@@ -84,7 +84,7 @@ export const AssetTuner: React.FC<{ seriesId: string; item: AssetItem; face?: Fa
         {item.kind === 'body' && item.parts.length > 0 && <RigTuner key={`${item.rev}-${item.skeleton?.headScale ?? 0}`} seriesId={seriesId} item={item} heads={heads} onChange={onChange} />}
         {item.kind !== 'foreground' && item.parts.length > 0 && (
           <>
-            <p className="lg-meta" style={{ margin: 0 }}>Chấm tròn là pivot: nơi bộ phận đứng hoặc xoay. Nhân vật ở chân; thân ở hông; tay, chân ở đầu trên (vai, hông, khuỷu, gối); đầu ở cổ; miệng và đạo cụ ở giữa. Bấm vào ảnh để dời.</p>
+            <p className="lg-meta" style={{ margin: 0 }}>Chấm tròn là pivot: nơi bộ phận đứng hoặc xoay. Nhân vật ở chân; thân ở hông; tay, chân ở đầu trên (vai, hông, khuỷu, gối); đầu ở cổ; miệng ở giữa. Với đạo cụ, chấm là điểm cầm: bấm vào chỗ các ngón tay nắm (quai chén, thân gậy); để nguyên ở giữa thì engine cầm ở phần dưới. Bấm vào ảnh để dời.</p>
             <div className="an-parts">
               {item.parts.map((part) => <PivotPicker key={part.file} seriesId={seriesId} item={item} part={part} onChange={onChange} />)}
             </div>
