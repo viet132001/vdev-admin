@@ -3,6 +3,7 @@ import { Bot, Check, Copy, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import { AssetTuner, type Face } from './AssetTuner';
 import { DecorPicker } from './DecorPicker';
+import { ScaleFields } from './ScaleFields';
 import { KIND_LABEL, assetUrl, clearAsset, readImage, uploadAsset, type AssetItem, type AssetKind, type AssetSeries } from './animationWorker';
 
 const ORDER: AssetKind[] = ['character', 'body', 'heads', 'mouths', 'expression', 'background', 'foreground', 'plant', 'prop'];
@@ -52,6 +53,8 @@ const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string |
         {refName && !item.file && <p className="lg-meta" style={{ margin: 0 }}>Đính kèm ảnh {REFERENCE[item.kind]} "{refName}" khi nhờ ChatGPT vẽ.</p>}
         {/* key on rev: the slider restarts from the saved sensitivity after each processing */}
         <AssetTuner key={`${item.id}-${item.rev}-${item.version}-${item.rig?.scale ?? 0}`} seriesId={seriesId} item={item} face={face} heads={heads} onChange={onChange} />
+        {item.from && <p className="lg-meta" style={{ margin: 0 }}>Lấy từ kho, phong cách: {item.style}</p>}
+        <ScaleFields seriesId={seriesId} item={item} onChange={onChange} />
         {item.kind === 'background' && <DecorPicker series={series} background={item} onChange={onChange} />}
         <details>
           <summary className="lg-meta" style={{ cursor: 'pointer' }}>Prompt cho ChatGPT</summary>

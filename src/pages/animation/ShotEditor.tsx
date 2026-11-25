@@ -1,13 +1,14 @@
 import React from 'react';
-import { ArrowDown, ArrowUp, Copy, Eye, Loader2, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Eye, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
-  ACTION_LABEL, CAMERA_LABEL, EFFECT_LABEL, EXPRESSION_LABEL, GESTURE_LABEL, LIGHT_LABEL, MOVE_LABEL, NARRATOR, POSE_LABEL, TONE_LABEL, TRANSITION_LABEL,
+  ACTION_LABEL, CAMERA_LABEL, EFFECT_LABEL, EXPRESSION_LABEL, GESTURE_LABEL, GROUND_LINE, LIGHT_LABEL, MOVE_LABEL, NARRATOR, POSE_LABEL, TONE_LABEL, TRANSITION_LABEL,
   type AnimationCatalog, type ScriptMember, type ScriptShot
 } from './animationWorker';
 
 const faceName = (name: string) => EXPRESSION_LABEL[name] ?? name;
 const MAX_CHARS = 260;
 const MAX_EFFECTS = 3;
+type StageProp = ScriptShot['props'][number];
 
 interface ShotEditorProps {
   index: number;
@@ -48,6 +49,9 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
     const character = speaker && speaker !== NARRATOR ? speaker : null;
     onChange({ ...shot, speaker, text: speaker ? shot.text : '', expression: character && !facesOf(character).includes(shot.expression) ? 'neutral' : shot.expression, reactions: shot.reactions.filter((r) => r.character !== character), action: character ? shot.action : 'none' });
   };
+  const setProp = (n: number, patch: Partial<StageProp>) => onChange({ ...shot, props: shot.props.map((p, i) => (i === n ? { ...p, ...patch } : p)) });
+  const addProp = () => onChange({ ...shot, props: [...shot.props, { id: catalog.props[0].id, x: 0.5, y: GROUND_LINE, scale: 0.1, layer: 'back', depth: null }] });
+  const sized = (id: string) => !!catalog.props.find((p) => p.id === id)?.heightCm;
   const reactionOf = (id: string) => shot.reactions.find((r) => r.character === id)?.expression ?? 'neutral';
   const setReaction = (id: string, expression: string) => onChange({ ...shot, reactions: [...shot.reactions.filter((r) => r.character !== id), { character: id, expression }] });
   const toggleEffect = (effect: string, on: boolean) => onChange({ ...shot, effects: on ? [...shot.effects, effect] : shot.effects.filter((e) => e !== effect) });
@@ -118,6 +122,9 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
                   <label className="flex align-center gap-2 lg-meta">Vị trí
                     <input type="range" min={0.05} max={0.95} step={0.01} value={member.x} disabled={disabled} onChange={(e) => setMember(c.id, { x: Number(e.target.value) })} />
                   </label>
+                  <label className="flex align-center gap-2 lg-meta" title="Kéo sang trái là đứng xa (vẽ nhỏ hơn), sang phải là gần máy quay">Xa ↔ gần
+                    <input type="range" min={0.65} max={0.98} step={0.01} value={member.y ?? GROUND_LINE} disabled={disabled} onChange={(e) => setMember(c.id, { y: Number(e.target.value) })} />
+                  </label>
                   <label className="flex align-center gap-2 lg-meta">
                     <input type="checkbox" checked={member.toX !== null} disabled={disabled} onChange={(e) => setMember(c.id, { toX: e.target.checked ? Math.min(0.95, Math.max(0.05, member.x + (member.face === 1 ? 0.25 : -0.25))) : null })} /> Đi tới
                     {member.toX !== null && <input type="range" min={0.05} max={0.95} step={0.01} value={member.toX} disabled={disabled} onChange={(e) => setMember(c.id, { toX: Number(e.target.value) })} />}
@@ -149,6 +156,32 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
           );
         })}
       </div>
+
+      {(shot.props.length > 0 || catalog.props.length > 0) && (
+        <div className="flex flex-col gap-2" style={{ marginTop: 8 }}>
+          {shot.props.map((prop, n) => (
+            <div key={n} className="flex align-center gap-3" style={{ flexWrap: 'wrap' }}>
+              <select className="form-input" style={{ width: 'auto' }} value={prop.id} disabled={disabled} onChange={(e) => setProp(n, { id: e.target.value })} aria-label="Đạo cụ">
+                {!catalog.props.some((p) => p.id === prop.id) && <option value={prop.id}>{prop.id} (chưa có ảnh)</option>}
+                {catalog.props.map((p) => <option key={p.id} value={p.id}>{p.id}{p.heightCm ? ` (${p.heightCm} cm)` : ''}</option>)}
+              </select>
+              <label className="flex align-center gap-2 lg-meta">Ngang <input type="range" min={0} max={1} step={0.01} value={prop.x} disabled={disabled} onChange={(e) => setProp(n, { x: Number(e.target.value) })} /></label>
+              <label className="flex align-center gap-2 lg-meta">Dọc (chân vật) <input type="range" min={0} max={1} step={0.01} value={prop.y} disabled={disabled} onChange={(e) => setProp(n, { y: Number(e.target.value) })} /></label>
+              {!sized(prop.id) && <label className="flex align-center gap-2 lg-meta">Cỡ <input type="range" min={0.03} max={0.6} step={0.01} value={prop.scale} disabled={disabled} onChange={(e) => setProp(n, { scale: Number(e.target.value) })} /></label>}
+              <label className="flex align-center gap-2 lg-meta">
+                <input type="checkbox" checked={prop.depth != null} disabled={disabled} onChange={(e) => setProp(n, { depth: e.target.checked ? GROUND_LINE : null })} /> Đặt trên bàn / kệ
+                {prop.depth != null && <input type="range" min={0.5} max={1} step={0.01} value={prop.depth} disabled={disabled} title="Xa gần của cái bàn" aria-label="Xa gần của cái bàn" onChange={(e) => setProp(n, { depth: Number(e.target.value) })} />}
+              </label>
+              <select className="form-input" style={{ width: 'auto' }} value={prop.layer} disabled={disabled} onChange={(e) => setProp(n, { layer: e.target.value as StageProp['layer'] })} aria-label="Lớp">
+                <option value="back">Sau nhân vật</option>
+                <option value="front">Trước nhân vật</option>
+              </select>
+              <button className="icon-btn" title="Bỏ đạo cụ" disabled={disabled} onClick={() => onChange({ ...shot, props: shot.props.filter((_, i) => i !== n) })}><Trash2 size={14} /></button>
+            </div>
+          ))}
+          {catalog.props.length > 0 && <div><button className="btn btn-ghost btn-sm" disabled={disabled} onClick={addProp}><Plus size={14} /> Đặt đạo cụ lên sân khấu</button></div>}
+        </div>
+      )}
 
       <div className="st-fields" style={{ marginTop: 8 }}>
         <label>Tông màu

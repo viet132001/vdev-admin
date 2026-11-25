@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Bot, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Bot, Loader2, Plus, Ruler, Trash2 } from 'lucide-react';
 import { ConfirmDialog, type ConfirmState } from './tasks/shared';
 import { useBusy } from './tasks/agent';
 import { WORKER_COMMAND } from './dictation/lessonWorker';
@@ -8,7 +8,8 @@ import { AssetBoard } from './animation/AssetBoard';
 import { Videos } from './animation/Videos';
 import { VoicePanel } from './animation/VoicePanel';
 import { BriefDialog } from './animation/BriefDialog';
-import { addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, type AssetSeries, type AssetSummary } from './animation/animationWorker';
+import { SharedLibrary } from './animation/SharedLibrary';
+import { SIZED_KINDS, addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, suggestSizes, type AssetSeries, type AssetSummary } from './animation/animationWorker';
 
 const WATCH_EVERY = 6000;
 const WATCH_FOR = 45 * 60 * 1000;
@@ -70,6 +71,22 @@ const AddAsset: React.FC<{ seriesId: string; onChange: (series: AssetSeries) => 
         <div><button className="btn btn-secondary" disabled={!!busy || !name.trim() || !description.trim()} onClick={add}><Plus size={16} /> Thêm</button></div>
       </div>
     </details>
+  );
+};
+
+// Series made before real sizes (or assets added by hand) have none yet
+const SuggestSizes: React.FC<{ series: AssetSeries; onChange: (series: AssetSeries) => void }> = ({ series, onChange }) => {
+  const { busy, run } = useBusy();
+  const missing = series.items.filter((item) => SIZED_KINDS.includes(item.kind) && item.heightCm === null).length;
+  if (!missing) return null;
+  const suggest = () => run('sizes', async () => {
+    try { onChange(await suggestSizes(series.id)); } catch (err) { alert(message(err, 'Không ước lượng được kích thước')); }
+  });
+  return (
+    <div className="card flex align-center gap-3" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <p className="lg-meta" style={{ margin: 0 }}>{missing} asset chưa có chiều cao thật nên đang được vẽ theo cỡ cố định, dễ lệch tỉ lệ với nhân vật.</p>
+      <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={suggest}>{busy ? <Loader2 size={14} className="spin" /> : <Ruler size={14} />} {busy ? 'Claude đang ước lượng…' : 'Claude ước lượng kích thước'}</button>
+    </div>
   );
 };
 
@@ -194,6 +211,8 @@ export const Animation: React.FC = () => {
               </div>
               <VoicePanel series={series} onChange={changed} />
               {Date.now() < watchUntil && <p className="lg-meta" style={{ margin: 0 }}>Đang chờ Claude đưa ảnh vào, trang tự cập nhật.</p>}
+              <SuggestSizes series={series} onChange={changed} />
+              <SharedLibrary key={series.id} series={series} onChange={changed} />
               <AssetBoard series={series} onChange={changed} onBrief={setBrief} />
               <BriefDialog seriesId={series.id} items={brief} onClose={() => setBrief(null)} onHanded={handed} />
               <AddAsset seriesId={series.id} onChange={changed} />

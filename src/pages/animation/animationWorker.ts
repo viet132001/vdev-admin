@@ -13,6 +13,10 @@ export interface AssetItem {
   parts: AssetPart[]; rev: number; tolerance: number | null; problem: string | null; rig: { x: number; y: number; scale: number } | null;
   skeleton: Skeleton | null; // body sheets only
   decor: DecorSpot[] | null; // backgrounds only: the plants in it
+  heightCm: number | null; // characters, props, plants: real height, which sizes them against each other
+  horizon: number | null; // backgrounds only: eye level, 0..1 from the top
+  style: string | null; // borrowed items: the style they were drawn in
+  from: { series: string; item: string } | null;
 }
 export interface DecorSpot { id: string; x: number; y: number; scale: number; layer: 'back' | 'front'; phase: number }
 // Must match JOINTS / DEFAULT_JOINTS / DEFAULT_HEAD_SCALE in vdev-video src/asset/rig.ts
@@ -35,7 +39,7 @@ export const PART_LABEL: Record<string, string> = {
   neutral: 'Bình thường', happy: 'Vui', sad: 'Buồn', angry: 'Giận', surprised: 'Ngạc nhiên', scared: 'Sợ', worried: 'Lo lắng', blink: 'Nhắm mắt'
 };
 export interface BibleCharacter { id: string; name: string; role: string; look: string; voice: string }
-export interface AssetBible { style: string; characters: BibleCharacter[]; backgrounds: { id: string; name: string; description: string }[]; props: { id: string; name: string; description: string }[] }
+export interface AssetBible { styleTag?: string; style: string; characters: BibleCharacter[]; backgrounds: { id: string; name: string; description: string }[]; props: { id: string; name: string; description: string }[] }
 export interface AssetSeries { id: string; title: string; premise: string; createdAt: string; bible: AssetBible; items: AssetItem[]; voices: Record<string, string> }
 export interface AssetSummary { id: string; title: string; premise: string; ready: number; total: number; createdAt: string }
 
@@ -54,6 +58,19 @@ export const setLimbs = (id: string, item: string, arms: number, legs: number): 
 // The plants growing in a background; a new seed lays them out again
 export const setDecor = (id: string, item: string, plants: string[], seed: number): Promise<AssetSeries> => call(`/assets/series/${id}/decor`, 'POST', { item, plants, seed });
 export const setHeadScale = (id: string, item: string, scale: number): Promise<AssetSeries> => call(`/assets/series/${id}/head-scale`, 'POST', { item, scale });
+
+// Must match ADULT_CM / DEFAULT_HORIZON / GROUND_LINE in vdev-video src/asset/assetScript.ts
+export const DEFAULT_HORIZON = 0.4;
+export const GROUND_LINE = 0.86;
+export const SIZED_KINDS: AssetKind[] = ['character', 'prop', 'plant'];
+export const setSize = (id: string, item: string, heightCm: number | null): Promise<AssetSeries> => call(`/assets/series/${id}/size`, 'POST', { item, heightCm });
+export const suggestSizes = (id: string): Promise<AssetSeries> => call(`/assets/series/${id}/suggest-sizes`, 'POST', {});
+export const setHorizon = (id: string, item: string, horizon: number): Promise<AssetSeries> => call(`/assets/series/${id}/horizon`, 'POST', { item, horizon });
+
+// Backgrounds, props and plants of every series, to be reused instead of drawn again
+export interface SharedAsset { series: string; seriesTitle: string; item: string; kind: AssetKind; name: string; description: string; heightCm: number | null; style: string; file: string }
+export const listShared = (): Promise<SharedAsset[]> => call('/assets/shared');
+export const borrowAsset = (id: string, from: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/borrow`, 'POST', { from, item });
 
 // ElevenLabs voices of the account (read by the worker, the key never leaves it); NARRATOR is the storyteller's slot
 export const NARRATOR = 'narrator';
@@ -97,25 +114,25 @@ export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals
 export const TONE_LABEL: Record<string, string> = { none: 'Tự nhiên', warm: 'Ấm', cool: 'Lạnh', dusk: 'Hoàng hôn', night: 'Đêm' };
 export const LIGHT_LABEL: Record<string, string> = { lamp: 'Đèn dầu', fire: 'Bếp lửa', sun: 'Mặt trời', moon: 'Trăng' };
 
-export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null }
+export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null }
 export interface ScriptShot {
   background: string; camera: 'wide' | 'medium' | 'close'; subject: string | null; move: string; transition: 'cut' | 'fade';
   cast: ScriptMember[];
-  props: { id: string; x: number; y: number; scale: number; layer: 'back' | 'front' }[];
+  props: { id: string; x: number; y: number; scale: number; layer: 'back' | 'front'; depth?: number | null }[];
   speaker: string | null; text: string; expression: string;
   reactions: { character: string; expression: string }[]; action: string;
   effects: string[]; tone: string; light: { kind: string; x: number; y: number } | null;
 }
 export interface AnimationScript { title: string; description: string; shots: ScriptShot[] }
 export interface AnimationCatalog {
-  characters: { id: string; name: string; role: string; voice: string; expressions: string[]; talks: boolean; rigged: boolean }[];
+  characters: { id: string; name: string; role: string; voice: string; expressions: string[]; talks: boolean; rigged: boolean; heightCm?: number | null }[];
   backgrounds: { id: string; description: string; foreground: boolean }[];
-  props: { id: string; description: string }[];
+  props: { id: string; description: string; heightCm?: number | null }[];
 }
 // Scripts saved before poses and narration existed (the worker fills the same defaults)
 export const normalizeShot = (shot: any): ScriptShot => ({
   ...shot, subject: shot.subject ?? null, transition: shot.transition ?? 'cut', effects: shot.effects ?? [], tone: shot.tone ?? 'none', light: shot.light ?? null,
-  cast: (shot.cast ?? []).map((m: any) => ({ toX: null, pose: 'stand', gesture: 'none', hold: null, ...m }))
+  cast: (shot.cast ?? []).map((m: any) => ({ toX: null, pose: 'stand', gesture: 'none', hold: null, y: null, ...m }))
 });
 export type AnimationJob = Omit<LessonJob, 'animation'> & { animation?: { seriesId: string; script: AnimationScript } };
 
