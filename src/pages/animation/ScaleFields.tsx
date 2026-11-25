@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useBusy } from '../tasks/agent';
-import { DEFAULT_HORIZON, SIZED_KINDS, assetUrl, setHorizon, setSize, type AssetItem, type AssetSeries } from './animationWorker';
+import { DEFAULT_HORIZON, HOLD_LABEL, SIZED_KINDS, assetUrl, setHoldStyle, setHorizon, setSize, type AssetItem, type AssetSeries, type HoldStyle } from './animationWorker';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
@@ -21,6 +21,21 @@ const SizeField: React.FC<Props> = ({ seriesId, item, onChange }) => {
       <input className="form-input" style={{ width: 90 }} type="number" min={1} max={3000} value={text} disabled={!!busy} placeholder={item.kind === 'character' ? '170' : 'chưa đặt'}
         onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
       cm
+    </label>
+  );
+};
+
+const HoldField: React.FC<Props> = ({ seriesId, item, onChange }) => {
+  const { busy, run } = useBusy();
+  const save = (style: HoldStyle | null) => run('hold', async () => {
+    try { onChange(await setHoldStyle(seriesId, item.id, style)); } catch (err) { alert(message(err, 'Không lưu được cách cầm')); }
+  });
+  return (
+    <label className="form-label">Cách cầm
+      <select className="form-input" value={item.holdStyle ?? ''} disabled={!!busy} onChange={(e) => save((e.target.value || null) as HoldStyle | null)}>
+        <option value="">Tự đoán theo hình</option>
+        {Object.entries(HOLD_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      </select>
     </label>
   );
 };
@@ -56,6 +71,13 @@ const HorizonField: React.FC<Props> = ({ seriesId, item, onChange }) => {
 // What decides how big an asset is drawn: its real height, or for a background where its horizon lies
 export const ScaleFields: React.FC<Props> = (props) => {
   const { item } = props;
-  if (SIZED_KINDS.includes(item.kind)) return <SizeField key={item.heightCm ?? 'none'} {...props} />;
+  if (SIZED_KINDS.includes(item.kind)) {
+    return (
+      <>
+        <SizeField key={item.heightCm ?? 'none'} {...props} />
+        {item.kind === 'prop' && <HoldField {...props} />}
+      </>
+    );
+  }
   return item.kind === 'background' ? <HorizonField key={`${item.rev}-${item.horizon}`} {...props} /> : null;
 };

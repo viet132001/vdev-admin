@@ -4,11 +4,12 @@ import { useBusy } from '../tasks/agent';
 import { AssetTuner, type Face } from './AssetTuner';
 import { DecorPicker } from './DecorPicker';
 import { ScaleFields } from './ScaleFields';
+import { PoseMarker } from './DrawnActions';
 import { KIND_LABEL, assetUrl, clearAsset, readImage, uploadAsset, type AssetItem, type AssetKind, type AssetSeries } from './animationWorker';
 
-const ORDER: AssetKind[] = ['character', 'body', 'hands', 'heads', 'mouths', 'expression', 'background', 'foreground', 'plant', 'prop', 'animal'];
+const ORDER: AssetKind[] = ['character', 'body', 'hands', 'action', 'heads', 'mouths', 'expression', 'background', 'foreground', 'plant', 'prop', 'animal'];
 // What to attach as the reference when asking for the picture
-const REFERENCE: Partial<Record<AssetKind, string>> = { body: 'nhân vật', hands: 'nhân vật', heads: 'nhân vật', expression: 'nhân vật', mouths: 'nhân vật', foreground: 'bối cảnh' };
+const REFERENCE: Partial<Record<AssetKind, string>> = { body: 'nhân vật', hands: 'nhân vật', action: 'nhân vật', heads: 'nhân vật', expression: 'nhân vật', mouths: 'nhân vật', foreground: 'bối cảnh' };
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
 const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string | null; face?: Face; heads?: AssetItem; onChange: (series: AssetSeries) => void; onBrief: (items: string[]) => void; series: AssetSeries }> = ({ seriesId, item, refName, face, heads, onChange, onBrief, series }) => {
@@ -52,6 +53,7 @@ const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string |
         </div>
         {refName && !item.file && <p className="lg-meta" style={{ margin: 0 }}>Đính kèm ảnh {REFERENCE[item.kind]} "{refName}" khi nhờ ChatGPT vẽ.</p>}
         {/* key on rev: the slider restarts from the saved sensitivity after each processing */}
+        {item.kind === 'action' && <PoseMarker key={item.rev} seriesId={seriesId} item={item} onChange={onChange} />}
         <AssetTuner key={`${item.id}-${item.rev}-${item.version}-${item.rig?.scale ?? 0}`} seriesId={seriesId} item={item} face={face} heads={heads} onChange={onChange} />
         {item.grounded && <p className="lg-meta" style={{ margin: 0 }}>Ảnh này vẽ cả mặt đất nên đang được đặt sau nhân vật. Vẽ lại chỉ cỏ hoặc cành ở mép khung thì sẽ nằm trước.</p>}
         {item.from && <p className="lg-meta" style={{ margin: 0 }}>Lấy từ kho, phong cách: {item.style}</p>}

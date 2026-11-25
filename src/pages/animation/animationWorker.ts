@@ -2,9 +2,9 @@
 // ChatGPT makes the images, the user brings them back here; nothing goes through the BE.
 import { WORKER_URL, call, type LessonJob } from '../dictation/lessonWorker';
 
-export type AssetKind = 'character' | 'body' | 'hands' | 'heads' | 'expression' | 'mouths' | 'background' | 'foreground' | 'prop' | 'plant' | 'animal';
+export type AssetKind = 'character' | 'body' | 'hands' | 'heads' | 'expression' | 'mouths' | 'background' | 'foreground' | 'prop' | 'plant' | 'animal' | 'action';
 export const KIND_LABEL: Record<AssetKind, string> = {
-  character: 'Nhân vật', body: 'Bộ phận cơ thể', hands: 'Bàn tay (ngón cử động)', heads: 'Đầu và biểu cảm', expression: 'Biểu cảm (kiểu cũ)', mouths: 'Hình miệng', background: 'Bối cảnh', foreground: 'Tiền cảnh', prop: 'Đạo cụ', plant: 'Cây cỏ chuyển động', animal: 'Con vật'
+  character: 'Nhân vật', body: 'Bộ phận cơ thể', hands: 'Bàn tay (ngón cử động)', heads: 'Đầu và biểu cảm', expression: 'Biểu cảm (kiểu cũ)', mouths: 'Hình miệng', background: 'Bối cảnh', foreground: 'Tiền cảnh', prop: 'Đạo cụ', plant: 'Cây cỏ chuyển động', animal: 'Con vật', action: 'Động tác vẽ sẵn'
 };
 
 export interface AssetPart { name: string; file: string; width: number; height: number; pivot: { x: number; y: number } }
@@ -18,6 +18,9 @@ export interface AssetItem {
   style: string | null; // borrowed items: the style they were drawn in
   from: { series: string; item: string } | null;
   tags: string[];
+  action?: string | null; // drawn actions: which movement
+  marks?: PoseMark[] | null; // drawn actions: where each pose holds the weapon
+  holdStyle?: HoldStyle | null; // props: how a hand holds it
   grounded?: boolean | null; // foregrounds: it painted the ground, the engine puts it behind the characters
 }
 export interface DecorSpot { id: string; x: number; y: number; scale: number; layer: 'back' | 'front'; phase: number }
@@ -71,10 +74,19 @@ export const suggestSizes = (id: string): Promise<AssetSeries> => call(`/assets/
 export const setHorizon = (id: string, item: string, horizon: number): Promise<AssetSeries> => call(`/assets/series/${id}/horizon`, 'POST', { item, horizon });
 
 // Backgrounds, props and plants of every series, to be reused instead of drawn again
-export interface SharedAsset { series: string; seriesTitle: string; item: string; kind: AssetKind; name: string; description: string; heightCm: number | null; style: string; tags: string[]; file: string; usedBy: number; sheets?: { kind: AssetKind; ready: boolean }[] }
+export interface SharedAsset { series: string; seriesTitle: string; item: string; kind: AssetKind; name: string; description: string; heightCm: number | null; style: string; tags: string[]; holdStyle?: HoldStyle | null; file: string; usedBy: number; sheets?: { kind: AssetKind; ready: boolean }[] }
 // How the library is grouped, in this order
 export const LIBRARY_KINDS: AssetKind[] = ['character', 'background', 'prop', 'animal', 'plant'];
 export const listShared = (): Promise<SharedAsset[]> => call('/assets/shared');
+export type HoldStyle = 'cup' | 'rod' | 'sword' | 'carry';
+export const HOLD_LABEL: Record<HoldStyle, string> = { cup: 'Chén, vật cầm ngửa', rod: 'Gậy, cần câu', sword: 'Kiếm, vũ khí', carry: 'Xách (giỏ, đèn lồng)' };
+export const setHoldStyle = (id: string, item: string, style: HoldStyle | null): Promise<AssetSeries> => call(`/assets/series/${id}/hold-style`, 'POST', { item, style });
+// Must match ACTION_PRESETS in vdev-video src/asset/drawnActions.ts
+export const ACTION_PRESET_LABEL: Record<string, string> = { slash: 'Chém (một tay)', thrust: 'Đâm (một tay)', 'pole-thrust': 'Đâm giáo / gậy (cán dài)', cast: 'Quăng cần / lưới', pull: 'Ghì kéo (cá cắn, kéo lưới)' };
+export interface PoseMark { x: number | null; y: number | null; angle: number; behind: boolean; hand: string | null }
+export const addDrawnAction = (id: string, character: string, action: string): Promise<AssetSeries> => call(`/assets/series/${id}/add-action`, 'POST', { character, action });
+export const setPoseMark = (id: string, item: string, pose: number, mark: Partial<PoseMark>): Promise<AssetSeries> => call(`/assets/series/${id}/pose`, 'POST', { item, pose, mark });
+export const removeDrawnAction = (id: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/remove-action`, 'POST', { item });
 export const setAssetMeta = (id: string, item: string, meta: { style?: string; tags?: string[] }): Promise<AssetSeries> => call(`/assets/series/${id}/meta`, 'POST', { item, ...meta });
 export const setStyleTag = (id: string, styleTag: string): Promise<AssetSeries> => call(`/assets/series/${id}/style-tag`, 'POST', { styleTag });
 export const borrowAsset = (id: string, from: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/borrow`, 'POST', { from, item });
@@ -124,13 +136,13 @@ export const ACTION_LABEL: Record<string, string> = { none: 'Không', hop: 'Nh�
 export const EXPRESSION_LABEL: Record<string, string> = { neutral: 'Bình thường', happy: 'Vui', sad: 'Buồn', angry: 'Giận', surprised: 'Ngạc nhiên', scared: 'Sợ', worried: 'Lo lắng' };
 export const POSE_LABEL: Record<string, string> = { stand: 'Đứng', kneel: 'Quỳ', sit: 'Ngồi' };
 export const GESTURE_LABEL: Record<string, string> = {
-  none: 'Tay buông', point: 'Chỉ tay', wave: 'Vẫy tay', offer: 'Đưa / mời', drink: 'Uống', bow: 'Chắp tay cúi chào', chest: 'Tay lên ngực', think: 'Chống cằm', open: 'Giang tay', cover: 'Ôm mặt'
+  none: 'Tay buông', point: 'Chỉ tay', wave: 'Vẫy tay', offer: 'Đưa / mời', drink: 'Uống', bow: 'Chắp tay cúi chào', chest: 'Tay lên ngực', think: 'Chống cằm', open: 'Giang tay', cover: 'Ôm mặt', guard: 'Thủ thế', slash: 'Chém', thrust: 'Đâm', cast: 'Quăng cần', pull: 'Ghì kéo', fish: 'Ngồi câu'
 };
 export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals: 'Cánh hoa', snow: 'Tuyết', rain: 'Mưa', fireflies: 'Đom đóm', dust: 'Bụi nắng', mist: 'Sương', embers: 'Tàn lửa', fluff: 'Bông lau bay', wind: 'Gió mạnh' };
 export const TONE_LABEL: Record<string, string> = { none: 'Tự nhiên', warm: 'Ấm', cool: 'Lạnh', dusk: 'Hoàng hôn', night: 'Đêm' };
 export const LIGHT_LABEL: Record<string, string> = { lamp: 'Đèn dầu', fire: 'Bếp lửa', sun: 'Mặt trời', moon: 'Trăng' };
 
-export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null }
+export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null; act?: string | null }
 export interface ScriptShot {
   background: string; camera: 'wide' | 'medium' | 'close'; subject: string | null; move: string; transition: 'cut' | 'fade';
   cast: ScriptMember[];
@@ -141,14 +153,14 @@ export interface ScriptShot {
 }
 export interface AnimationScript { title: string; description: string; shots: ScriptShot[] }
 export interface AnimationCatalog {
-  characters: { id: string; name: string; role: string; voice: string; expressions: string[]; talks: boolean; rigged: boolean; heightCm?: number | null }[];
+  characters: { id: string; name: string; role: string; voice: string; expressions: string[]; talks: boolean; rigged: boolean; heightCm?: number | null; actions?: { id: string; label: string; weapon: boolean }[] }[];
   backgrounds: { id: string; description: string; foreground: boolean }[];
   props: { id: string; description: string; heightCm?: number | null }[];
 }
 // Scripts saved before poses and narration existed (the worker fills the same defaults)
 export const normalizeShot = (shot: any): ScriptShot => ({
   ...shot, subject: shot.subject ?? null, transition: shot.transition ?? 'cut', effects: shot.effects ?? [], tone: shot.tone ?? 'none', light: shot.light ?? null,
-  cast: (shot.cast ?? []).map((m: any) => ({ toX: null, pose: 'stand', gesture: 'none', hold: null, y: null, ...m }))
+  cast: (shot.cast ?? []).map((m: any) => ({ toX: null, pose: 'stand', gesture: 'none', hold: null, y: null, act: null, ...m }))
 });
 export type AnimationJob = Omit<LessonJob, 'animation'> & { animation?: { seriesId: string; script: AnimationScript } };
 

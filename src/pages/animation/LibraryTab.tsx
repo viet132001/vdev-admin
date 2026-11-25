@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import { WORKER_COMMAND } from '../dictation/lessonWorker';
-import { KIND_LABEL, LIBRARY_KINDS, fileUrl, listShared, setAssetMeta, setSize, type AssetKind, type SharedAsset } from './animationWorker';
+import { HOLD_LABEL, KIND_LABEL, LIBRARY_KINDS, fileUrl, listShared, setAssetMeta, setHoldStyle, setSize, type AssetKind, type HoldStyle, type SharedAsset } from './animationWorker';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 const tagsOf = (text: string) => text.split(',').map((tag) => tag.trim()).filter(Boolean);
@@ -36,6 +36,15 @@ const LibraryCard: React.FC<{ asset: SharedAsset; onSaved: () => void; onOpen: (
             <input className="form-input" style={{ width: 90 }} type="number" min={1} max={3000} value={height} disabled={!!busy} placeholder="chưa đặt" onKeyDown={onEnter}
               onChange={(e) => setHeight(e.target.value)} onBlur={() => { const value = height.trim() ? Number(height) : null; save(value !== asset.heightCm, () => setSize(asset.series, asset.item, value)); }} />
             cm
+          </label>
+        )}
+        {asset.kind === 'prop' && (
+          <label className="form-label">Cách cầm
+            <select className="form-input" value={asset.holdStyle ?? ''} disabled={!!busy}
+              onChange={(e) => save(true, () => setHoldStyle(asset.series, asset.item, (e.target.value || null) as HoldStyle | null))}>
+              <option value="">Tự đoán theo hình</option>
+              {Object.entries(HOLD_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
           </label>
         )}
         <label className="form-label">Phong cách
@@ -118,7 +127,7 @@ export const LibraryTab: React.FC = () => {
             <div className="an-grid">
               {items.map((a) => (
                 // key on the saved values: a card restarts from them after a reload
-                <LibraryCard key={`${a.series}/${a.item}/${a.heightCm}/${a.style}/${a.tags.join()}`} asset={a} onSaved={load} onOpen={() => setParams({ series: a.series })} />
+                <LibraryCard key={`${a.series}/${a.item}/${a.heightCm}/${a.style}/${a.tags.join()}/${a.holdStyle}`} asset={a} onSaved={load} onOpen={() => setParams({ series: a.series })} />
               ))}
             </div>
           </section>

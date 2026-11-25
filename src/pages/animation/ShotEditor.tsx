@@ -133,7 +133,20 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
                     <option value={1}>Nhìn phải</option>
                     <option value={-1}>Nhìn trái</option>
                   </select>
-                  {c.rigged && (
+                  {(c.actions?.length ?? 0) > 0 && (
+                    <select className="form-input" style={{ width: 'auto' }} value={member.act ?? ''} disabled={disabled} aria-label="Hành động vẽ sẵn"
+                      onChange={(e) => setMember(c.id, e.target.value ? { act: e.target.value, pose: 'stand', gesture: 'none', toX: null } : { act: null })}>
+                      <option value="">Không diễn hành động</option>
+                      {c.actions!.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                    </select>
+                  )}
+                  {member.act && catalog.props.length > 0 && (
+                    <select className="form-input" style={{ width: 'auto' }} value={member.hold ?? ''} disabled={disabled} onChange={(e) => setMember(c.id, { hold: e.target.value || null })} aria-label="Vũ khí">
+                      <option value="">Tay không</option>
+                      {catalog.props.map((p) => <option key={p.id} value={p.id}>Cầm: {p.id}</option>)}
+                    </select>
+                  )}
+                  {c.rigged && !member.act && (
                     <>
                       <select className="form-input" style={{ width: 'auto' }} value={member.pose} disabled={disabled} onChange={(e) => setMember(c.id, { pose: e.target.value })} aria-label="Tư thế"><Options labels={POSE_LABEL} /></select>
                       <select className="form-input" style={{ width: 'auto' }} value={member.gesture} disabled={disabled} onChange={(e) => setMember(c.id, { gesture: e.target.value })} aria-label="Cử chỉ"><Options labels={GESTURE_LABEL} /></select>

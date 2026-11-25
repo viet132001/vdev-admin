@@ -11,6 +11,7 @@ import { BriefDialog } from './animation/BriefDialog';
 import { SharedLibrary } from './animation/SharedLibrary';
 import { LibraryTab } from './animation/LibraryTab';
 import { PracticeRoom } from './animation/PracticeRoom';
+import { AddDrawnAction } from './animation/DrawnActions';
 import { SIZED_KINDS, addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, setStyleTag, suggestSizes, type AssetSeries, type AssetSummary } from './animation/animationWorker';
 
 const WATCH_EVERY = 6000;
@@ -244,6 +245,7 @@ export const Animation: React.FC = () => {
               {Date.now() < watchUntil && <p className="lg-meta" style={{ margin: 0 }}>Đang chờ Claude đưa ảnh vào, trang tự cập nhật.</p>}
               <SuggestSizes series={series} onChange={changed} />
               <SharedLibrary key={series.id} series={series} onChange={changed} />
+              <AddDrawnAction key={`act-${series.id}`} series={series} onChange={changed} />
               <AssetBoard series={series} onChange={changed} onBrief={setBrief} />
               <BriefDialog seriesId={series.id} items={brief} onClose={() => setBrief(null)} onHanded={handed} />
               <AddAsset seriesId={series.id} onChange={changed} />
