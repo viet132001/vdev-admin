@@ -68,5 +68,5 @@ export const placePieces = (drawn: Record<string, AssetPart>, head: AssetPart | 
     piece('arm', shoulderF, armAbs(a.armF), arm),
     piece('forearm', armF.mid, armAbs(a.armF) - a.foreF, forearm)
   ];
-  return { pieces, top: Math.min(headTop.y, ...pieces.map((p) => p.y)) - ground };
+  return { pieces, top: Math.min(headTop.y - ground, ...pieces.map((p) => p.y)) };
 };

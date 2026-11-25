@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import {
-  ACTION_PRESET_LABEL, addDrawnAction, fileUrl, removeDrawnAction, setPoseMark,
+  ACTION_PRESET_LABEL, addDrawnAction, fileUrl, removeDrawnAction, setPoseMark, setWalkOrder,
   type AssetItem, type AssetSeries, type PoseMark
 } from './animationWorker';
 
@@ -10,14 +10,14 @@ const message = (err: unknown, fallback: string) => (err instanceof Error && err
 
 export const AddDrawnAction: React.FC<{ series: AssetSeries; onChange: (series: AssetSeries) => void }> = ({ series, onChange }) => {
   const [character, setCharacter] = useState(series.bible.characters[0]?.id ?? '');
-  const [action, setAction] = useState('slash');
+  const [action, setAction] = useState('walk');
   const { busy, run } = useBusy();
   const add = () => run('add', async () => {
     try { onChange(await addDrawnAction(series.id, character, action)); } catch (err) { alert(message(err, 'Không thêm được động tác')); }
   });
   return (
     <div className="card flex flex-col gap-2">
-      <strong>Thêm động tác vẽ sẵn (chém, đâm, quăng, kéo)</strong>
+      <strong>Thêm động tác vẽ sẵn (đi bộ, chém, đâm, quăng, kéo)</strong>
       <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
         <select className="form-input" style={{ width: 'auto' }} value={character} onChange={(e) => setCharacter(e.target.value)} aria-label="Nhân vật">
           {series.bible.characters.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -28,6 +28,36 @@ export const AddDrawnAction: React.FC<{ series: AssetSeries; onChange: (series: 
         <button className="btn btn-secondary" disabled={!!busy || !character} onClick={add}><Plus size={16} /> Thêm</button>
       </div>
       <p className="lg-meta" style={{ margin: 0 }}>Thẻ mới nằm ở mục "Động tác vẽ sẵn". Vẽ một tấm các dáng tay không cầm gì, rồi đánh dấu chỗ nắm một lần; đổi vũ khí không phải vẽ lại.</p>
+    </div>
+  );
+};
+
+// The numbered poses of a walk, and the order they play in: a frame that jerks can be swapped for another
+const WalkOrder: React.FC<{ seriesId: string; item: AssetItem; onChange: (series: AssetSeries) => void }> = ({ seriesId, item, onChange }) => {
+  const drawn = item.parts.map((_, n) => n + 1);
+  const saved = (item.order?.map((n) => n + 1) ?? drawn).join(' ');
+  const [text, setText] = useState(saved);
+  const { busy, run } = useBusy();
+  const save = () => {
+    if (text.trim() === saved) return;
+    run('order', async () => {
+      try { onChange(await setWalkOrder(seriesId, item.id, text.split(/[\s,]+/).filter(Boolean).map(Number))); } catch (err) { alert(message(err, 'Không lưu được thứ tự')); }
+    });
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+        {item.parts.map((p, n) => (
+          <figure key={p.name} className="an-checker" style={{ margin: 0, textAlign: 'center' }}>
+            <img src={fileUrl(seriesId, p.file)} alt={`Hình ${n + 1}`} style={{ height: 90, display: 'block' }} />
+            <figcaption className="lg-meta">{n + 1}</figcaption>
+          </figure>
+        ))}
+      </div>
+      <label className="form-label">Thứ tự chạy
+        <input className="form-input" value={text} disabled={!!busy} onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+      </label>
+      <p className="lg-meta" style={{ margin: 0 }}>Nhân vật đi trong video sẽ tự dùng các hình này. Hình nào làm giật thì thay bằng số của hình khác.</p>
     </div>
   );
 };
@@ -50,8 +80,15 @@ export const PoseMarker: React.FC<{ seriesId: string; item: AssetItem; onChange:
   };
   const left = (item.marks ?? []).filter((m) => m.x === null).length;
 
+  const walking = item.action === 'walk';
   return (
     <div className="flex flex-col gap-2">
+      {walking && item.parts.length > 0 && (
+        <>
+          <WalkOrder key={`${item.rev}-${item.order?.join()}`} seriesId={seriesId} item={item} onChange={onChange} />
+          <p className="lg-meta" style={{ margin: 0 }}>Để vừa đi vừa cầm đồ: ở từng dáng dưới đây, bấm vào bàn tay phía trước người xem.</p>
+        </>
+      )}
       {part && mark && (
         <>
           <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
@@ -65,17 +102,17 @@ export const PoseMarker: React.FC<{ seriesId: string; item: AssetItem; onChange:
             <img src={fileUrl(seriesId, part.file)} alt={`Dáng ${pose + 1}`} draggable={false} />
             {mark.x !== null && mark.y !== null && (
               <>
-                {/* where the weapon will point */}
-                <div style={{ position: 'absolute', left: `${mark.x * 100}%`, top: `${mark.y * 100}%`, width: 3, height: 70, marginLeft: -1.5, marginTop: -70, background: 'var(--primary)', transformOrigin: '50% 100%', transform: `rotate(${mark.angle}deg)`, pointerEvents: 'none' }} />
+                {/* where the weapon will point; a net is drawn by the engine */}
+                {item.action !== 'net' && item.action !== 'haul' && !walking && <div style={{ position: 'absolute', left: `${mark.x * 100}%`, top: `${mark.y * 100}%`, width: 3, height: 70, marginLeft: -1.5, marginTop: -70, background: 'var(--primary)', transformOrigin: '50% 100%', transform: `rotate(${mark.angle}deg)`, pointerEvents: 'none' }} />}
                 <i className="an-dot" style={{ left: `${mark.x * 100}%`, top: `${mark.y * 100}%` }} />
               </>
             )}
           </div>
-          <PoseAngle key={`${pose}-${mark.angle}`} angle={mark.angle} onSave={(angle) => save({ angle })} />
+          {item.action !== 'net' && item.action !== 'haul' && <PoseAngle key={`${pose}-${mark.angle}`} angle={mark.angle} walking={walking} onSave={(angle) => save({ angle })} />}
           <label className="flex align-center gap-2 lg-meta">
             <input type="checkbox" checked={mark.behind} disabled={!!busy} onChange={(e) => save({ behind: e.target.checked })} /> Vũ khí nằm sau người ở dáng này
           </label>
-          <p className="lg-meta" style={{ margin: 0 }}>{left ? `Còn ${left} dáng chưa đánh dấu chỗ nắm tay.` : 'Đã đánh dấu đủ. Xem trong Phòng tập.'} Đoạn thẳng chỉ hướng mũi vũ khí.</p>
+          <p className="lg-meta" style={{ margin: 0 }}>{left ? `Còn ${left} dáng chưa đánh dấu chỗ nắm tay.` : 'Đã đánh dấu đủ. Xem trong Phòng tập.'} {item.action === 'net' || item.action === 'haul' ? 'Chỉ cần chấm chỗ tay: lưới được engine tự vẽ từ đó.' : walking ? 'Thanh kéo là độ lắc của đồ theo cánh tay.' : 'Đoạn thẳng chỉ hướng mũi vũ khí.'}</p>
         </>
       )}
       <div><button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={remove}><Trash2 size={14} /> Xoá động tác này</button></div>
@@ -83,12 +120,12 @@ export const PoseMarker: React.FC<{ seriesId: string; item: AssetItem; onChange:
   );
 };
 
-const PoseAngle: React.FC<{ angle: number; onSave: (angle: number) => void }> = ({ angle, onSave }) => {
+const PoseAngle: React.FC<{ angle: number; walking: boolean; onSave: (angle: number) => void }> = ({ angle, walking, onSave }) => {
   const [value, setValue] = useState(angle);
   const save = () => { if (value !== angle) onSave(value); };
   return (
     <label className="flex flex-col gap-2 lg-meta">
-      Hướng vũ khí: {value}° (0 là chĩa lên, 90 là chĩa ra trước)
+      {walking ? `Đồ lắc theo tay: ${value}° (dương khi tay ở sau, âm khi tay đưa ra trước)` : `Hướng vũ khí: ${value}° (0 là chĩa lên, 90 là chĩa ra trước)`}
       <input type="range" min={-180} max={180} value={value} onChange={(e) => setValue(Number(e.target.value))} onPointerUp={save} onKeyUp={save} />
     </label>
   );

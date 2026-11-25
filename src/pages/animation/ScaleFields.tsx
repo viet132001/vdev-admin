@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useBusy } from '../tasks/agent';
-import { DEFAULT_HORIZON, HOLD_LABEL, SIZED_KINDS, assetUrl, setHoldStyle, setHorizon, setSize, type AssetItem, type AssetSeries, type HoldStyle } from './animationWorker';
+import { DEFAULT_HORIZON, HOLD_LABEL, SIZED_KINDS, assetUrl, setDeck, setHoldStyle, setHorizon, setSize, type AssetItem, type AssetSeries, type HoldStyle } from './animationWorker';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
@@ -68,6 +68,36 @@ const HorizonField: React.FC<Props> = ({ seriesId, item, onChange }) => {
   );
 };
 
+// Water: a boat under whoever is there. The line is drawn on the picture where its deck should sit
+const WaterField: React.FC<Props> = ({ seriesId, item, onChange }) => {
+  const { busy, run } = useBusy();
+  const [value, setValue] = useState(item.deck ?? 0.65);
+  const url = assetUrl(seriesId, item);
+  const save = (deck: number | null) => run('deck', async () => {
+    try { onChange(await setDeck(seriesId, item.id, deck)); } catch (err) { alert(message(err, 'Không lưu được mặt nước')); }
+  });
+  if (!url) return null;
+  const on = item.deck != null;
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="flex align-center gap-2 lg-meta">
+        <input type="checkbox" checked={on} disabled={!!busy} onChange={(e) => save(e.target.checked ? value : null)} /> Bối cảnh trên mặt nước (có thuyền)
+      </label>
+      {on && (
+        <>
+          <div style={{ position: 'relative' }}>
+            <img src={url} alt="" style={{ display: 'block', width: '100%', borderRadius: 'var(--radius-sm)' }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, top: `${value * 100}%`, borderTop: '2px dashed var(--primary)' }} />
+          </div>
+          <input type="range" min={0.4} max={0.85} step={0.01} value={value} disabled={!!busy} aria-label="Mạn thuyền"
+            onChange={(e) => setValue(Number(e.target.value))} onPointerUp={() => save(value)} onKeyUp={() => save(value)} />
+          <p className="lg-meta" style={{ margin: 0 }}>Kéo vạch tới chỗ chân người đứng trên thuyền, nằm giữa vùng nước.</p>
+        </>
+      )}
+    </div>
+  );
+};
+
 // What decides how big an asset is drawn: its real height, or for a background where its horizon lies
 export const ScaleFields: React.FC<Props> = (props) => {
   const { item } = props;
@@ -79,5 +109,11 @@ export const ScaleFields: React.FC<Props> = (props) => {
       </>
     );
   }
-  return item.kind === 'background' ? <HorizonField key={`${item.rev}-${item.horizon}`} {...props} /> : null;
+  if (item.kind !== 'background') return null;
+  return (
+    <>
+      <HorizonField key={`${item.rev}-${item.horizon}`} {...props} />
+      <WaterField key={`water-${item.rev}-${item.deck}`} {...props} />
+    </>
+  );
 };

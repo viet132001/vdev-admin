@@ -15,11 +15,13 @@ export interface AssetItem {
   decor: DecorSpot[] | null; // backgrounds only: the plants in it
   heightCm: number | null; // characters, props, plants: real height, which sizes them against each other
   horizon: number | null; // backgrounds only: eye level, 0..1 from the top
+  deck?: number | null; // backgrounds only: it is water, a boat's deck sits on this line
   style: string | null; // borrowed items: the style they were drawn in
   from: { series: string; item: string } | null;
   tags: string[];
   action?: string | null; // drawn actions: which movement
   marks?: PoseMark[] | null; // drawn actions: where each pose holds the weapon
+  order?: number[] | null; // drawn walk: the poses as played, 0-based
   holdStyle?: HoldStyle | null; // props: how a hand holds it
   grounded?: boolean | null; // foregrounds: it painted the ground, the engine puts it behind the characters
 }
@@ -71,6 +73,7 @@ export const GROUND_LINE = 0.86;
 export const SIZED_KINDS: AssetKind[] = ['character', 'prop', 'plant', 'animal'];
 export const setSize = (id: string, item: string, heightCm: number | null): Promise<AssetSeries> => call(`/assets/series/${id}/size`, 'POST', { item, heightCm });
 export const suggestSizes = (id: string): Promise<AssetSeries> => call(`/assets/series/${id}/suggest-sizes`, 'POST', {});
+export const setDeck = (id: string, item: string, deck: number | null): Promise<AssetSeries> => call(`/assets/series/${id}/deck`, 'POST', { item, deck });
 export const setHorizon = (id: string, item: string, horizon: number): Promise<AssetSeries> => call(`/assets/series/${id}/horizon`, 'POST', { item, horizon });
 
 // Backgrounds, props and plants of every series, to be reused instead of drawn again
@@ -82,10 +85,11 @@ export type HoldStyle = 'cup' | 'rod' | 'sword' | 'carry';
 export const HOLD_LABEL: Record<HoldStyle, string> = { cup: 'Chén, vật cầm ngửa', rod: 'Gậy, cần câu', sword: 'Kiếm, vũ khí', carry: 'Xách (giỏ, đèn lồng)' };
 export const setHoldStyle = (id: string, item: string, style: HoldStyle | null): Promise<AssetSeries> => call(`/assets/series/${id}/hold-style`, 'POST', { item, style });
 // Must match ACTION_PRESETS in vdev-video src/asset/drawnActions.ts
-export const ACTION_PRESET_LABEL: Record<string, string> = { slash: 'Chém (một tay)', thrust: 'Đâm (một tay)', 'pole-thrust': 'Đâm giáo / gậy (cán dài)', cast: 'Quăng cần / lưới', pull: 'Ghì kéo (cá cắn, kéo lưới)' };
+export const ACTION_PRESET_LABEL: Record<string, string> = { walk: 'Đi bộ', slash: 'Chém (một tay)', thrust: 'Đâm (một tay)', 'pole-thrust': 'Đâm giáo / gậy (cán dài)', cast: 'Quăng cần câu', net: 'Quăng chài (lưới tự bung)', haul: 'Kéo lưới có cá', pull: 'Ghì kéo cần câu' };
 export interface PoseMark { x: number | null; y: number | null; angle: number; behind: boolean; hand: string | null }
 export const addDrawnAction = (id: string, character: string, action: string): Promise<AssetSeries> => call(`/assets/series/${id}/add-action`, 'POST', { character, action });
 export const setPoseMark = (id: string, item: string, pose: number, mark: Partial<PoseMark>): Promise<AssetSeries> => call(`/assets/series/${id}/pose`, 'POST', { item, pose, mark });
+export const setWalkOrder = (id: string, item: string, order: number[]): Promise<AssetSeries> => call(`/assets/series/${id}/order`, 'POST', { item, order });
 export const removeDrawnAction = (id: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/remove-action`, 'POST', { item });
 export const setAssetMeta = (id: string, item: string, meta: { style?: string; tags?: string[] }): Promise<AssetSeries> => call(`/assets/series/${id}/meta`, 'POST', { item, ...meta });
 export const setStyleTag = (id: string, styleTag: string): Promise<AssetSeries> => call(`/assets/series/${id}/style-tag`, 'POST', { styleTag });
@@ -136,7 +140,7 @@ export const ACTION_LABEL: Record<string, string> = { none: 'Không', hop: 'Nh�
 export const EXPRESSION_LABEL: Record<string, string> = { neutral: 'Bình thường', happy: 'Vui', sad: 'Buồn', angry: 'Giận', surprised: 'Ngạc nhiên', scared: 'Sợ', worried: 'Lo lắng' };
 export const POSE_LABEL: Record<string, string> = { stand: 'Đứng', kneel: 'Quỳ', sit: 'Ngồi' };
 export const GESTURE_LABEL: Record<string, string> = {
-  none: 'Tay buông', point: 'Chỉ tay', wave: 'Vẫy tay', offer: 'Đưa / mời', drink: 'Uống', bow: 'Chắp tay cúi chào', chest: 'Tay lên ngực', think: 'Chống cằm', open: 'Giang tay', cover: 'Ôm mặt', guard: 'Thủ thế', slash: 'Chém', thrust: 'Đâm', cast: 'Quăng cần', pull: 'Ghì kéo', fish: 'Ngồi câu'
+  none: 'Tay buông', point: 'Chỉ tay', wave: 'Vẫy tay', offer: 'Đưa / mời', drink: 'Uống', bow: 'Chắp tay cúi chào', chest: 'Tay lên ngực', think: 'Chống cằm', open: 'Giang tay', cover: 'Ôm mặt', guard: 'Thủ thế', slash: 'Chém', thrust: 'Đâm', cast: 'Quăng cần', pull: 'Ghì kéo', fish: 'Ngồi câu', row: 'Chèo thuyền'
 };
 export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals: 'Cánh hoa', snow: 'Tuyết', rain: 'Mưa', fireflies: 'Đom đóm', dust: 'Bụi nắng', mist: 'Sương', embers: 'Tàn lửa', fluff: 'Bông lau bay', wind: 'Gió mạnh' };
 export const TONE_LABEL: Record<string, string> = { none: 'Tự nhiên', warm: 'Ấm', cool: 'Lạnh', dusk: 'Hoàng hôn', night: 'Đêm' };
