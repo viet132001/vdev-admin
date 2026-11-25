@@ -17,6 +17,7 @@ export interface AssetItem {
   horizon: number | null; // backgrounds only: eye level, 0..1 from the top
   style: string | null; // borrowed items: the style they were drawn in
   from: { series: string; item: string } | null;
+  tags: string[];
 }
 export interface DecorSpot { id: string; x: number; y: number; scale: number; layer: 'back' | 'front'; phase: number }
 // Must match JOINTS / DEFAULT_JOINTS / DEFAULT_HEAD_SCALE in vdev-video src/asset/rig.ts
@@ -47,7 +48,7 @@ export const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 
 export const listAssetSeries = (): Promise<AssetSummary[]> => call('/assets/series');
 export const getAssetSeries = (id: string): Promise<AssetSeries> => call(`/assets/series/${id}`);
-export const createAssetSeries = (premise: string, note: string): Promise<AssetSeries> => call('/assets/series', 'POST', { premise, note });
+export const createAssetSeries = (premise: string, note: string, reuse: boolean): Promise<AssetSeries> => call('/assets/series', 'POST', { premise, note, reuse });
 export const uploadAsset = (id: string, item: string, image: string): Promise<AssetSeries> => call(`/assets/series/${id}/upload`, 'POST', { item, image });
 export const reprocessAsset = (id: string, item: string, tolerance: number): Promise<AssetSeries> => call(`/assets/series/${id}/process`, 'POST', { item, tolerance });
 export const setAssetPivot = (id: string, item: string, part: string, x: number, y: number): Promise<AssetSeries> => call(`/assets/series/${id}/pivot`, 'POST', { item, part, x, y });
@@ -68,8 +69,10 @@ export const suggestSizes = (id: string): Promise<AssetSeries> => call(`/assets/
 export const setHorizon = (id: string, item: string, horizon: number): Promise<AssetSeries> => call(`/assets/series/${id}/horizon`, 'POST', { item, horizon });
 
 // Backgrounds, props and plants of every series, to be reused instead of drawn again
-export interface SharedAsset { series: string; seriesTitle: string; item: string; kind: AssetKind; name: string; description: string; heightCm: number | null; style: string; file: string }
+export interface SharedAsset { series: string; seriesTitle: string; item: string; kind: AssetKind; name: string; description: string; heightCm: number | null; style: string; tags: string[]; file: string; usedBy: number }
 export const listShared = (): Promise<SharedAsset[]> => call('/assets/shared');
+export const setAssetMeta = (id: string, item: string, meta: { style?: string; tags?: string[] }): Promise<AssetSeries> => call(`/assets/series/${id}/meta`, 'POST', { item, ...meta });
+export const setStyleTag = (id: string, styleTag: string): Promise<AssetSeries> => call(`/assets/series/${id}/style-tag`, 'POST', { styleTag });
 export const borrowAsset = (id: string, from: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/borrow`, 'POST', { from, item });
 
 // ElevenLabs voices of the account (read by the worker, the key never leaves it); NARRATOR is the storyteller's slot
@@ -137,7 +140,7 @@ export const normalizeShot = (shot: any): ScriptShot => ({
 export type AnimationJob = Omit<LessonJob, 'animation'> & { animation?: { seriesId: string; script: AnimationScript } };
 
 export const isAnimation = (job: LessonJob): job is AnimationJob => job.request?.kind === 'animation';
-export const createAnimationJob = (seriesId: string, idea: string, note: string): Promise<AnimationJob> => call('/animation', 'POST', { seriesId, idea, note });
+export const createAnimationJob = (seriesId: string, idea: string, note: string, reuse: boolean): Promise<AnimationJob> => call('/animation', 'POST', { seriesId, idea, note, reuse });
 export const animationCatalog = (id: string): Promise<AnimationCatalog> => call(`/animation/${id}/catalog`, 'POST', {});
 export const saveAnimationScript = (id: string, script: AnimationScript): Promise<AnimationJob> => call(`/animation/${id}/script`, 'POST', { script });
 export const previewAnimationShot = async (id: string, shot: number, script: AnimationScript) => `${WORKER_URL}${(await call(`/animation/${id}/preview`, 'POST', { shot, script })).url}`;

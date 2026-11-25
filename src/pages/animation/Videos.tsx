@@ -44,7 +44,7 @@ export const Videos: React.FC = () => {
   const [script, setScript] = useState<AnimationScript | null>(null);
   const [dirty, setDirty] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
-  const [form, setForm] = useState({ seriesId: '', idea: '', note: '' });
+  const [form, setForm] = useState({ seriesId: '', idea: '', note: '', reuse: true });
   const [previews, setPreviews] = useState<Record<number, string>>({});
   const [previewing, setPreviewing] = useState<number | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -73,8 +73,12 @@ export const Videos: React.FC = () => {
     setPreviews({});
     setErrors([]);
     setDirty(false);
-    if (selectedId) animationCatalog(selectedId).then(setCatalog).catch(() => undefined);
   }, [selectedId]);
+  // Read again once planning ends: the script may have brought assets in from the library
+  const planning = jobs.find((j) => j.id === selectedId)?.status === 'PLANNING';
+  useEffect(() => {
+    if (selectedId && !planning) animationCatalog(selectedId).then(setCatalog).catch(() => undefined);
+  }, [selectedId, planning]);
   const seriesId = jobs.find((j) => j.id === selectedId)?.animation?.seriesId ?? null;
   useEffect(() => {
     setSeries(null);
@@ -97,7 +101,7 @@ export const Videos: React.FC = () => {
     e.preventDefault();
     run('create', async () => {
       try {
-        const next = await createAnimationJob(form.seriesId, form.idea, form.note);
+        const next = await createAnimationJob(form.seriesId, form.idea, form.note, form.reuse);
         replace(next);
         setForm((f) => ({ ...f, idea: '', note: '' }));
         select(next.id);
@@ -222,6 +226,9 @@ export const Videos: React.FC = () => {
                   <label className="form-label">Ghi chú thêm</label>
                   <input className="form-input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Độ dài (mặc định 2–4 phút, tối đa 20), giọng điệu, kết thúc mong muốn…" />
                 </div>
+                <label className="flex align-center gap-2 lg-meta">
+                  <input type="checkbox" checked={form.reuse} onChange={(e) => setForm({ ...form, reuse: e.target.checked })} /> Cho Claude dùng cả bối cảnh, đạo cụ trong kho (dùng cái nào thì thêm vào series)
+                </label>
                 <div><button className="btn btn-primary" type="submit" disabled={!!busy || !form.idea.trim() || !form.seriesId}>{busy === 'create' ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />} Claude viết kịch bản</button></div>
               </>
             )}

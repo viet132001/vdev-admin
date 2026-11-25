@@ -9,7 +9,8 @@ import { Videos } from './animation/Videos';
 import { VoicePanel } from './animation/VoicePanel';
 import { BriefDialog } from './animation/BriefDialog';
 import { SharedLibrary } from './animation/SharedLibrary';
-import { SIZED_KINDS, addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, suggestSizes, type AssetSeries, type AssetSummary } from './animation/animationWorker';
+import { LibraryTab } from './animation/LibraryTab';
+import { SIZED_KINDS, addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, setStyleTag, suggestSizes, type AssetSeries, type AssetSummary } from './animation/animationWorker';
 
 const WATCH_EVERY = 6000;
 const WATCH_FOR = 45 * 60 * 1000;
@@ -18,10 +19,11 @@ const message = (err: unknown, fallback: string) => (err instanceof Error && err
 const NewSeries: React.FC<{ onCreated: (series: AssetSeries) => void }> = ({ onCreated }) => {
   const [premise, setPremise] = useState('');
   const [note, setNote] = useState('');
+  const [reuse, setReuse] = useState(true);
   const { busy, run } = useBusy();
   const create = () => run('create', async () => {
     try {
-      onCreated(await createAssetSeries(premise, note));
+      onCreated(await createAssetSeries(premise, note, reuse));
     } catch (err) {
       alert(message(err, 'Không tạo được series'));
     }
@@ -38,6 +40,9 @@ const NewSeries: React.FC<{ onCreated: (series: AssetSeries) => void }> = ({ onC
         <label className="form-label">Ghi chú thêm</label>
         <input className="form-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Màu sắc, tông, nhân vật bắt buộc có…" />
       </div>
+      <label className="flex align-center gap-2 lg-meta">
+        <input type="checkbox" checked={reuse} disabled={!!busy} onChange={(e) => setReuse(e.target.checked)} /> Dùng lại bối cảnh, đạo cụ, cây cỏ trong kho nếu hợp, chỉ vẽ phần còn thiếu
+      </label>
       <div><button className="btn btn-primary" disabled={!!busy || !premise.trim()} onClick={create}>{busy ? <Loader2 size={16} className="spin" /> : <Plus size={16} />} {busy ? 'Claude đang thiết kế…' : 'Tạo series'}</button></div>
     </div>
   );
@@ -71,6 +76,24 @@ const AddAsset: React.FC<{ seriesId: string; onChange: (series: AssetSeries) => 
         <div><button className="btn btn-secondary" disabled={!!busy || !name.trim() || !description.trim()} onClick={add}><Plus size={16} /> Thêm</button></div>
       </div>
     </details>
+  );
+};
+
+// The name the series' pictures go by in the library; series made before it have none
+const StyleTag: React.FC<{ series: AssetSeries; onChange: (series: AssetSeries) => void }> = ({ series, onChange }) => {
+  const [text, setText] = useState(series.bible.styleTag ?? '');
+  const { busy, run } = useBusy();
+  const save = () => {
+    if (text.trim() === (series.bible.styleTag ?? '')) return;
+    run('style', async () => {
+      try { onChange(await setStyleTag(series.id, text)); } catch (err) { alert(message(err, 'Không lưu được tên phong cách')); }
+    });
+  };
+  return (
+    <label className="flex align-center gap-2 lg-meta">Tên phong cách
+      <input className="form-input" style={{ maxWidth: 240 }} maxLength={40} value={text} disabled={!!busy} placeholder="ví dụ: tranh thuỷ mặc"
+        onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+    </label>
   );
 };
 
@@ -112,10 +135,11 @@ export const Animation: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const activeId = seriesId ?? list[0]?.id ?? null;
+  const openTab = params.get('tab');
   useEffect(() => {
     if (!activeId || activeId === 'new') { setSeries(null); return; }
     getAssetSeries(activeId).then(setSeries).catch(() => setSeries(null));
-  }, [activeId]);
+  }, [activeId, openTab]);
 
   useEffect(() => {
     if (!series || Date.now() > watchUntil) return;
@@ -134,7 +158,7 @@ export const Animation: React.FC = () => {
     setList((all) => (all.some((s) => s.id === next.id) ? all : [{ id: next.id, title: next.title, premise: next.premise, ready: 0, total: next.items.length, createdAt: next.createdAt }, ...all]).map((s) => (s.id === next.id ? { ...s, ready: next.items.filter((i) => i.file).length, total: next.items.length } : s)));
   };
 
-  const tab = params.get('tab') === 'video' ? 'video' : 'assets';
+  const tab = params.get('tab') === 'video' ? 'video' : params.get('tab') === 'library' ? 'library' : 'assets';
   const header = (
     <div className="flex flex-col gap-3">
       <div>
@@ -144,10 +168,12 @@ export const Animation: React.FC = () => {
       <div className="tabs">
         <button className={`tab${tab === 'assets' ? ' active' : ''}`} onClick={() => setParams({})}>Asset</button>
         <button className={`tab${tab === 'video' ? ' active' : ''}`} onClick={() => setParams({ tab: 'video' })}>Video</button>
+        <button className={`tab${tab === 'library' ? ' active' : ''}`} onClick={() => setParams({ tab: 'library' })}>Kho asset</button>
       </div>
     </div>
   );
   if (tab === 'video') return <div className="flex flex-col gap-4">{header}<Videos /></div>;
+  if (tab === 'library') return <div className="flex flex-col gap-4">{header}<LibraryTab /></div>;
 
   if (state === 'loading') return <div className="loading-container"><div className="spinner" /></div>;
   if (state === 'offline') {
@@ -195,6 +221,7 @@ export const Animation: React.FC = () => {
                     <button className="icon-btn" title="Xoá series" onClick={() => setConfirm({ title: 'Xoá series', message: `Xoá "${series.title}" cùng toàn bộ ảnh đã tải lên?`, confirmLabel: 'Xoá', action: async () => { setConfirm(null); try { await deleteAssetSeries(series.id); setSeries(null); setList((all) => all.filter((s) => s.id !== series.id)); setParams({}); } catch (err) { alert(message(err, 'Không xoá được series')); } } })}><Trash2 size={16} /></button>
                   </div>
                 </div>
+                <StyleTag key={series.id} series={series} onChange={changed} />
                 <details>
                   <summary className="lg-meta" style={{ cursor: 'pointer' }}>Phong cách và nhân vật</summary>
                   <p style={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}>{series.bible.style}</p>
