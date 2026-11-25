@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Library, Loader2, Plus } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
-import { KIND_LABEL, borrowAsset, fileUrl, listShared, type AssetSeries, type SharedAsset } from './animationWorker';
+import { KIND_LABEL, LIBRARY_KINDS, borrowAsset, fileUrl, listShared, type AssetSeries, type SharedAsset } from './animationWorker';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 
@@ -21,7 +21,7 @@ const Grid: React.FC<{ series: AssetSeries; onChange: (series: AssetSeries) => v
   if (!all) return <Loader2 size={18} className="spin" />;
 
   const others = all.filter((a) => a.series !== series.id);
-  if (!others.length) return <p className="lg-meta">Kho đang trống: chưa series nào khác có ảnh bối cảnh, đạo cụ hoặc cây cỏ.</p>;
+  if (!others.length) return <p className="lg-meta">Chưa series nào khác có ảnh để lấy.</p>;
   const needle = search.trim().toLowerCase();
   const shown = others.filter((a) => (!kind || a.kind === kind) && (!style || a.style === style) && (!needle || `${a.name} ${a.description} ${a.tags.join(' ')}`.toLowerCase().includes(needle)));
   const taken = (a: SharedAsset) => series.items.some((item) => item.from?.series === a.series && item.from.item === a.item);
@@ -35,7 +35,7 @@ const Grid: React.FC<{ series: AssetSeries; onChange: (series: AssetSeries) => v
         <input className="form-input" style={{ flex: 1, minWidth: 160 }} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm theo tên hoặc mô tả" />
         <select className="form-input" style={{ width: 'auto' }} value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Loại">
           <option value="">Mọi loại</option>
-          {(['background', 'prop', 'plant'] as const).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+          {LIBRARY_KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
         </select>
         <select className="form-input" style={{ width: 'auto' }} value={style} onChange={(e) => setStyle(e.target.value)} aria-label="Phong cách">
           <option value="">Mọi phong cách</option>
@@ -69,7 +69,7 @@ export const SharedLibrary: React.FC<{ series: AssetSeries; onChange: (series: A
   const [open, setOpen] = useState(false);
   return (
     <details className="card" onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary style={{ cursor: 'pointer', fontWeight: 600 }}><Library size={14} /> Lấy từ kho dùng chung (bối cảnh, đạo cụ, cây cỏ của series khác)</summary>
+      <summary style={{ cursor: 'pointer', fontWeight: 600 }}><Library size={14} /> Lấy từ kho dùng chung (nhân vật, bối cảnh, đạo cụ, con vật, cây cỏ của series khác)</summary>
       <div style={{ marginTop: 12 }}>{open && <Grid series={series} onChange={onChange} />}</div>
     </details>
   );

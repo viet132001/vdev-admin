@@ -50,7 +50,7 @@ const NewSeries: React.FC<{ onCreated: (series: AssetSeries) => void }> = ({ onC
 };
 
 const AddAsset: React.FC<{ seriesId: string; onChange: (series: AssetSeries) => void }> = ({ seriesId, onChange }) => {
-  const [kind, setKind] = useState<'background' | 'prop' | 'plant'>('background');
+  const [kind, setKind] = useState<'background' | 'prop' | 'plant' | 'animal'>('background');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const { busy, run } = useBusy();
@@ -65,11 +65,12 @@ const AddAsset: React.FC<{ seriesId: string; onChange: (series: AssetSeries) => 
   });
   return (
     <details className="card">
-      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Thêm bối cảnh / đạo cụ / cây cỏ</summary>
+      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Thêm bối cảnh / đạo cụ / con vật / cây cỏ</summary>
       <div className="flex flex-col gap-3" style={{ marginTop: 12 }}>
-        <select className="form-input" value={kind} onChange={(e) => setKind(e.target.value as 'background' | 'prop' | 'plant')}>
+        <select className="form-input" value={kind} onChange={(e) => setKind(e.target.value as 'background' | 'prop' | 'plant' | 'animal')}>
           <option value="background">Bối cảnh</option>
           <option value="prop">Đạo cụ</option>
+          <option value="animal">Con vật (chó, trâu, cá, chim...)</option>
           <option value="plant">Cây cỏ chuyển động (bụi lau, khóm tre... lay theo gió)</option>
         </select>
         <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Tên (tiếng Việt)" />

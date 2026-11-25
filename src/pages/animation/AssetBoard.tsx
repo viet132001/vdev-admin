@@ -6,7 +6,7 @@ import { DecorPicker } from './DecorPicker';
 import { ScaleFields } from './ScaleFields';
 import { KIND_LABEL, assetUrl, clearAsset, readImage, uploadAsset, type AssetItem, type AssetKind, type AssetSeries } from './animationWorker';
 
-const ORDER: AssetKind[] = ['character', 'body', 'hands', 'heads', 'mouths', 'expression', 'background', 'foreground', 'plant', 'prop'];
+const ORDER: AssetKind[] = ['character', 'body', 'hands', 'heads', 'mouths', 'expression', 'background', 'foreground', 'plant', 'prop', 'animal'];
 // What to attach as the reference when asking for the picture
 const REFERENCE: Partial<Record<AssetKind, string>> = { body: 'nhân vật', hands: 'nhân vật', heads: 'nhân vật', expression: 'nhân vật', mouths: 'nhân vật', foreground: 'bối cảnh' };
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);

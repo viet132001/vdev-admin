@@ -2,9 +2,9 @@
 // ChatGPT makes the images, the user brings them back here; nothing goes through the BE.
 import { WORKER_URL, call, type LessonJob } from '../dictation/lessonWorker';
 
-export type AssetKind = 'character' | 'body' | 'hands' | 'heads' | 'expression' | 'mouths' | 'background' | 'foreground' | 'prop' | 'plant';
+export type AssetKind = 'character' | 'body' | 'hands' | 'heads' | 'expression' | 'mouths' | 'background' | 'foreground' | 'prop' | 'plant' | 'animal';
 export const KIND_LABEL: Record<AssetKind, string> = {
-  character: 'Nhân vật', body: 'Bộ phận cơ thể', hands: 'Bàn tay (ngón cử động)', heads: 'Đầu và biểu cảm', expression: 'Biểu cảm (kiểu cũ)', mouths: 'Hình miệng', background: 'Bối cảnh', foreground: 'Tiền cảnh', prop: 'Đạo cụ', plant: 'Cây cỏ chuyển động'
+  character: 'Nhân vật', body: 'Bộ phận cơ thể', hands: 'Bàn tay (ngón cử động)', heads: 'Đầu và biểu cảm', expression: 'Biểu cảm (kiểu cũ)', mouths: 'Hình miệng', background: 'Bối cảnh', foreground: 'Tiền cảnh', prop: 'Đạo cụ', plant: 'Cây cỏ chuyển động', animal: 'Con vật'
 };
 
 export interface AssetPart { name: string; file: string; width: number; height: number; pivot: { x: number; y: number } }
@@ -65,13 +65,15 @@ export const setHeadScale = (id: string, item: string, scale: number): Promise<A
 // Must match ADULT_CM / DEFAULT_HORIZON / GROUND_LINE in vdev-video src/asset/assetScript.ts
 export const DEFAULT_HORIZON = 0.4;
 export const GROUND_LINE = 0.86;
-export const SIZED_KINDS: AssetKind[] = ['character', 'prop', 'plant'];
+export const SIZED_KINDS: AssetKind[] = ['character', 'prop', 'plant', 'animal'];
 export const setSize = (id: string, item: string, heightCm: number | null): Promise<AssetSeries> => call(`/assets/series/${id}/size`, 'POST', { item, heightCm });
 export const suggestSizes = (id: string): Promise<AssetSeries> => call(`/assets/series/${id}/suggest-sizes`, 'POST', {});
 export const setHorizon = (id: string, item: string, horizon: number): Promise<AssetSeries> => call(`/assets/series/${id}/horizon`, 'POST', { item, horizon });
 
 // Backgrounds, props and plants of every series, to be reused instead of drawn again
-export interface SharedAsset { series: string; seriesTitle: string; item: string; kind: AssetKind; name: string; description: string; heightCm: number | null; style: string; tags: string[]; file: string; usedBy: number }
+export interface SharedAsset { series: string; seriesTitle: string; item: string; kind: AssetKind; name: string; description: string; heightCm: number | null; style: string; tags: string[]; file: string; usedBy: number; sheets?: { kind: AssetKind; ready: boolean }[] }
+// How the library is grouped, in this order
+export const LIBRARY_KINDS: AssetKind[] = ['character', 'background', 'prop', 'animal', 'plant'];
 export const listShared = (): Promise<SharedAsset[]> => call('/assets/shared');
 export const setAssetMeta = (id: string, item: string, meta: { style?: string; tags?: string[] }): Promise<AssetSeries> => call(`/assets/series/${id}/meta`, 'POST', { item, ...meta });
 export const setStyleTag = (id: string, styleTag: string): Promise<AssetSeries> => call(`/assets/series/${id}/style-tag`, 'POST', { styleTag });
@@ -97,7 +99,7 @@ export const suggestVoices = (id: string): Promise<AssetSeries> => call(`/assets
 // The task to paste into Claude Desktop: it draws the missing pictures (or the ones named) in ChatGPT and hands each to the worker
 export const assetBrief = async (id: string, items: string[] = []): Promise<string> => (await call(`/assets/series/${id}/brief`, 'POST', { items })).text;
 export const clearAsset = (id: string, item: string): Promise<AssetSeries> => call(`/assets/series/${id}/clear`, 'POST', { item });
-export const addAsset = (id: string, kind: 'background' | 'prop' | 'plant', name: string, description: string): Promise<AssetSeries> => call(`/assets/series/${id}/add`, 'POST', { kind, name, description });
+export const addAsset = (id: string, kind: 'background' | 'prop' | 'plant' | 'animal', name: string, description: string): Promise<AssetSeries> => call(`/assets/series/${id}/add`, 'POST', { kind, name, description });
 export const deleteAssetSeries = (id: string): Promise<{ ok: true }> => call(`/assets/series/${id}/delete`, 'POST', {});
 
 export const fileUrl = (seriesId: string, file: string) => `${WORKER_URL}/assets/files/${seriesId}/${file}`;

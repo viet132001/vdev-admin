@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import { WORKER_COMMAND } from '../dictation/lessonWorker';
-import { KIND_LABEL, fileUrl, listShared, setAssetMeta, setSize, type SharedAsset } from './animationWorker';
+import { KIND_LABEL, LIBRARY_KINDS, fileUrl, listShared, setAssetMeta, setSize, type AssetKind, type SharedAsset } from './animationWorker';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 const tagsOf = (text: string) => text.split(',').map((tag) => tag.trim()).filter(Boolean);
@@ -28,6 +28,9 @@ const LibraryCard: React.FC<{ asset: SharedAsset; onSaved: () => void; onOpen: (
       <div className="an-body">
         <strong className="vl-title">{asset.name}</strong>
         <p className="lg-meta" style={{ margin: 0 }}>{KIND_LABEL[asset.kind]}{asset.usedBy ? ` · ${asset.usedBy} series khác đang dùng` : ''}</p>
+        {asset.sheets && (
+          <p className="lg-meta" style={{ margin: 0 }}>{asset.sheets.map((sheet) => `${sheet.ready ? '✓' : '✗'} ${KIND_LABEL[sheet.kind]}`).join(' · ')}</p>
+        )}
         {asset.kind !== 'background' && (
           <label className="flex align-center gap-2 lg-meta">Cao thật
             <input className="form-input" style={{ width: 90 }} type="number" min={1} max={3000} value={height} disabled={!!busy} placeholder="chưa đặt" onKeyDown={onEnter}
@@ -74,7 +77,7 @@ export const LibraryTab: React.FC = () => {
     );
   }
   if (!all) return <div className="loading-container"><div className="spinner" /></div>;
-  if (!all.length) return <div className="card"><p className="lg-meta" style={{ margin: 0 }}>Kho đang trống. Bối cảnh, đạo cụ và cây cỏ sẽ hiện ở đây ngay khi series có ảnh của chúng.</p></div>;
+  if (!all.length) return <div className="card"><p className="lg-meta" style={{ margin: 0 }}>Kho đang trống. Nhân vật, bối cảnh, đạo cụ, con vật và cây cỏ sẽ hiện ở đây ngay khi series có ảnh của chúng.</p></div>;
 
   const needle = search.trim().toLowerCase();
   const shown = all.filter((a) => (!kind || a.kind === kind) && (!style || a.style === style) && (!tag || a.tags.includes(tag))
@@ -85,12 +88,15 @@ export const LibraryTab: React.FC = () => {
   return (
     <div className="flex flex-col gap-3">
       <p className="lg-meta" style={{ margin: 0 }}>Ảnh vẽ một lần, series nào cũng dùng được. Sửa chiều cao, phong cách hay nhãn ở đây thì các series đang dùng cũng đổi theo.</p>
+      <div className="tabs">
+        {['', ...LIBRARY_KINDS].map((k) => (
+          <button key={k} className={`tab${kind === k ? ' active' : ''}`} onClick={() => setKind(k)}>
+            {k ? KIND_LABEL[k as AssetKind] : 'Tất cả'} ({k ? all.filter((a) => a.kind === k).length : all.length})
+          </button>
+        ))}
+      </div>
       <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
         <input className="form-input" style={{ flex: 1, minWidth: 160 }} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm theo tên, mô tả, nhãn" />
-        <select className="form-input" style={{ width: 'auto' }} value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Loại">
-          <option value="">Mọi loại</option>
-          {(['background', 'prop', 'plant'] as const).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-        </select>
         <select className="form-input" style={{ width: 'auto' }} value={style} onChange={(e) => setStyle(e.target.value)} aria-label="Phong cách">
           <option value="">Mọi phong cách</option>
           {styles.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -103,12 +109,21 @@ export const LibraryTab: React.FC = () => {
         )}
       </div>
       {!shown.length && <p className="lg-meta" style={{ margin: 0 }}>Không có asset nào khớp bộ lọc.</p>}
-      <div className="an-grid">
-        {shown.map((a) => (
-          // key on the saved values: a card restarts from them after a reload
-          <LibraryCard key={`${a.series}/${a.item}/${a.heightCm}/${a.style}/${a.tags.join()}`} asset={a} onSaved={load} onOpen={() => setParams({ series: a.series })} />
-        ))}
-      </div>
+      {LIBRARY_KINDS.map((group) => {
+        const items = shown.filter((a) => a.kind === group);
+        if (!items.length) return null;
+        return (
+          <section key={group}>
+            <h2 style={{ fontSize: '1.05rem', margin: '0 0 8px', fontWeight: 600 }}>{KIND_LABEL[group]} <span className="lg-meta">{items.length}</span></h2>
+            <div className="an-grid">
+              {items.map((a) => (
+                // key on the saved values: a card restarts from them after a reload
+                <LibraryCard key={`${a.series}/${a.item}/${a.heightCm}/${a.style}/${a.tags.join()}`} asset={a} onSaved={load} onOpen={() => setParams({ series: a.series })} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 };
