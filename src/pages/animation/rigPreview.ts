@@ -1,3 +1,4 @@
+// The separate hand pictures are not previewed here: the practice room shows them.
 // Where the pieces of a rigged character go, for the live preview of the rig tuner. Same maths as forwardKinematics in
 // vdev-video src/asset/rig.ts (the engine): change one, change the other, or the preview no longer shows the video.
 import type { AssetPart, JointName, Limbs } from './animationWorker';

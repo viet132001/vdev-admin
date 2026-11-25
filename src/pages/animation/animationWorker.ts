@@ -2,9 +2,9 @@
 // ChatGPT makes the images, the user brings them back here; nothing goes through the BE.
 import { WORKER_URL, call, type LessonJob } from '../dictation/lessonWorker';
 
-export type AssetKind = 'character' | 'body' | 'heads' | 'expression' | 'mouths' | 'background' | 'foreground' | 'prop' | 'plant';
+export type AssetKind = 'character' | 'body' | 'hands' | 'heads' | 'expression' | 'mouths' | 'background' | 'foreground' | 'prop' | 'plant';
 export const KIND_LABEL: Record<AssetKind, string> = {
-  character: 'Nhân vật', body: 'Bộ phận cơ thể', heads: 'Đầu và biểu cảm', expression: 'Biểu cảm (kiểu cũ)', mouths: 'Hình miệng', background: 'Bối cảnh', foreground: 'Tiền cảnh', prop: 'Đạo cụ', plant: 'Cây cỏ chuyển động'
+  character: 'Nhân vật', body: 'Bộ phận cơ thể', hands: 'Bàn tay (ngón cử động)', heads: 'Đầu và biểu cảm', expression: 'Biểu cảm (kiểu cũ)', mouths: 'Hình miệng', background: 'Bối cảnh', foreground: 'Tiền cảnh', prop: 'Đạo cụ', plant: 'Cây cỏ chuyển động'
 };
 
 export interface AssetPart { name: string; file: string; width: number; height: number; pivot: { x: number; y: number } }
@@ -22,21 +22,22 @@ export interface AssetItem {
 }
 export interface DecorSpot { id: string; x: number; y: number; scale: number; layer: 'back' | 'front'; phase: number }
 // Must match JOINTS / DEFAULT_JOINTS / DEFAULT_HEAD_SCALE in vdev-video src/asset/rig.ts
-export type JointName = 'neck' | 'shoulder' | 'hip' | 'elbow' | 'knee' | 'hand' | 'foot';
+export type JointName = 'neck' | 'shoulder' | 'hip' | 'elbow' | 'knee' | 'hand' | 'foot' | 'wrist';
 export interface Limbs { arms: number; legs: number }
 export interface Skeleton { joints: Record<JointName, { x: number; y: number }>; headScale: number; limbs?: Limbs }
 export const DEFAULT_SKELETON: Skeleton = {
-  joints: { neck: { x: 0.5, y: 0.08 }, shoulder: { x: 0.5, y: 0.13 }, hip: { x: 0.5, y: 0.94 }, elbow: { x: 0.5, y: 0.93 }, knee: { x: 0.5, y: 0.93 }, hand: { x: 0.5, y: 0.9 }, foot: { x: 0.5, y: 0.97 } },
+  joints: { neck: { x: 0.5, y: 0.08 }, shoulder: { x: 0.5, y: 0.13 }, hip: { x: 0.5, y: 0.94 }, elbow: { x: 0.5, y: 0.93 }, knee: { x: 0.5, y: 0.93 }, hand: { x: 0.5, y: 0.9 }, foot: { x: 0.5, y: 0.97 }, wrist: { x: 0.5, y: 0.67 } },
   headScale: 0.42
 };
 // Which picture each joint is set on, and what it is in words
 export const JOINT_INFO: Record<JointName, { part: string; label: string }> = {
   neck: { part: 'torso', label: 'Cổ: đầu gắn vào thân' }, shoulder: { part: 'torso', label: 'Vai' }, hip: { part: 'torso', label: 'Hông: chân gắn vào thân' },
-  elbow: { part: 'arm', label: 'Khuỷu tay' }, knee: { part: 'thigh', label: 'Đầu gối' }, hand: { part: 'forearm', label: 'Bàn tay: chỗ cầm đồ' }, foot: { part: 'shin', label: 'Bàn chân: chỗ chạm đất' }
+  elbow: { part: 'arm', label: 'Khuỷu tay' }, knee: { part: 'thigh', label: 'Đầu gối' }, hand: { part: 'forearm', label: 'Bàn tay: chỗ cầm đồ' }, foot: { part: 'shin', label: 'Bàn chân: chỗ chạm đất' }, wrist: { part: 'forearm', label: 'Cổ tay: chỗ nối bàn tay rời' }
 };
 export const DEFAULT_TOLERANCE = 60;
 export const PART_LABEL: Record<string, string> = {
   closed: 'Ngậm', small: 'Hé', wide: 'Há to', round: 'Tròn', main: 'Ảnh',
+  relaxed: 'Thả lỏng', half: 'Nửa nắm', fist: 'Nắm', open: 'Xoè', point: 'Chỉ', pinch: 'Nhón', cup: 'Đỡ chén', rod: 'Cầm cần',
   torso: 'Thân', arm: 'Bắp tay', forearm: 'Cẳng tay', thigh: 'Đùi', shin: 'Cẳng chân', grip: 'Tay cầm',
   neutral: 'Bình thường', happy: 'Vui', sad: 'Buồn', angry: 'Giận', surprised: 'Ngạc nhiên', scared: 'Sợ', worried: 'Lo lắng', blink: 'Nhắm mắt'
 };
