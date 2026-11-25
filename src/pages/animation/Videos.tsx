@@ -242,7 +242,14 @@ export const Videos: React.FC = () => {
             </header>
 
             {job.status === 'PLANNING' && <div className="card flex align-center gap-2"><Loader2 size={16} className="spin" /> Claude đang viết kịch bản từ asset của series. Thường mất 1–3 phút.</div>}
-            {job.status === 'RENDERING' && <div className="card flex align-center gap-2"><Loader2 size={16} className="spin" /> Đang lồng giọng và render video...</div>}
+            {job.status === 'RENDERING' && (
+              <div className="card flex flex-col gap-2">
+                <div className="flex align-center gap-2"><Loader2 size={16} className="spin" />
+                  {job.progress == null ? 'Đang lồng giọng và render video...' : job.progress < 10 ? `Đang lồng giọng... ${job.progress}%` : `Đang render video... ${job.progress}%`}
+                </div>
+                {job.progress != null && <div className="progress-bar-container"><div className="progress-bar-fill" style={{ width: `${job.progress}%` }} /></div>}
+              </div>
+            )}
             {job.status === 'FAILED' && (
               <div className="card">
                 <p className="lg-error" style={{ marginTop: 0 }}>{job.error}</p>
