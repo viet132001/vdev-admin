@@ -140,7 +140,7 @@ export const ACTION_LABEL: Record<string, string> = { none: 'Không', hop: 'Nh�
 export const EXPRESSION_LABEL: Record<string, string> = { neutral: 'Bình thường', happy: 'Vui', sad: 'Buồn', angry: 'Giận', surprised: 'Ngạc nhiên', scared: 'Sợ', worried: 'Lo lắng' };
 export const POSE_LABEL: Record<string, string> = { stand: 'Đứng', kneel: 'Quỳ', sit: 'Ngồi' };
 export const GESTURE_LABEL: Record<string, string> = {
-  none: 'Tay buông', point: 'Chỉ tay', wave: 'Vẫy tay', offer: 'Đưa / mời', drink: 'Uống', bow: 'Chắp tay cúi chào', chest: 'Tay lên ngực', think: 'Chống cằm', open: 'Giang tay', cover: 'Ôm mặt', guard: 'Thủ thế', slash: 'Chém', thrust: 'Đâm', cast: 'Quăng cần', pull: 'Ghì kéo', fish: 'Ngồi câu', row: 'Chèo thuyền'
+  none: 'Tay buông', point: 'Chỉ tay', wave: 'Vẫy tay', offer: 'Đưa / mời', drink: 'Uống', bow: 'Chắp tay cúi chào', chest: 'Tay lên ngực', think: 'Chống cằm', open: 'Giang tay', cover: 'Ôm mặt', guard: 'Thủ thế', slash: 'Chém', thrust: 'Đâm', cast: 'Quăng cần', pull: 'Ghì kéo', fish: 'Ngồi câu', row: 'Chèo thuyền', look: 'Nâng lên ngắm'
 };
 export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals: 'Cánh hoa', snow: 'Tuyết', rain: 'Mưa', fireflies: 'Đom đóm', dust: 'Bụi nắng', mist: 'Sương', embers: 'Tàn lửa', fluff: 'Bông lau bay', wind: 'Gió mạnh' };
 export const TONE_LABEL: Record<string, string> = { none: 'Tự nhiên', warm: 'Ấm', cool: 'Lạnh', dusk: 'Hoàng hôn', night: 'Đêm' };
