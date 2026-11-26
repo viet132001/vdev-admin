@@ -55,6 +55,7 @@ export interface VideoGenre {
   noVocabulary?: boolean; // the lines are the whole lesson: no vocabulary list or grammar notes (Shadowing)
   styles: { id: string; label: string; aspects: ('9:16' | '16:9')[] }[];
   words?: { min: number; max: number; default: number }; // long lessons (Podcast); the others use the form's own range
+  vocabPerVideo?: number; // the vocabulary also becomes short videos, this many words each
   facebook: boolean;
   youtube: boolean;
   env: { facebook: string[]; youtube: string };

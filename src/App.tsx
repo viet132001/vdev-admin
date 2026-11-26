@@ -9,6 +9,7 @@ import { Liabilities } from './pages/Liabilities';
 import { Learning } from './pages/Learning';
 import { Tasks } from './pages/Tasks';
 import { Dictation } from './pages/Dictation';
+import { Podcast } from './pages/Podcast';
 import { Studio } from './pages/Studio';
 import { Story } from './pages/Story';
 import { Animation } from './pages/Animation';
@@ -100,6 +101,8 @@ function App() {
           <Route path="/story" element={<ProtectedRoute roles={['ADMIN']}><Story /></ProtectedRoute>} />
           <Route path="/animation" element={<ProtectedRoute roles={['ADMIN']}><Animation /></ProtectedRoute>} />
           <Route path="/dictation" element={<ProtectedRoute roles={['ADMIN']}><Dictation /></ProtectedRoute>} />
+
+          <Route path="/podcast" element={<ProtectedRoute roles={['ADMIN']}><Podcast /></ProtectedRoute>} />
 
           <Route path="/users" element={<ProtectedRoute roles={['ADMIN']}><Users /></ProtectedRoute>} />
 

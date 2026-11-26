@@ -7,6 +7,7 @@ import { Markdown } from '../tasks/PlanPanel';
 import { CONTENT_TYPES, type ContentType } from './schedule';
 import { ShotEditor } from './ShotEditor';
 import { VideoPublish } from './VideoPublish';
+import { VocabClips } from './VocabClips';
 import { DEFAULT_GENRE, WORKER_COMMAND, batchOf, createJob, isAnimationJob, isComedyJob, genreIdOf, getJob, isPublishing, jobAction, jobVideoUrl, listJobs, listPages, workerHealth, type CoursePage, type LessonJob, type VideoGenre } from './lessonWorker';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -70,8 +71,8 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
       setPages(await listPages().catch(() => []));
       const jobs = await listJobs();
       // Pick up work still in progress after the dialog or the page was closed. A batch has its own screen.
-      setJob(jobs.find((j) => !batchOf(j) && !isComedyJob(j) && !isAnimationJob(j) && (!FINISHED.includes(j.status) || isPublishing(j))) ?? null);
-      setRecent(jobs.filter((j) => j.status === 'DONE' && j.videoPath && !isComedyJob(j) && !isAnimationJob(j)).slice(0, RECENT_VIDEOS));
+      setJob(jobs.find((j) => !batchOf(j) && !j.meta?.clipOf && !isComedyJob(j) && !isAnimationJob(j) && (!FINISHED.includes(j.status) || isPublishing(j))) ?? null);
+      setRecent(jobs.filter((j) => j.status === 'DONE' && j.videoPath && !j.meta?.clipOf && !isComedyJob(j) && !isAnimationJob(j)).slice(0, RECENT_VIDEOS));
       setWorkerState('online');
     } catch {
       setWorkerState('offline');
@@ -313,6 +314,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
             )}
             <p className="lg-meta">Task nằm ở bảng “{TASK_PROJECT_NAME}”, đang chờ bạn đánh dấu Done.</p>
             {job.videoPath && genreOfJob && <VideoPublish key={job.id} job={job} genre={genreOfJob} onManageChannels={onManageChannels} onChange={setJob} onLinked={onCreated} />}
+            {genreOfJob?.vocabPerVideo && <VocabClips parentId={job.id} genre={genreOfJob} onManageChannels={onManageChannels} onLinked={onCreated} />}
           </>
         )}
       </>,
@@ -430,6 +432,7 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
                 <div className="form-group">
                   <label className="form-label">Số từ vựng</label>
                   <input type="number" required min={VOCABULARY.min} max={VOCABULARY.max} className="form-input" value={form.vocabulary} onChange={(e) => update({ vocabulary: Number(e.target.value) })} />
+                  {currentGenre?.vocabPerVideo && form.video && <p className="lg-meta">Thêm {Math.ceil(form.vocabulary / currentGenre.vocabPerVideo)} video từ vựng ngắn, mỗi video tối đa {currentGenre.vocabPerVideo} từ.</p>}
                 </div>
               )}
             </div>

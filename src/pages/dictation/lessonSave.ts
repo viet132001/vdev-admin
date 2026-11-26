@@ -85,3 +85,20 @@ export const defaultCaption = (job: LessonJob, genre: VideoGenre) => (genre.noVo
   ? shadowingCaption(job, genre)
   : [job.lesson?.description, vocabularyList(job), genre.hashtags].filter(Boolean).join('\n\n')).slice(0, CAPTION_LIMIT);
 export const defaultTitle = (job: LessonJob, genre: VideoGenre) => `${job.lesson?.title ?? job.request.topic} | ${genre.titleSuffix}`.slice(0, TITLE_LIMIT);
+
+// Books each video on both platforms at its planned time. Returns what could not be booked.
+export const scheduleVideos = async (jobs: LessonJob[], plan: Map<string, Date>, genre: VideoGenre): Promise<string[]> => {
+  const failed: string[] = [];
+  for (const job of jobs) {
+    const at = plan.get(job.id);
+    if (!at) continue;
+    const shared = { title: defaultTitle(job, genre), description: defaultCaption(job, genre), aiGenerated: true, scheduledAt: at.toISOString() };
+    try {
+      if (job.target?.facebook) await jobAction(job.id, 'facebook', { ...shared, state: 'SCHEDULED' });
+      if (job.target?.youtube) await jobAction(job.id, 'youtube', { ...shared, privacy: 'public' });
+    } catch (err) {
+      failed.push(`${job.lesson?.title ?? job.request.topic}: ${err instanceof Error ? err.message : 'lỗi'}`);
+    }
+  }
+  return failed;
+};

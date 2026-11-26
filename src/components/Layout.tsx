@@ -7,6 +7,7 @@ import {
   X,
   CheckSquare,
   Headphones,
+  Mic,
   Settings,
   TriangleAlert,
   Users, Clapperboard, FolderKanban } from 'lucide-react';
@@ -58,6 +59,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { path: '/projects', label: 'Dự án nhóm', icon: FolderKanban },
     ...(hasRole(user, 'ADMIN') ? [
       { path: '/dictation', label: 'Quản lý page', icon: Headphones },
+      { path: '/podcast', label: 'Podcast', icon: Mic },
       // /studio and /story stay routable but are replaced in the menu by the asset-driven studio
       { path: '/animation', label: 'Xưởng hoạt hình', icon: Clapperboard },
       { path: '/users', label: 'Người dùng', icon: Users }

@@ -3,7 +3,7 @@ import { CalendarCheck, ChevronDown, ChevronRight, Layers, Plus, RotateCcw, Sett
 import { useBusy } from '../tasks/agent';
 import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { BATCH_ACTIVE } from './batchRunner';
-import { defaultCaption, defaultTitle } from './lessonSave';
+import { scheduleVideos } from './lessonSave';
 import { CONTENT_TYPES, formatWhen, jobWhen, planDays, type ContentType } from './schedule';
 import { WORKER_COMMAND, batchOf, createBatch, facebookTaken, jobAction, jobVideoUrl, listJobs, listPages, ownerOf, workerHealth, type CoursePage, type LessonJob, type VideoGenre } from './lessonWorker';
 
@@ -115,7 +115,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
   }, [owner]);
   const plan = time ? planDays(pending, jobs.filter((job) => owner && ownerOf(job) === owner), start, time, new Date(), onPage, dailyTimes) : new Map<string, Date>();
   // The hours of a genre that posts more than once a day, with the shape that goes out at each
-  const daily = [...new Map(pending.filter((job) => job.request?.dailyTime).map((job) => [job.request.dailyTime as string, job.request.aspect as string])).entries()].sort(([x], [y]) => x.localeCompare(y));
+  const daily = [...new Map(pending.filter((job) => job.request?.dailyTime).map((job) => [job.request.dailyTime as string, job.meta?.clipOf ? 'từ vựng' : job.request.aspect === '9:16' ? 'podcast dọc' : 'podcast ngang'])).entries()].sort(([x], [y]) => x.localeCompare(y));
   const tooFar = [...plan.values()].some((at) => at.getTime() - Date.now() > MAX_AHEAD_DAYS * 24 * 60 * 60 * 1000);
   const target = batch[0]?.target;
 
@@ -180,18 +180,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
   // Both platforms, every video of the batch, each on its own day: one click after watching them
   const schedule = () => run('schedule', async () => {
     if (!genre) return;
-    const failed: string[] = [];
-    for (const job of pending) {
-      const at = plan.get(job.id);
-      if (!at) continue;
-      const shared = { title: defaultTitle(job, genre), description: defaultCaption(job, genre), aiGenerated: true, scheduledAt: at.toISOString() };
-      try {
-        if (job.target?.facebook) await jobAction(job.id, 'facebook', { ...shared, state: 'SCHEDULED' });
-        if (job.target?.youtube) await jobAction(job.id, 'youtube', { ...shared, privacy: 'public' });
-      } catch (err) {
-        failed.push(`${job.lesson?.title ?? job.request.topic}: ${err instanceof Error ? err.message : 'lỗi'}`);
-      }
-    }
+    const failed = await scheduleVideos(pending, plan, genre);
     setJobs(await listJobs());
     onStarted();
     if (failed.length) alert(`Chưa hẹn được:\n${failed.join('\n')}`);
@@ -363,7 +352,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
         </select>
       )}
       <p className="lg-meta" style={{ marginTop: 0 }}>
-        {done}/{live.length} bài đã có video · đăng lên {target?.name ?? page.channel.name}
+        {done}/{live.length} video đã xong · đăng lên {target?.name ?? page.channel.name}
         {moving && ' · trang này cần mở để bài được đưa lên khoá học'}
       </p>
       <div className="bg-jobs">
@@ -403,15 +392,15 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
 
       {pending.length > 0 && (
         <div className="lg-facebook" style={{ marginTop: 16 }}>
-          <p style={{ fontWeight: 600, margin: '0 0 10px' }}>Lịch đăng: {daily.length ? 'mỗi ngày một bản dọc và một bản ngang' : 'mỗi ngày một video'}</p>
+          <p style={{ fontWeight: 600, margin: '0 0 10px' }}>Lịch đăng: {daily.length ? 'mỗi giờ dưới đây một video mỗi ngày' : 'mỗi ngày một video'}</p>
           <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Từ ngày</label>
               <input type="date" className="form-input" value={start} min={toDateInput(new Date())} onChange={(e) => setStart(e.target.value)} />
             </div>
-            {daily.length ? daily.map(([own, aspect]) => (
+            {daily.length ? daily.map(([own, kind]) => (
               <div key={own} className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">Giờ đăng bản {aspect === '9:16' ? 'dọc' : 'ngang'}</label>
+                <label className="form-label">Giờ đăng {kind}</label>
                 <input type="time" className="form-input" value={dailyTimes[own] ?? own} onChange={(e) => setDailyTimes({ ...dailyTimes, [own]: e.target.value })} />
               </div>
             )) : (

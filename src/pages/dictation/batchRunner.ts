@@ -35,8 +35,11 @@ const step = async (job: LessonJob, onSaved: () => void) => {
   }
 };
 
+const inBatch = (job: LessonJob) => !!batchOf(job);
+
 // Returns kick(): call it after starting or scheduling a batch, so the runner looks again
-export const useBatchRunner = (enabled: boolean, onSaved: () => void) => {
+// pick: the jobs to carry through; must be a stable function
+export const useBatchRunner = (enabled: boolean, onSaved: () => void, pick: (job: LessonJob) => boolean = inBatch) => {
   const [tick, setTick] = useState(0);
   const kick = useCallback(() => setTick((t) => t + 1), []);
 
@@ -48,7 +51,7 @@ export const useBatchRunner = (enabled: boolean, onSaved: () => void) => {
       // The worker not running means nothing is moving: wait for a kick instead of waking it up again and again
       const jobs = await listJobs().catch(() => null);
       if (!jobs || stopped) return;
-      const batch = jobs.filter((job) => batchOf(job) && job.status !== 'CANCELLED');
+      const batch = jobs.filter((job) => pick(job) && job.status !== 'CANCELLED');
       for (const job of batch) {
         if (stopped) return;
         await step(job, onSaved);
@@ -60,7 +63,7 @@ export const useBatchRunner = (enabled: boolean, onSaved: () => void) => {
       stopped = true;
       window.clearTimeout(timer);
     };
-  }, [enabled, tick, onSaved]);
+  }, [enabled, tick, onSaved, pick]);
 
   return kick;
 };

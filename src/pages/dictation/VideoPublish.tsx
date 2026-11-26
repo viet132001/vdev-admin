@@ -214,19 +214,22 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
         </div>
       </div>
 
-      <div className="lg-publish-row">
-        <p className="lg-publish-name">Link video của bài học</p>
-        {linkedUrl && youtube?.live === false && <p className="lg-meta" style={{ marginTop: 0 }}>Học viên xem được từ {formatWhen(youtube.publishAt)}.</p>}
-        {linkedUrl
-          ? <p className="flex align-center gap-2 lg-meta" style={{ margin: 0, color: 'var(--success)' }}><CircleCheck size={16} /> {linkedUrl}</p>
-          : <p className="lg-meta" style={{ margin: 0 }}>{lessonId ? 'Link sẽ tự cập nhật sau khi đăng YouTube.' : 'Bài này chưa lưu lên khoá học.'}</p>}
-        {linkError && (
-          <>
-            <p className="lg-error" style={{ marginTop: 8 }}>{linkError}</p>
-            {youtubeUrl && <div className="lg-facebook-actions"><button className="btn btn-secondary btn-sm" onClick={() => link(youtubeUrl)}><RotateCcw size={14} /> Thử lại</button></div>}
-          </>
-        )}
-      </div>
+      {/* A vocabulary short is not the lesson's video */}
+      {!job.meta?.clipOf && (
+        <div className="lg-publish-row">
+          <p className="lg-publish-name">Link video của bài học</p>
+          {linkedUrl && youtube?.live === false && <p className="lg-meta" style={{ marginTop: 0 }}>Học viên xem được từ {formatWhen(youtube.publishAt)}.</p>}
+          {linkedUrl
+            ? <p className="flex align-center gap-2 lg-meta" style={{ margin: 0, color: 'var(--success)' }}><CircleCheck size={16} /> {linkedUrl}</p>
+            : <p className="lg-meta" style={{ margin: 0 }}>{lessonId ? 'Link sẽ tự cập nhật sau khi đăng YouTube.' : 'Bài này chưa lưu lên khoá học.'}</p>}
+          {linkError && (
+            <>
+              <p className="lg-error" style={{ marginTop: 8 }}>{linkError}</p>
+              {youtubeUrl && <div className="lg-facebook-actions"><button className="btn btn-secondary btn-sm" onClick={() => link(youtubeUrl)}><RotateCcw size={14} /> Thử lại</button></div>}
+            </>
+          )}
+        </div>
+      )}
 
       {canRerender && !isPublishing(job) && (
         <div className="lg-facebook-actions">

@@ -84,8 +84,8 @@ export const nextFreeSlot = (contentType: ContentType | undefined, jobs: LessonJ
 };
 
 const BATCH_SEARCH_DAYS = 60;
-// Two posts of one day are far apart; anything closer than this to a daily slot already fills it
-const DAILY_GAP_MS = 4 * 60 * 60 * 1000;
+// The posts of one day are at least this far apart; anything closer to a daily slot already fills it
+const DAILY_GAP_MS = 90 * 60 * 1000;
 
 const atClock = (day: Date, time: string) => atTime(day, time.split(':').map(Number));
 const clashes = (daily: boolean, taken: Date[], at: Date) => taken.some((other) => sameDay(other, at) && (!daily || Math.abs(other.getTime() - at.getTime()) < DAILY_GAP_MS));
