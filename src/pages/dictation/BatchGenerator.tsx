@@ -67,6 +67,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
   const [counts, setCounts] = useState<number[]>(() => ROADMAP.map(() => 3));
   const [start, setStart] = useState(() => toDateInput(new Date()));
   const [time, setTime] = useState('');
+  const [dailyTimes, setDailyTimes] = useState<Record<string, string>>({});
   const [onPage, setOnPage] = useState<Date[]>([]);
 
   const load = useCallback(async () => {
@@ -100,6 +101,9 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
   }, [moving]);
 
   const genre = genres.find((g) => g.id === page?.genre);
+  const wordLimits = genre?.words ?? { min: 30, max: 600 };
+  const genreWords = genre?.words?.default;
+  useEffect(() => { if (genreWords) setForm((f) => ({ ...f, words: genreWords })); }, [genreWords]);
   const pending = batch.filter((job) => job.status === 'DONE' && job.videoPath && !isScheduled(job));
   const owner = batch[0] ? ownerOf(batch[0]) : null;
   // The batch takes no day the Page already posts on, booked by VDEV or by hand in Meta Business Suite
@@ -109,7 +113,9 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
     facebookTaken(owner).then((days) => { if (!stale) setOnPage(days); });
     return () => { stale = true; };
   }, [owner]);
-  const plan = time ? planDays(pending, jobs.filter((job) => owner && ownerOf(job) === owner), start, time, new Date(), onPage) : new Map<string, Date>();
+  const plan = time ? planDays(pending, jobs.filter((job) => owner && ownerOf(job) === owner), start, time, new Date(), onPage, dailyTimes) : new Map<string, Date>();
+  // The hours of a genre that posts more than once a day, with the shape that goes out at each
+  const daily = [...new Map(pending.filter((job) => job.request?.dailyTime).map((job) => [job.request.dailyTime as string, job.request.aspect as string])).entries()].sort(([x], [y]) => x.localeCompare(y));
   const tooFar = [...plan.values()].some((at) => at.getTime() - Date.now() > MAX_AHEAD_DAYS * 24 * 60 * 60 * 1000);
   const target = batch[0]?.target;
 
@@ -256,7 +262,7 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
               <div className="grid grid-cols-2 gap-4">
                 <div className="form-group">
                   <label className="form-label">Độ dài mỗi bài (số từ)</label>
-                  <input type="number" required min={30} max={600} step={10} className="form-input" value={form.words} onChange={(e) => setForm({ ...form, words: Number(e.target.value) })} />
+                  <input type="number" required min={wordLimits.min} max={wordLimits.max} step={10} className="form-input" value={form.words} onChange={(e) => setForm({ ...form, words: Number(e.target.value) })} />
                 </div>
               </div>
               <div className="form-group">
@@ -316,8 +322,10 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
                 </div>
                 <div className="form-group">
                   <label className="form-label">Độ dài mỗi bài (số từ)</label>
-                  <input type="number" required min={30} max={600} step={10} className="form-input" value={form.words} onChange={(e) => setForm({ ...form, words: Number(e.target.value) })} />
-                  {form.words > 95 && <p className="lg-meta">Trên khoảng 95 từ, video có thể dài hơn 90 giây và Facebook Reels sẽ không nhận.</p>}
+                  <input type="number" required min={wordLimits.min} max={wordLimits.max} step={10} className="form-input" value={form.words} onChange={(e) => setForm({ ...form, words: Number(e.target.value) })} />
+                  {genre?.words
+                    ? <p className="lg-meta">Từ {wordLimits.min} đến {wordLimits.max} từ, video khoảng 5–10 phút.</p>
+                    : form.words > 95 && <p className="lg-meta">Trên khoảng 95 từ, video có thể dài hơn 90 giây: Facebook sẽ đăng thành video thường thay vì Reels.</p>}
                 </div>
                 {!genre?.noVocabulary && (
                   <div className="form-group">
@@ -395,16 +403,23 @@ export const BatchGenerator: React.FC<BatchGeneratorProps> = ({ course, onOpenSe
 
       {pending.length > 0 && (
         <div className="lg-facebook" style={{ marginTop: 16 }}>
-          <p style={{ fontWeight: 600, margin: '0 0 10px' }}>Lịch đăng: mỗi ngày một video</p>
+          <p style={{ fontWeight: 600, margin: '0 0 10px' }}>Lịch đăng: {daily.length ? 'mỗi ngày một bản dọc và một bản ngang' : 'mỗi ngày một video'}</p>
           <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Từ ngày</label>
               <input type="date" className="form-input" value={start} min={toDateInput(new Date())} onChange={(e) => setStart(e.target.value)} />
             </div>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Giờ đăng</label>
-              <input type="time" className="form-input" value={time} onChange={(e) => setTime(e.target.value)} />
-            </div>
+            {daily.length ? daily.map(([own, aspect]) => (
+              <div key={own} className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Giờ đăng bản {aspect === '9:16' ? 'dọc' : 'ngang'}</label>
+                <input type="time" className="form-input" value={dailyTimes[own] ?? own} onChange={(e) => setDailyTimes({ ...dailyTimes, [own]: e.target.value })} />
+              </div>
+            )) : (
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Giờ đăng</label>
+                <input type="time" className="form-input" value={time} onChange={(e) => setTime(e.target.value)} />
+              </div>
+            )}
           </div>
           <p className="lg-meta">Ngày đã có video khác của kênh này được bỏ qua. Tiêu đề và nội dung bài đăng lấy theo mặc định, có danh sách từ vựng.</p>
           {(!target?.facebook || !target?.youtube) && (

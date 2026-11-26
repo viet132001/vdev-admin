@@ -84,20 +84,43 @@ export const nextFreeSlot = (contentType: ContentType | undefined, jobs: LessonJ
 };
 
 const BATCH_SEARCH_DAYS = 60;
+// Two posts of one day are far apart; anything closer than this to a daily slot already fills it
+const DAILY_GAP_MS = 4 * 60 * 60 * 1000;
 
-// One video a day from the start date at the page's hour, skipping days this channel already posts on
+const atClock = (day: Date, time: string) => atTime(day, time.split(':').map(Number));
+const clashes = (daily: boolean, taken: Date[], at: Date) => taken.some((other) => sameDay(other, at) && (!daily || Math.abs(other.getTime() - at.getTime()) < DAILY_GAP_MS));
+
+// The slot a video would take. One with an hour of its own (a genre that posts twice a day) goes to the next free day at
+// that hour; the others follow the weekly plan.
+export const slotFor = (job: LessonJob, others: LessonJob[], now = new Date(), alsoTaken: Date[] = []): Date => {
+  const time: string | undefined = job.request?.dailyTime;
+  if (!time) return nextFreeSlot(job.request?.contentType ?? 'conversation', others, now, alsoTaken);
+  const taken = [...others.map(jobWhen).filter((date): date is Date => !!date), ...alsoTaken];
+  for (let offset = 0; offset < SEARCH_DAYS; offset++) {
+    const day = new Date(now);
+    day.setDate(day.getDate() + offset);
+    const at = atClock(day, time);
+    if (at.getTime() - now.getTime() > MIN_LEAD_MS && !clashes(true, taken, at)) return at;
+  }
+  return new Date(now.getTime() + 24 * 60 * 60 * 1000);
+};
+
+// One video a day from the start date at the page's hour, skipping days this channel already posts on. Videos with an
+// hour of their own fill one slot a day per hour; dailyTimes holds the hours changed on screen.
 // alsoTaken: days the channel's Facebook Page already posts on outside these jobs
-export const planDays = (pending: LessonJob[], all: LessonJob[], start: string, time: string, now = new Date(), alsoTaken: Date[] = []): Map<string, Date> => {
+export const planDays = (pending: LessonJob[], all: LessonJob[], start: string, time: string, now = new Date(), alsoTaken: Date[] = [], dailyTimes: Record<string, string> = {}): Map<string, Date> => {
   const taken = [...all.filter((job) => !pending.includes(job)).map(jobWhen).filter((date): date is Date => !!date), ...alsoTaken];
-  const [hours, minutes] = time.split(':').map(Number);
-  const day = new Date(`${start}T00:00`);
+  const cursors = new Map<string, Date>();
   const plan = new Map<string, Date>();
   for (const job of pending) {
+    const own: string = job.request?.dailyTime ?? '';
+    const day = cursors.get(own) ?? new Date(`${start}T00:00`);
+    cursors.set(own, day);
+    const clock = own ? dailyTimes[own] || own : time;
     for (let i = 0; i < BATCH_SEARCH_DAYS; i++) {
-      const at = new Date(day);
-      at.setHours(hours, minutes, 0, 0);
+      const at = atClock(day, clock);
       day.setDate(day.getDate() + 1);
-      if (at.getTime() - now.getTime() < MIN_LEAD_MS || taken.some((other) => sameDay(other, at))) continue;
+      if (at.getTime() - now.getTime() < MIN_LEAD_MS || clashes(!!own, taken, at)) continue;
       plan.set(job.id, at);
       taken.push(at);
       break;

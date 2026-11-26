@@ -85,6 +85,12 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     if (channelsVersion) workerHealth().then((health) => setGenres(health.genres ?? [])).catch(() => undefined);
   }, [channelsVersion]);
 
+  const currentGenre = genres.find((g) => g.id === form.genre);
+  const currentStyle = currentGenre?.styles.find((s) => s.id === form.videoStyle);
+  const wordLimits = currentGenre?.words ?? WORDS;
+  // A genre with a length of its own starts the form there, and leaving it goes back to the short default
+  const genreWords = currentGenre?.words?.default;
+  useEffect(() => { setForm((f) => ({ ...f, words: genreWords ?? 100 })); }, [genreWords]);
   const jobId = job?.id;
   const jobStatus = job?.status;
   const publishingNow = !!job && isPublishing(job);
@@ -192,8 +198,6 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
     }
   });
 
-  const currentGenre = genres.find((g) => g.id === form.genre);
-  const currentStyle = currentGenre?.styles.find((s) => s.id === form.videoStyle);
   const genreOfJob = job ? genres.find((g) => g.id === genreIdOf(job.request)) : undefined;
 
   // The genre decides which formats and styles exist, so a choice from another genre can't carry over
@@ -417,8 +421,10 @@ export const LessonGenerator: React.FC<LessonGeneratorProps> = ({ sessions, init
               </div>
               <div className="form-group">
                 <label className="form-label">Độ dài bài (số từ)</label>
-                <input type="number" required min={WORDS.min} max={WORDS.max} step={10} className="form-input" value={form.words} onChange={(e) => update({ words: Number(e.target.value) })} />
-                {form.video && form.words > REELS_SAFE_WORDS && <p className="lg-meta">Video có thể dài hơn 90 giây, Facebook Reels sẽ không nhận. YouTube vẫn đăng được.</p>}
+                <input type="number" required min={wordLimits.min} max={wordLimits.max} step={10} className="form-input" value={form.words} onChange={(e) => update({ words: Number(e.target.value) })} />
+                {currentGenre?.words
+                  ? <p className="lg-meta">Từ {wordLimits.min} đến {wordLimits.max} từ, video khoảng 5–10 phút.</p>
+                  : form.video && form.words > REELS_SAFE_WORDS && <p className="lg-meta">Video có thể dài hơn 90 giây: Facebook sẽ đăng thành video thường thay vì Reels.</p>}
               </div>
               {!currentGenre?.noVocabulary && (
                 <div className="form-group">

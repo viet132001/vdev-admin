@@ -5,7 +5,7 @@ import { useBusy } from '../tasks/agent';
 import { ConfirmDialog, type ConfirmState } from '../tasks/shared';
 import { facebookTaken, isFacebookBusy, isPublishing, jobAction, listJobs, ownerOf, type LessonJob, type VideoGenre, type YouTubePrivacy } from './lessonWorker';
 import { CAPTION_LIMIT, TITLE_LIMIT, defaultCaption, defaultTitle, youtubeLinkOf } from './lessonSave';
-import { formatWhen, fromLocalInput, nextFreeSlot, toLocalInput } from './schedule';
+import { formatWhen, fromLocalInput, slotFor, toLocalInput } from './schedule';
 
 const PRIVACY_LABEL: Record<YouTubePrivacy, string> = { public: 'Công khai', unlisted: 'Không công khai (ai có link mới xem được)', private: 'Riêng tư' };
 
@@ -68,15 +68,17 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
     }
   });
 
-  // Offers the next free slot of this lesson's category in the weekly plan
-  const contentType = job.request?.contentType;
+  // Offers the next free slot of this lesson: its daily hour, or its category's in the weekly plan
+  const { contentType, dailyTime } = job.request ?? {};
   const owner = ownerOf(job);
   useEffect(() => {
     // Another channel posting that day doesn't take this channel's slot; what its Facebook Page already has does
     Promise.all([listJobs(), facebookTaken(owner, job.id)])
-      .then(([jobs, onPage]) => setWhen((current) => current || toLocalInput(nextFreeSlot(contentType, jobs.filter((j) => j.id !== job.id && ownerOf(j) === owner), new Date(), onPage))))
+      .then(([jobs, onPage]) => setWhen((current) => current || toLocalInput(slotFor(job, jobs.filter((j) => j.id !== job.id && ownerOf(j) === owner), new Date(), onPage))))
       .catch(() => undefined);
-  }, [contentType, job.id, owner]);
+    // The job object changes on every poll; only what decides the slot may run this again
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentType, dailyTime, job.id, owner]);
 
   const askFacebook = () => setConfirm({
     title: `Đăng công khai lên Facebook ${channelName}?`,
@@ -145,6 +147,7 @@ export const VideoPublish: React.FC<VideoPublishProps> = ({ job, genre, onManage
             <input type="checkbox" checked={aiGenerated} onChange={(e) => setAiGenerated(e.target.checked)} />
             Gắn nhãn nội dung do AI tạo
           </label>
+          <p className="lg-meta">Video trên 90 giây đăng thành video thường trên Facebook, không phải Reels. Với loại này nhãn AI không gắn được từ đây, cần gắn trên Facebook.</p>
         </>
       )}
 

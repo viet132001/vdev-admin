@@ -1,7 +1,7 @@
 // Where a lesson's video is: still being made, only on this machine, on its way to a channel, or out there with a link.
 // One answer per video, so the library, the schedule and the lesson all say the same thing.
 import { isFacebookBusy, type LessonJob } from './lessonWorker';
-import { CONTENT_TYPES, jobWhen, nextFreeSlot, type ContentType } from './schedule';
+import { CONTENT_TYPES, jobWhen, slotFor, type ContentType } from './schedule';
 
 export type VideoState = 'MAKING' | 'FAILED' | 'LOCAL' | 'UPLOADING' | 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'LINKED';
 
@@ -76,7 +76,7 @@ export const planVideos = (jobs: LessonJob[], channelOf: (job: LessonJob) => str
     const channel = channelOf(job);
     const taken = promised.get(channel) ?? takenOf(channel);
     // A job from before categories is a conversation everywhere else on this page, so it takes that slot here too
-    const at = nextFreeSlot(job.request?.contentType ?? 'conversation', jobs.filter((other) => channelOf(other) === channel), now, taken);
+    const at = slotFor(job, jobs.filter((other) => channelOf(other) === channel), now, taken);
     promised.set(channel, [...taken, at]);
     plan.set(job.id, { at, suggested: true });
   }
