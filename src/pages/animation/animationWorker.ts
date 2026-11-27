@@ -81,7 +81,7 @@ export type ZoneKind = 'ground' | 'water' | 'house' | 'block';
 export type SpotKind = 'seat' | 'door' | 'table';
 export const ZONE_LABEL: Record<ZoneKind, string> = { ground: 'Đất đi được', water: 'Nước', house: 'Nhà', block: 'Vật cản' };
 export const SPOT_LABEL: Record<SpotKind, string> = { seat: 'Chỗ ngồi', door: 'Cửa', table: 'Mặt bàn' };
-export interface SceneMap { zones: { kind: ZoneKind; points: [number, number][] }[]; spots: { kind: SpotKind; x: number; y: number }[] }
+export interface SceneMap { zones: { kind: ZoneKind; points: [number, number][] }[]; spots: { kind: SpotKind; x: number; y: number; floor?: number }[] }
 export const setSceneMap = (id: string, item: string, map: SceneMap | null): Promise<AssetSeries> => call(`/assets/series/${id}/map`, 'POST', { item, map });
 export const setHorizon = (id: string, item: string, horizon: number): Promise<AssetSeries> => call(`/assets/series/${id}/horizon`, 'POST', { item, horizon });
 
