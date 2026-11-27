@@ -17,6 +17,7 @@ export interface AssetItem {
   heightCm: number | null; // characters, props, plants: real height, which sizes them against each other
   horizon: number | null; // backgrounds only: eye level, 0..1 from the top
   deck?: number | null; // backgrounds only: it is water, a boat's deck sits on this line
+  map?: SceneMap | null; // backgrounds only: ground, water, houses and seats marked on the picture
   style: string | null; // borrowed items: the style they were drawn in
   from: { series: string; item: string } | null;
   tags: string[];
@@ -75,6 +76,13 @@ export const SIZED_KINDS: AssetKind[] = ['character', 'prop', 'plant', 'animal']
 export const setSize = (id: string, item: string, heightCm: number | null): Promise<AssetSeries> => call(`/assets/series/${id}/size`, 'POST', { item, heightCm });
 export const suggestSizes = (id: string): Promise<AssetSeries> => call(`/assets/series/${id}/suggest-sizes`, 'POST', {});
 export const setDeck = (id: string, item: string, deck: number | null): Promise<AssetSeries> => call(`/assets/series/${id}/deck`, 'POST', { item, deck });
+// Must match src/asset/scene.ts in vdev-video; points are 0..1 of the picture
+export type ZoneKind = 'ground' | 'water' | 'house' | 'block';
+export type SpotKind = 'seat' | 'door' | 'table';
+export const ZONE_LABEL: Record<ZoneKind, string> = { ground: 'Đất đi được', water: 'Nước', house: 'Nhà', block: 'Vật cản' };
+export const SPOT_LABEL: Record<SpotKind, string> = { seat: 'Chỗ ngồi', door: 'Cửa', table: 'Mặt bàn' };
+export interface SceneMap { zones: { kind: ZoneKind; points: [number, number][] }[]; spots: { kind: SpotKind; x: number; y: number }[] }
+export const setSceneMap = (id: string, item: string, map: SceneMap | null): Promise<AssetSeries> => call(`/assets/series/${id}/map`, 'POST', { item, map });
 export const setHorizon = (id: string, item: string, horizon: number): Promise<AssetSeries> => call(`/assets/series/${id}/horizon`, 'POST', { item, horizon });
 
 // Backgrounds, props and plants of every series, to be reused instead of drawn again

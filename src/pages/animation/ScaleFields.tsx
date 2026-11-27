@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useBusy } from '../tasks/agent';
+import { SceneMapEditor } from './SceneMapEditor';
 import { DEFAULT_HORIZON, HOLD_LABEL, SIZED_KINDS, assetUrl, setDeck, setHoldStyle, setHorizon, setSize, type AssetItem, type AssetSeries, type HoldStyle } from './animationWorker';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
@@ -114,6 +115,7 @@ export const ScaleFields: React.FC<Props> = (props) => {
     <>
       <HorizonField key={`${item.rev}-${item.horizon}`} {...props} />
       <WaterField key={`water-${item.rev}-${item.deck}`} {...props} />
+      <SceneMapEditor key={`map-${item.rev}`} {...props} />
     </>
   );
 };
