@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowDown, ArrowUp, Copy, Eye, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
   ACTION_LABEL, CAMERA_LABEL, EFFECT_LABEL, EXPRESSION_LABEL, GESTURE_LABEL, GROUND_LINE, LIGHT_LABEL, MOVE_LABEL, NARRATOR, POSE_LABEL, TONE_LABEL, TRANSITION_LABEL,
-  type AnimationCatalog, type ScriptMember, type ScriptShot
+  VIEW_TURNS, type AnimationCatalog, type ScriptMember, type ScriptShot
 } from './animationWorker';
 
 const faceName = (name: string) => EXPRESSION_LABEL[name] ?? name;
@@ -133,6 +133,26 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
                     <option value={1}>Nhìn phải</option>
                     <option value={-1}>Nhìn trái</option>
                   </select>
+                  {(c.views?.length ?? 0) > 0 && (() => {
+                    // Carrying something and drawn actions only exist seen from the side
+                    const sideOnly = !!member.hold || !!member.act;
+                    const turns = VIEW_TURNS.filter((v) => v.view === 'side' || c.views!.includes(v.view));
+                    const why = sideOnly ? 'Đang cầm đồ hoặc diễn hành động vẽ sẵn thì chỉ có góc nghiêng' : undefined;
+                    return (
+                      <>
+                        <select className="form-input" style={{ width: 'auto' }} value={member.turn ?? 90} disabled={disabled || sideOnly} title={why} aria-label="Góc quay"
+                          onChange={(e) => setMember(c.id, { turn: Number(e.target.value) === 90 ? null : Number(e.target.value) })}>
+                          {turns.map((v) => <option key={v.view} value={v.degrees}>Góc: {v.label}</option>)}
+                        </select>
+                        <select className="form-input" style={{ width: 'auto' }} value={member.toTurn ?? ''} disabled={disabled || sideOnly} title={why} aria-label="Xoay người trong shot"
+                          onChange={(e) => setMember(c.id, { toTurn: e.target.value === '' ? null : Number(e.target.value) })}>
+                          <option value="">Không xoay</option>
+                          {turns.map((v) => <option key={v.view} value={v.degrees}>Xoay sang: {v.label.toLowerCase()}</option>)}
+                          <option value={-90}>Xoay sang: bên kia</option>
+                        </select>
+                      </>
+                    );
+                  })()}
                   {(c.actions?.length ?? 0) > 0 && (
                     <select className="form-input" style={{ width: 'auto' }} value={member.act ?? ''} disabled={disabled} aria-label="Hành động vẽ sẵn"
                       onChange={(e) => setMember(c.id, e.target.value ? { act: e.target.value, pose: 'stand', gesture: 'none', toX: null } : { act: null })}>

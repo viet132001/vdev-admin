@@ -152,7 +152,7 @@ export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals
 export const TONE_LABEL: Record<string, string> = { none: 'Tự nhiên', warm: 'Ấm', cool: 'Lạnh', dusk: 'Hoàng hôn', night: 'Đêm' };
 export const LIGHT_LABEL: Record<string, string> = { lamp: 'Đèn dầu', fire: 'Bếp lửa', sun: 'Mặt trời', moon: 'Trăng' };
 
-export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null; act?: string | null }
+export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null; act?: string | null; turn?: number | null; toTurn?: number | null }
 export interface ScriptShot {
   background: string; camera: 'wide' | 'medium' | 'close'; subject: string | null; move: string; transition: 'cut' | 'fade';
   cast: ScriptMember[];
@@ -162,15 +162,20 @@ export interface ScriptShot {
   effects: string[]; tone: string; light: { kind: string; x: number; y: number } | null;
 }
 export interface AnimationScript { title: string; description: string; shots: ScriptShot[] }
+// Degrees of each view (VIEW_HEADING in vdev-video src/asset/skeleton.ts); every character has the side one
+export const VIEW_TURNS: { view: string; degrees: number; label: string }[] = [
+  { view: 'side', degrees: 90, label: 'Nghiêng' }, { view: 'quarter', degrees: 45, label: 'Ba phần tư' }, { view: 'front', degrees: 0, label: 'Chính diện' },
+  { view: 'quarter-back', degrees: 135, label: 'Ba phần tư sau' }, { view: 'back', degrees: 180, label: 'Sau lưng' }
+];
 export interface AnimationCatalog {
-  characters: { id: string; name: string; role: string; voice: string; expressions: string[]; talks: boolean; rigged: boolean; heightCm?: number | null; actions?: { id: string; label: string; weapon: boolean }[] }[];
+  characters: { id: string; name: string; role: string; voice: string; expressions: string[]; talks: boolean; rigged: boolean; views?: string[]; heightCm?: number | null; actions?: { id: string; label: string; weapon: boolean }[] }[];
   backgrounds: { id: string; description: string; foreground: boolean }[];
   props: { id: string; description: string; heightCm?: number | null }[];
 }
 // Scripts saved before poses and narration existed (the worker fills the same defaults)
 export const normalizeShot = (shot: any): ScriptShot => ({
   ...shot, subject: shot.subject ?? null, transition: shot.transition ?? 'cut', effects: shot.effects ?? [], tone: shot.tone ?? 'none', light: shot.light ?? null,
-  cast: (shot.cast ?? []).map((m: any) => ({ toX: null, pose: 'stand', gesture: 'none', hold: null, y: null, act: null, ...m }))
+  cast: (shot.cast ?? []).map((m: any) => ({ toX: null, pose: 'stand', gesture: 'none', hold: null, y: null, act: null, turn: null, toTurn: null, ...m }))
 });
 export type AnimationJob = Omit<LessonJob, 'animation'> & { animation?: { seriesId: string; script: AnimationScript } };
 
