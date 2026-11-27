@@ -43,7 +43,16 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
     const speaker = shot.speaker === NARRATOR || keeps(shot.speaker) ? shot.speaker : null;
     onChange({ ...shot, cast, speaker, subject: keeps(shot.subject) ? shot.subject : null, reactions: shot.reactions.filter((r) => keeps(r.character)), camera: cast.length ? shot.camera : 'wide' });
   };
-  const setMember = (id: string, patch: Partial<ScriptMember>) => onChange({ ...shot, cast: shot.cast.map((m) => (m.character === id ? { ...m, ...patch } : m)) });
+  // Carrying, acting and walking are only drawn from the side: the worker refuses a turn left over from before
+  const sideBusy = (m: ScriptMember) => !!m.hold || !!m.act || m.toX !== null;
+  const setMember = (id: string, patch: Partial<ScriptMember>) => onChange({
+    ...shot,
+    cast: shot.cast.map((m) => {
+      if (m.character !== id) return m;
+      const next = { ...m, ...patch };
+      return sideBusy(next) ? { ...next, turn: null, toTurn: null } : next;
+    })
+  });
   const setSpeaker = (id: string) => {
     const speaker = id || null;
     const character = speaker && speaker !== NARRATOR ? speaker : null;
@@ -134,10 +143,9 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
                     <option value={-1}>Nhìn trái</option>
                   </select>
                   {(c.views?.length ?? 0) > 0 && (() => {
-                    // Carrying something and drawn actions only exist seen from the side
-                    const sideOnly = !!member.hold || !!member.act;
+                    const sideOnly = sideBusy(member);
                     const turns = VIEW_TURNS.filter((v) => v.view === 'side' || c.views!.includes(v.view));
-                    const why = sideOnly ? 'Đang cầm đồ hoặc diễn hành động vẽ sẵn thì chỉ có góc nghiêng' : undefined;
+                    const why = sideOnly ? 'Đang cầm đồ, đi hoặc diễn hành động vẽ sẵn thì chỉ có góc nghiêng' : undefined;
                     return (
                       <>
                         <select className="form-input" style={{ width: 'auto' }} value={member.turn ?? 90} disabled={disabled || sideOnly} title={why} aria-label="Góc quay"

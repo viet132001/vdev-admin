@@ -28,17 +28,17 @@ export interface AssetItem {
 }
 export interface DecorSpot { id: string; x: number; y: number; scale: number; layer: 'back' | 'front'; phase: number }
 // Must match JOINTS / DEFAULT_JOINTS / DEFAULT_HEAD_SCALE in vdev-video src/asset/rig.ts
-export type JointName = 'neck' | 'shoulder' | 'hip' | 'elbow' | 'knee' | 'hand' | 'foot' | 'wrist';
+export type JointName = 'neck' | 'shoulder' | 'hip' | 'elbow' | 'knee' | 'hand' | 'foot' | 'wrist' | 'ankle';
 export interface Limbs { arms: number; legs: number }
 export interface Skeleton { joints: Record<JointName, { x: number; y: number }>; headScale: number; limbs?: Limbs }
 export const DEFAULT_SKELETON: Skeleton = {
-  joints: { neck: { x: 0.5, y: 0.08 }, shoulder: { x: 0.5, y: 0.13 }, hip: { x: 0.5, y: 0.94 }, elbow: { x: 0.5, y: 0.93 }, knee: { x: 0.5, y: 0.93 }, hand: { x: 0.5, y: 0.9 }, foot: { x: 0.5, y: 0.97 }, wrist: { x: 0.5, y: 0.67 } },
+  joints: { neck: { x: 0.5, y: 0.08 }, shoulder: { x: 0.5, y: 0.13 }, hip: { x: 0.5, y: 0.94 }, elbow: { x: 0.5, y: 0.93 }, knee: { x: 0.5, y: 0.93 }, hand: { x: 0.5, y: 0.9 }, foot: { x: 0.5, y: 0.97 }, wrist: { x: 0.5, y: 0.67 }, ankle: { x: 0.5, y: 0.86 } },
   headScale: 0.42
 };
 // Which picture each joint is set on, and what it is in words
 export const JOINT_INFO: Record<JointName, { part: string; label: string }> = {
   neck: { part: 'torso', label: 'Cổ: đầu gắn vào thân' }, shoulder: { part: 'torso', label: 'Vai' }, hip: { part: 'torso', label: 'Hông: chân gắn vào thân' },
-  elbow: { part: 'arm', label: 'Khuỷu tay' }, knee: { part: 'thigh', label: 'Đầu gối' }, hand: { part: 'forearm', label: 'Bàn tay: chỗ cầm đồ' }, foot: { part: 'shin', label: 'Bàn chân: chỗ chạm đất' }, wrist: { part: 'forearm', label: 'Cổ tay: chỗ nối bàn tay rời' }
+  elbow: { part: 'arm', label: 'Khuỷu tay' }, knee: { part: 'thigh', label: 'Đầu gối' }, hand: { part: 'forearm', label: 'Bàn tay: chỗ cầm đồ' }, foot: { part: 'shin', label: 'Bàn chân: chỗ chạm đất' }, wrist: { part: 'forearm', label: 'Cổ tay: chỗ nối bàn tay rời' }, ankle: { part: 'shin', label: 'Cổ chân: chỗ bàn chân gập' }
 };
 export const DEFAULT_TOLERANCE = 60;
 export const PART_LABEL: Record<string, string> = {
