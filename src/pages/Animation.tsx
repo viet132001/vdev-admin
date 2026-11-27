@@ -12,7 +12,7 @@ import { SharedLibrary } from './animation/SharedLibrary';
 import { LibraryTab } from './animation/LibraryTab';
 import { PracticeRoom } from './animation/PracticeRoom';
 import { AddDrawnAction } from './animation/DrawnActions';
-import { SIZED_KINDS, addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, setStyleTag, suggestSizes, type AssetSeries, type AssetSummary } from './animation/animationWorker';
+import { ASSET_STYLES, SIZED_KINDS, WEAPON_TAG, addAsset, createAssetSeries, deleteAssetSeries, getAssetSeries, listAssetSeries, setAssetMeta, setStyleTag, suggestSizes, type AssetSeries, type AssetSummary } from './animation/animationWorker';
 
 const WATCH_EVERY = 6000;
 const WATCH_FOR = 45 * 60 * 1000;
@@ -22,10 +22,11 @@ const NewSeries: React.FC<{ onCreated: (series: AssetSeries) => void }> = ({ onC
   const [premise, setPremise] = useState('');
   const [note, setNote] = useState('');
   const [reuse, setReuse] = useState(true);
+  const [style, setStyle] = useState(ASSET_STYLES[0]);
   const { busy, run } = useBusy();
   const create = () => run('create', async () => {
     try {
-      onCreated(await createAssetSeries(premise, note, reuse));
+      onCreated(await createAssetSeries(premise, [`Phong cách: ${style}.`, note].join(' ').trim(), reuse));
     } catch (err) {
       alert(message(err, 'Không tạo được series'));
     }
@@ -39,6 +40,12 @@ const NewSeries: React.FC<{ onCreated: (series: AssetSeries) => void }> = ({ onC
         <textarea className="form-input" rows={3} value={premise} onChange={(e) => setPremise(e.target.value)} placeholder="Ví dụ: Cậu bé Bo và những sinh vật nhỏ trong khu rừng giấy, phong cách đồ chơi nỉ và giấy cắt" />
       </div>
       <div className="form-group">
+        <label className="form-label">Phong cách</label>
+        <select className="form-input" value={style} disabled={!!busy} onChange={(e) => setStyle(e.target.value)}>
+          {ASSET_STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+      <div className="form-group">
         <label className="form-label">Ghi chú thêm</label>
         <input className="form-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Màu sắc, tông, nhân vật bắt buộc có…" />
       </div>
@@ -50,14 +57,22 @@ const NewSeries: React.FC<{ onCreated: (series: AssetSeries) => void }> = ({ onC
   );
 };
 
+type NewKind = 'background' | 'prop' | 'weapon' | 'plant' | 'animal';
+
 const AddAsset: React.FC<{ seriesId: string; onChange: (series: AssetSeries) => void }> = ({ seriesId, onChange }) => {
-  const [kind, setKind] = useState<'background' | 'prop' | 'plant' | 'animal'>('background');
+  const [kind, setKind] = useState<NewKind>('background');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const { busy, run } = useBusy();
   const add = () => run('add', async () => {
     try {
-      onChange(await addAsset(seriesId, kind, name, description));
+      let next = await addAsset(seriesId, kind === 'weapon' ? 'prop' : kind, name, description);
+      onChange(next);
+      if (kind === 'weapon') {
+        // the new item is the last one; the tag is what files it under weapons
+        next = await setAssetMeta(seriesId, next.items[next.items.length - 1].id, { tags: [WEAPON_TAG] });
+        onChange(next);
+      }
       setName('');
       setDescription('');
     } catch (err) {
@@ -66,11 +81,12 @@ const AddAsset: React.FC<{ seriesId: string; onChange: (series: AssetSeries) => 
   });
   return (
     <details className="card">
-      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Thêm bối cảnh / đạo cụ / con vật / cây cỏ</summary>
+      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Thêm bối cảnh / đạo cụ / vũ khí / con vật / cây cỏ</summary>
       <div className="flex flex-col gap-3" style={{ marginTop: 12 }}>
-        <select className="form-input" value={kind} onChange={(e) => setKind(e.target.value as 'background' | 'prop' | 'plant' | 'animal')}>
+        <select className="form-input" value={kind} onChange={(e) => setKind(e.target.value as NewKind)}>
           <option value="background">Bối cảnh</option>
           <option value="prop">Đạo cụ</option>
+          <option value="weapon">Vũ khí (kiếm, giáo, cung...)</option>
           <option value="animal">Con vật (chó, trâu, cá, chim...)</option>
           <option value="plant">Cây cỏ chuyển động (bụi lau, khóm tre... lay theo gió)</option>
         </select>
@@ -82,20 +98,18 @@ const AddAsset: React.FC<{ seriesId: string; onChange: (series: AssetSeries) => 
   );
 };
 
-// The name the series' pictures go by in the library; series made before it have none
+// Which group of the library the series' pictures fall in; it does not change how they are drawn
 const StyleTag: React.FC<{ series: AssetSeries; onChange: (series: AssetSeries) => void }> = ({ series, onChange }) => {
-  const [text, setText] = useState(series.bible.styleTag ?? '');
   const { busy, run } = useBusy();
-  const save = () => {
-    if (text.trim() === (series.bible.styleTag ?? '')) return;
-    run('style', async () => {
-      try { onChange(await setStyleTag(series.id, text)); } catch (err) { alert(message(err, 'Không lưu được tên phong cách')); }
-    });
-  };
+  const current = ASSET_STYLES.find((s) => s === series.bible.styleTag) ?? ASSET_STYLES[0];
+  const save = (style: string) => run('style', async () => {
+    try { onChange(await setStyleTag(series.id, style)); } catch (err) { alert(message(err, 'Không lưu được phong cách')); }
+  });
   return (
-    <label className="flex align-center gap-2 lg-meta">Tên phong cách
-      <input className="form-input" style={{ maxWidth: 240 }} maxLength={40} value={text} disabled={!!busy} placeholder="ví dụ: tranh thuỷ mặc"
-        onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+    <label className="flex align-center gap-2 lg-meta">Phong cách
+      <select className="form-input" style={{ width: 'auto' }} value={current} disabled={!!busy} onChange={(e) => save(e.target.value)}>
+        {ASSET_STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
     </label>
   );
 };

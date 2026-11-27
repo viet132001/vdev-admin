@@ -75,10 +75,10 @@ const AssetCard: React.FC<{ seriesId: string; item: AssetItem; refName: string |
 
 export const AssetBoard: React.FC<{ series: AssetSeries; onChange: (series: AssetSeries) => void; onBrief: (items: string[]) => void }> = ({ series, onChange, onBrief }) => {
   const nameOf = (id: string | null) => series.items.find((item) => item.id === id)?.name ?? null;
-  const headsOf = (character: string | null) => series.items.find((entry) => entry.kind === 'heads' && entry.of === character);
+  const headsOf = (character: string | null, view?: string | null) => series.items.find((entry) => entry.kind === 'heads' && entry.of === character && (entry.view ?? null) === (view ?? null));
   // The mouth is placed on the neutral head of a rigged character, else on the whole character
-  const faceOf = (character: string | null): Face => {
-    const head = headsOf(character)?.parts.find((part) => part.name === 'neutral');
+  const faceOf = (character: string | null, view?: string | null): Face => {
+    const head = headsOf(character, view)?.parts.find((part) => part.name === 'neutral');
     const whole = series.items.find((entry) => entry.id === character);
     return head ? { part: head, name: `${whole?.name ?? character}: đầu bình thường` } : { part: whole?.parts[0], name: whole?.name ?? String(character) };
   };
@@ -92,7 +92,7 @@ export const AssetBoard: React.FC<{ series: AssetSeries; onChange: (series: Asse
             <h2 style={{ fontSize: '1.05rem', margin: '0 0 8px', fontWeight: 600 }}>{KIND_LABEL[kind]} <span className="lg-meta">{items.filter((i) => i.file).length}/{items.length}</span></h2>
             <div className="an-grid">
               {items.map((item) => <AssetCard key={item.id} seriesId={series.id} item={item} refName={REFERENCE[item.kind] ? nameOf(item.of) : null}
-                face={item.kind === 'mouths' ? faceOf(item.of) : undefined} heads={item.kind === 'body' ? headsOf(item.of) : undefined} onChange={onChange} onBrief={onBrief} series={series} />)}
+                face={item.kind === 'mouths' ? faceOf(item.of, item.view) : undefined} heads={item.kind === 'body' ? headsOf(item.of, item.view) : undefined} onChange={onChange} onBrief={onBrief} series={series} />)}
             </div>
           </section>
         );

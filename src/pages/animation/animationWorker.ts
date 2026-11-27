@@ -9,6 +9,7 @@ export const KIND_LABEL: Record<AssetKind, string> = {
 
 export interface AssetPart { name: string; file: string; width: number; height: number; pivot: { x: number; y: number } }
 export interface AssetItem {
+  view?: string | null; // a character's pictures facing another way
   id: string; kind: AssetKind; name: string; description: string; prompt: string; of: string | null; file: string | null; version: number;
   parts: AssetPart[]; rev: number; tolerance: number | null; problem: string | null; rig: { x: number; y: number; scale: number } | null;
   skeleton: Skeleton | null; // body sheets only
@@ -78,6 +79,11 @@ export const setHorizon = (id: string, item: string, horizon: number): Promise<A
 
 // Backgrounds, props and plants of every series, to be reused instead of drawn again
 export interface SharedAsset { series: string; seriesTitle: string; item: string; kind: AssetKind; name: string; description: string; heightCm: number | null; style: string; tags: string[]; holdStyle?: HoldStyle | null; file: string; usedBy: number; sheets?: { kind: AssetKind; ready: boolean }[] }
+// Must match STYLES in vdev-video scripts/assetStudio.ts
+export const ASSET_STYLES = ['Hoạt hình', 'Tả thực', '3D', 'Người que'];
+// A weapon is not a kind of its own for the engine: a prop held like a sword, or one tagged so
+export const WEAPON_TAG = 'vũ khí';
+export const isWeapon = (asset: { kind: AssetKind; holdStyle?: HoldStyle | null; tags: string[] }) => asset.kind === 'prop' && (asset.holdStyle === 'sword' || asset.tags.includes(WEAPON_TAG));
 // How the library is grouped, in this order
 export const LIBRARY_KINDS: AssetKind[] = ['character', 'background', 'prop', 'animal', 'plant'];
 export const listShared = (): Promise<SharedAsset[]> => call('/assets/shared');

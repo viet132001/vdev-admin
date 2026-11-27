@@ -3,17 +3,37 @@ import { useSearchParams } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 import { useBusy } from '../tasks/agent';
 import { WORKER_COMMAND } from '../dictation/lessonWorker';
-import { HOLD_LABEL, KIND_LABEL, LIBRARY_KINDS, fileUrl, listShared, setAssetMeta, setHoldStyle, setSize, type AssetKind, type HoldStyle, type SharedAsset } from './animationWorker';
+import { ASSET_STYLES, EFFECT_LABEL, HOLD_LABEL, KIND_LABEL, WEAPON_TAG, fileUrl, isWeapon, listShared, setAssetMeta, setHoldStyle, setSize, type HoldStyle, type SharedAsset } from './animationWorker';
 
 const message = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
 const tagsOf = (text: string) => text.split(',').map((tag) => tag.trim()).filter(Boolean);
+
+const GROUPS: { id: string; label: string; has: (a: SharedAsset) => boolean }[] = [
+  { id: 'character', label: 'Nhân vật', has: (a) => a.kind === 'character' },
+  { id: 'prop', label: 'Đạo cụ', has: (a) => a.kind === 'prop' && !isWeapon(a) },
+  { id: 'weapon', label: 'Vũ khí', has: isWeapon },
+  { id: 'animal', label: 'Con vật', has: (a) => a.kind === 'animal' },
+  { id: 'background', label: 'Bối cảnh', has: (a) => a.kind === 'background' },
+  { id: 'plant', label: 'Cây cỏ', has: (a) => a.kind === 'plant' }
+];
+// Weather and air are drawn by the engine, not from pictures
+const PHENOMENA = 'phenomena';
+
+const Phenomena: React.FC = () => (
+  <section>
+    <h2 style={{ fontSize: '1.05rem', margin: '0 0 8px', fontWeight: 600 }}>Hiện tượng <span className="lg-meta">{Object.keys(EFFECT_LABEL).length}</span></h2>
+    <p className="lg-meta" style={{ margin: '0 0 8px' }}>Engine tự vẽ, không cần ảnh, dùng được với mọi phong cách. Chọn trong từng shot ở tab Video.</p>
+    <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+      {Object.entries(EFFECT_LABEL).map(([id, label]) => <span key={id} className="badge badge-info">{label}</span>)}
+    </div>
+  </section>
+);
 
 // One asset with its attributes; each field is saved when it is left
 const LibraryCard: React.FC<{ asset: SharedAsset; onSaved: () => void; onOpen: () => void }> = ({ asset, onSaved, onOpen }) => {
   const { busy, run } = useBusy();
   const [height, setHeight] = useState(String(asset.heightCm ?? ''));
-  const [style, setStyle] = useState(asset.style);
-  const [tags, setTags] = useState(asset.tags.join(', '));
+    const [tags, setTags] = useState(asset.tags.join(', '));
   const save = (changed: boolean, action: () => Promise<unknown>) => {
     if (!changed) return;
     run('save', async () => {
@@ -39,6 +59,13 @@ const LibraryCard: React.FC<{ asset: SharedAsset; onSaved: () => void; onOpen: (
           </label>
         )}
         {asset.kind === 'prop' && (
+          <label className="flex align-center gap-2 lg-meta">
+            <input type="checkbox" checked={isWeapon(asset)} disabled={!!busy || asset.holdStyle === 'sword'}
+              onChange={(e) => save(true, () => setAssetMeta(asset.series, asset.item, { tags: e.target.checked ? [WEAPON_TAG, ...asset.tags] : asset.tags.filter((t) => t !== WEAPON_TAG) }))} />
+            Là vũ khí
+          </label>
+        )}
+        {asset.kind === 'prop' && (
           <label className="form-label">Cách cầm
             <select className="form-input" value={asset.holdStyle ?? ''} disabled={!!busy}
               onChange={(e) => save(true, () => setHoldStyle(asset.series, asset.item, (e.target.value || null) as HoldStyle | null))}>
@@ -48,8 +75,10 @@ const LibraryCard: React.FC<{ asset: SharedAsset; onSaved: () => void; onOpen: (
           </label>
         )}
         <label className="form-label">Phong cách
-          <input className="form-input" maxLength={40} value={style} disabled={!!busy} onKeyDown={onEnter} onChange={(e) => setStyle(e.target.value)}
-            onBlur={() => save(style.trim() !== asset.style, () => setAssetMeta(asset.series, asset.item, { style }))} />
+          <select className="form-input" value={asset.style} disabled={!!busy}
+            onChange={(e) => save(true, () => setAssetMeta(asset.series, asset.item, { style: e.target.value }))}>
+            {ASSET_STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
         </label>
         <label className="form-label">Nhãn (cách nhau bằng dấu phẩy)
           <input className="form-input" value={tags} disabled={!!busy} placeholder="ban đêm, sông nước" onKeyDown={onEnter} onChange={(e) => setTags(e.target.value)}
@@ -61,12 +90,12 @@ const LibraryCard: React.FC<{ asset: SharedAsset; onSaved: () => void; onOpen: (
   );
 };
 
-// Every background, prop and plant of every series, with what decides where it can be reused
+// Every asset of every series, by style and then by what it is
 export const LibraryTab: React.FC = () => {
   const [, setParams] = useSearchParams();
   const [all, setAll] = useState<SharedAsset[] | null>(null);
   const [offline, setOffline] = useState(false);
-  const [kind, setKind] = useState('');
+  const [group, setGroup] = useState('');
   const [style, setStyle] = useState('');
   const [tag, setTag] = useState('');
   const [search, setSearch] = useState('');
@@ -86,30 +115,31 @@ export const LibraryTab: React.FC = () => {
     );
   }
   if (!all) return <div className="loading-container"><div className="spinner" /></div>;
-  if (!all.length) return <div className="card"><p className="lg-meta" style={{ margin: 0 }}>Kho đang trống. Nhân vật, bối cảnh, đạo cụ, con vật và cây cỏ sẽ hiện ở đây ngay khi series có ảnh của chúng.</p></div>;
 
   const needle = search.trim().toLowerCase();
-  const shown = all.filter((a) => (!kind || a.kind === kind) && (!style || a.style === style) && (!tag || a.tags.includes(tag))
+  const matched = all.filter((a) => (!style || a.style === style) && (!tag || a.tags.includes(tag))
     && (!needle || `${a.name} ${a.description} ${a.tags.join(' ')}`.toLowerCase().includes(needle)));
-  const styles = [...new Set(all.map((a) => a.style))];
   const tags = [...new Set(all.flatMap((a) => a.tags))].sort();
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="lg-meta" style={{ margin: 0 }}>Ảnh vẽ một lần, series nào cũng dùng được. Sửa chiều cao, phong cách hay nhãn ở đây thì các series đang dùng cũng đổi theo.</p>
-      <div className="tabs">
-        {['', ...LIBRARY_KINDS].map((k) => (
-          <button key={k} className={`tab${kind === k ? ' active' : ''}`} onClick={() => setKind(k)}>
-            {k ? KIND_LABEL[k as AssetKind] : 'Tất cả'} ({k ? all.filter((a) => a.kind === k).length : all.length})
+      <p className="lg-meta" style={{ margin: 0 }}>Ảnh vẽ một lần, series nào cũng dùng được. Sửa chiều cao, phong cách hay nhãn ở đây thì các series đang dùng cũng đổi theo. Vẽ thêm ảnh ở tab Asset.</p>
+      <div className="flex gap-2" style={{ flexWrap: 'wrap' }} role="group" aria-label="Phong cách">
+        {['', ...ASSET_STYLES].map((name) => (
+          <button key={name} className={`btn btn-sm ${style === name ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={style === name} onClick={() => setStyle(name)}>
+            {name || 'Mọi phong cách'} ({name ? all.filter((a) => a.style === name).length : all.length})
           </button>
         ))}
       </div>
+      <div className="tabs">
+        <button className={`tab${group === '' ? ' active' : ''}`} onClick={() => setGroup('')}>Tất cả ({matched.length})</button>
+        {GROUPS.map((g) => (
+          <button key={g.id} className={`tab${group === g.id ? ' active' : ''}`} onClick={() => setGroup(g.id)}>{g.label} ({matched.filter(g.has).length})</button>
+        ))}
+        <button className={`tab${group === PHENOMENA ? ' active' : ''}`} onClick={() => setGroup(PHENOMENA)}>Hiện tượng ({Object.keys(EFFECT_LABEL).length})</button>
+      </div>
       <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
         <input className="form-input" style={{ flex: 1, minWidth: 160 }} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Tìm theo tên, mô tả, nhãn" />
-        <select className="form-input" style={{ width: 'auto' }} value={style} onChange={(e) => setStyle(e.target.value)} aria-label="Phong cách">
-          <option value="">Mọi phong cách</option>
-          {styles.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
         {tags.length > 0 && (
           <select className="form-input" style={{ width: 'auto' }} value={tag} onChange={(e) => setTag(e.target.value)} aria-label="Nhãn">
             <option value="">Mọi nhãn</option>
@@ -117,13 +147,13 @@ export const LibraryTab: React.FC = () => {
           </select>
         )}
       </div>
-      {!shown.length && <p className="lg-meta" style={{ margin: 0 }}>Không có asset nào khớp bộ lọc.</p>}
-      {LIBRARY_KINDS.map((group) => {
-        const items = shown.filter((a) => a.kind === group);
+      {group !== PHENOMENA && !GROUPS.some((g) => (!group || group === g.id) && matched.some(g.has)) && <p className="lg-meta" style={{ margin: 0 }}>Chưa có asset nào ở mục này.</p>}
+      {GROUPS.filter((g) => !group || group === g.id).map((g) => {
+        const items = matched.filter(g.has);
         if (!items.length) return null;
         return (
-          <section key={group}>
-            <h2 style={{ fontSize: '1.05rem', margin: '0 0 8px', fontWeight: 600 }}>{KIND_LABEL[group]} <span className="lg-meta">{items.length}</span></h2>
+          <section key={g.id}>
+            <h2 style={{ fontSize: '1.05rem', margin: '0 0 8px', fontWeight: 600 }}>{g.label} <span className="lg-meta">{items.length}</span></h2>
             <div className="an-grid">
               {items.map((a) => (
                 // key on the saved values: a card restarts from them after a reload
@@ -133,6 +163,7 @@ export const LibraryTab: React.FC = () => {
           </section>
         );
       })}
+      {(!group || group === PHENOMENA) && <Phenomena />}
     </div>
   );
 };
