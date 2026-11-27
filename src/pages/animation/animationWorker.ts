@@ -78,9 +78,9 @@ export const suggestSizes = (id: string): Promise<AssetSeries> => call(`/assets/
 export const setDeck = (id: string, item: string, deck: number | null): Promise<AssetSeries> => call(`/assets/series/${id}/deck`, 'POST', { item, deck });
 // Must match src/asset/scene.ts in vdev-video; points are 0..1 of the picture
 export type ZoneKind = 'ground' | 'water' | 'house' | 'block';
-export type SpotKind = 'seat' | 'door' | 'table';
+export type SpotKind = 'seat' | 'door' | 'table' | 'rail';
 export const ZONE_LABEL: Record<ZoneKind, string> = { ground: 'Đất đi được', water: 'Nước', house: 'Nhà', block: 'Vật cản' };
-export const SPOT_LABEL: Record<SpotKind, string> = { seat: 'Chỗ ngồi', door: 'Cửa', table: 'Mặt bàn' };
+export const SPOT_LABEL: Record<SpotKind, string> = { seat: 'Chỗ ngồi', door: 'Cửa', table: 'Mặt bàn', rail: 'Chỗ vịn (hàng rào, lan can)' };
 export interface SceneMap { zones: { kind: ZoneKind; points: [number, number][] }[]; spots: { kind: SpotKind; x: number; y: number; floor?: number }[] }
 export const setSceneMap = (id: string, item: string, map: SceneMap | null): Promise<AssetSeries> => call(`/assets/series/${id}/map`, 'POST', { item, map });
 export const setHorizon = (id: string, item: string, horizon: number): Promise<AssetSeries> => call(`/assets/series/${id}/horizon`, 'POST', { item, horizon });
@@ -160,7 +160,7 @@ export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals
 export const TONE_LABEL: Record<string, string> = { none: 'Tự nhiên', warm: 'Ấm', cool: 'Lạnh', dusk: 'Hoàng hôn', night: 'Đêm' };
 export const LIGHT_LABEL: Record<string, string> = { lamp: 'Đèn dầu', fire: 'Bếp lửa', sun: 'Mặt trời', moon: 'Trăng' };
 
-export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null; act?: string | null; turn?: number | null; toTurn?: number | null; touch?: 'table' | 'door' | null }
+export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null; act?: string | null; turn?: number | null; toTurn?: number | null; touch?: 'table' | 'door' | 'rail' | null }
 export interface ScriptShot {
   background: string; camera: 'wide' | 'medium' | 'close'; subject: string | null; move: string; transition: 'cut' | 'fade';
   cast: ScriptMember[];

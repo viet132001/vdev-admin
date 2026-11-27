@@ -26,6 +26,8 @@ interface ShotEditorProps {
   onPreview: () => void;
 }
 
+const TOUCH_LABEL = { table: 'Tay lên mặt bàn', door: 'Tay nắm cửa', rail: 'Tay vịn hàng rào / lan can' };
+
 const Options: React.FC<{ labels: Record<string, string> }> = ({ labels }) => <>{Object.entries(labels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</>;
 
 // One shot of the script: who speaks (the narrator or a character) and what, who is on stage and how they act,
@@ -46,7 +48,7 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
   // Carrying, acting and walking are only drawn from the side: the worker refuses a turn left over from before
   const sideBusy = (m: ScriptMember) => !!m.hold || !!m.act || m.toX !== null || !!m.touch;
   // what the background marks for a hand to rest on
-  const touchable = (['table', 'door'] as const).filter((kind) => catalog.backgrounds.find((b) => b.id === shot.background)?.map?.spots.some((s) => s.kind === kind));
+  const touchable = (['table', 'door', 'rail'] as const).filter((kind) => catalog.backgrounds.find((b) => b.id === shot.background)?.map?.spots.some((s) => s.kind === kind));
   const setMember = (id: string, patch: Partial<ScriptMember>) => onChange({
     ...shot,
     cast: shot.cast.map((m) => {
@@ -191,9 +193,9 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
                   {c.rigged && !member.act && touchable.length > 0 && (
                     <select className="form-input" style={{ width: 'auto' }} value={member.touch ?? ''} disabled={disabled} aria-label="Chạm"
                       title="Đứng gần chỗ đã đánh dấu trên bản đồ cảnh (lệch không quá 0,12)"
-                      onChange={(e) => setMember(c.id, e.target.value ? { touch: e.target.value as 'table' | 'door', gesture: 'none', hold: null, toX: null } : { touch: null })}>
+                      onChange={(e) => setMember(c.id, e.target.value ? { touch: e.target.value as 'table' | 'door' | 'rail', gesture: 'none', hold: null, toX: null } : { touch: null })}>
                       <option value="">Không chạm gì</option>
-                      {touchable.map((kind) => <option key={kind} value={kind}>{kind === 'table' ? 'Tay lên mặt bàn' : 'Tay nắm cửa'}</option>)}
+                      {touchable.map((kind) => <option key={kind} value={kind}>{TOUCH_LABEL[kind]}</option>)}
                     </select>
                   )}
                   {c.id !== talker && (
