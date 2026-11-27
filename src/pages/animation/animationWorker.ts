@@ -160,7 +160,7 @@ export const EFFECT_LABEL: Record<string, string> = { leaves: 'Lá rơi', petals
 export const TONE_LABEL: Record<string, string> = { none: 'Tự nhiên', warm: 'Ấm', cool: 'Lạnh', dusk: 'Hoàng hôn', night: 'Đêm' };
 export const LIGHT_LABEL: Record<string, string> = { lamp: 'Đèn dầu', fire: 'Bếp lửa', sun: 'Mặt trời', moon: 'Trăng' };
 
-export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null; act?: string | null; turn?: number | null; toTurn?: number | null }
+export interface ScriptMember { character: string; x: number; toX: number | null; face: 1 | -1; pose: string; gesture: string; hold: string | null; y?: number | null; act?: string | null; turn?: number | null; toTurn?: number | null; touch?: 'table' | 'door' | null }
 export interface ScriptShot {
   background: string; camera: 'wide' | 'medium' | 'close'; subject: string | null; move: string; transition: 'cut' | 'fade';
   cast: ScriptMember[];
@@ -177,13 +177,13 @@ export const VIEW_TURNS: { view: string; degrees: number; label: string }[] = [
 ];
 export interface AnimationCatalog {
   characters: { id: string; name: string; role: string; voice: string; expressions: string[]; talks: boolean; rigged: boolean; views?: string[]; heightCm?: number | null; actions?: { id: string; label: string; weapon: boolean }[] }[];
-  backgrounds: { id: string; description: string; foreground: boolean }[];
+  backgrounds: { id: string; description: string; foreground: boolean; map?: { spots: { kind: string }[] } }[];
   props: { id: string; description: string; heightCm?: number | null }[];
 }
 // Scripts saved before poses and narration existed (the worker fills the same defaults)
 export const normalizeShot = (shot: any): ScriptShot => ({
   ...shot, subject: shot.subject ?? null, transition: shot.transition ?? 'cut', effects: shot.effects ?? [], tone: shot.tone ?? 'none', light: shot.light ?? null,
-  cast: (shot.cast ?? []).map((m: any) => ({ toX: null, pose: 'stand', gesture: 'none', hold: null, y: null, act: null, turn: null, toTurn: null, ...m }))
+  cast: (shot.cast ?? []).map((m: any) => ({ toX: null, pose: 'stand', gesture: 'none', hold: null, y: null, act: null, turn: null, toTurn: null, touch: null, ...m }))
 });
 export type AnimationJob = Omit<LessonJob, 'animation'> & { animation?: { seriesId: string; script: AnimationScript } };
 

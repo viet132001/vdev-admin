@@ -44,7 +44,9 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
     onChange({ ...shot, cast, speaker, subject: keeps(shot.subject) ? shot.subject : null, reactions: shot.reactions.filter((r) => keeps(r.character)), camera: cast.length ? shot.camera : 'wide' });
   };
   // Carrying, acting and walking are only drawn from the side: the worker refuses a turn left over from before
-  const sideBusy = (m: ScriptMember) => !!m.hold || !!m.act || m.toX !== null;
+  const sideBusy = (m: ScriptMember) => !!m.hold || !!m.act || m.toX !== null || !!m.touch;
+  // what the background marks for a hand to rest on
+  const touchable = (['table', 'door'] as const).filter((kind) => catalog.backgrounds.find((b) => b.id === shot.background)?.map?.spots.some((s) => s.kind === kind));
   const setMember = (id: string, patch: Partial<ScriptMember>) => onChange({
     ...shot,
     cast: shot.cast.map((m) => {
@@ -185,6 +187,14 @@ export const ShotEditor: React.FC<ShotEditorProps> = ({ index, shot, catalog, di
                         </select>
                       )}
                     </>
+                  )}
+                  {c.rigged && !member.act && touchable.length > 0 && (
+                    <select className="form-input" style={{ width: 'auto' }} value={member.touch ?? ''} disabled={disabled} aria-label="Chạm"
+                      title="Đứng gần chỗ đã đánh dấu trên bản đồ cảnh (lệch không quá 0,12)"
+                      onChange={(e) => setMember(c.id, e.target.value ? { touch: e.target.value as 'table' | 'door', gesture: 'none', hold: null, toX: null } : { touch: null })}>
+                      <option value="">Không chạm gì</option>
+                      {touchable.map((kind) => <option key={kind} value={kind}>{kind === 'table' ? 'Tay lên mặt bàn' : 'Tay nắm cửa'}</option>)}
+                    </select>
                   )}
                   {c.id !== talker && (
                     <select className="form-input" style={{ width: 'auto' }} value={reactionOf(c.id)} disabled={disabled} onChange={(e) => setReaction(c.id, e.target.value)} aria-label="Biểu cảm">
